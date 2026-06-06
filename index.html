@@ -1,32 +1,109 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Login Admin</title>
+    <title>Dashboard Private Qur'an</title>
     <link rel="stylesheet" href="style.css">
+    
 </head>
 <body>
 
-<div class="login-box">
-
-    <h2>🔐 Login Admin</h2>
-
-    <input
-    type="text"
-    id="username"
-    placeholder="Username">
-
-    <input
-    type="password"
-    id="password"
-    placeholder="Password">
-
-    <button onclick="login()">
-        Masuk
+    <h1>📖 Dashboard Private Qur'an</h1>
+    <button onclick="exportCSV()">
+    Export Excel
     </button>
 
+    <button onclick="logout()">
+🚪 Logout
+</button>
+
+    <div class="cards">
+
+    <div class="card">
+        <h3>Total Santri</h3>
+        <h2 id="totalSantri">0</h2>
+    </div>
+
+    <div class="card">
+        <h3>Hadir</h3>
+        <h2 id="totalHadir">0</h2>
+    </div>
+
+    <div class="card">
+        <h3>Izin</h3>
+        <h2 id="totalIzin">0</h2>
+    </div>
+    <div class="card">
+    <h3>Sakit</h3>
+    <h2 id="totalSakit">0</h2>
 </div>
 
-<script src="login.js"></script>
+<div class="card">
+    <h3>Alpa</h3>
+    <h2 id="totalAlpa">0</h2>
+</div>
 
+</div>
+    <div class="form">
+
+        <input
+            type="text"
+            id="nama"
+            placeholder="Nama Santri"
+        >
+
+        <input
+    type="text"
+    id="hafalan"
+    placeholder="Hafalan">
+
+<input
+    type="text"
+    id="catatan"
+    placeholder="Catatan">
+        >
+<input
+    type="text"
+    id="catatan"
+    placeholder="catatan">
+
+        <select id="kehadiran">
+            <option>Hadir</option>
+            <option>Izin</option>
+            <option>Sakit</option>
+            <option>Alpa</option>
+        </select>
+
+        <button onclick="tambahSantri()">
+            Tambah
+        </button>
+
+    </div>
+
+  <input
+  type="text"
+  id="cari"
+  placeholder="🔍 Cari Santri..."
+  onkeyup="cariSantri()"
+  class="search">
+
+    <table>
+
+        <thead>
+            <tr>
+                <th>Nama</th>
+                <th>No HP Wali</th>
+                <th>Hafalan</th>
+                <th>Catatan</th>
+                <th>Kehadiran</th>
+                <th>Aksi</th>
+            </tr>
+
+        </thead>
+
+        <tbody id="tabelSantri"></tbody>
+
+    </table>
+
+    <script src="script.js"></script>
 </body>
 </html>

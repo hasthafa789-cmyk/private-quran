@@ -1,10 +1,8 @@
 if (localStorage.getItem("login") !== "true") {
     window.location.href = "index.html";
-
 }
-let dataSantri =
-JSON.parse(localStorage.getItem("dataSantri"))
-|| [];
+
+let dataSantri = JSON.parse(localStorage.getItem("dataSantri")) || [];
 
 tampilkanData();
 
@@ -19,10 +17,10 @@ function tambahSantri() {
     const kehadiran =
     document.getElementById("kehadiran").value;
 
-    if (nama === "" || hafalan === "") {
-        alert("Lengkapi data");
-        return;
-    }
+    if (nama === "" || hafalan === "" || kehadiran === "") {
+    alert("Lengkapi data");
+    return;
+}
 
     dataSantri.push({
         nama,
@@ -71,19 +69,17 @@ function tampilkanData() {
 }
 
 function editSantri(index){
+    const namaBaru = prompt("Nama Baru", dataSantri[index].nama);
+    const hafalanBaru = prompt("Hafalan Baru", dataSantri[index].hafalan);
+    const kehadiranBaru = prompt("Kehadiran (Hadir/Izin/Sakit/Alpa)", dataSantri[index].kehadiran);
 
-    const namaBaru =
-    prompt("Nama Baru", dataSantri[index].nama);
-
-    const hafalanBaru =
-    prompt("Hafalan Baru", dataSantri[index].hafalan);
-
-    if(!namaBaru || !hafalanBaru){
+    if(!namaBaru || !hafalanBaru || !kehadiranBaru){
         return;
     }
 
     dataSantri[index].nama = namaBaru;
     dataSantri[index].hafalan = hafalanBaru;
+    dataSantri[index].kehadiran = kehadiranBaru;
 
     simpanData();
     tampilkanData();
@@ -141,7 +137,7 @@ function cariSantri(){
     .toLowerCase();
 
     const rows =
-    document.querySelectorAll("#tabelSantri tr");
+    document.querySelectorAll("#tabelSantri tbody tr");
 
     rows.forEach(row => {
 
