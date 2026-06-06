@@ -17,7 +17,7 @@ function login(){
         );
 
         window.location.href =
-        "index.html";
+        "dashboard.html";
 
     }else{
 
