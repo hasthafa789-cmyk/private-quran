@@ -1,0 +1,43 @@
+body {
+    font-family: Arial, sans-serif;
+    max-width: 1000px;
+    margin: auto;
+    padding: 20px;
+    background: #f4f4f4;
+}
+
+h1 {
+    color: green;
+}
+
+.form {
+    margin-bottom: 20px;
+}
+
+input,
+select,
+button {
+    padding: 10px;
+    margin: 5px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+}
+
+th,
+td {
+    border: 1px solid #ddd;
+    padding: 12px;
+}
+
+th {
+    background: #1e8e3e;
+    color: white;
+}
+
+button {
+    cursor: pointer;
+}

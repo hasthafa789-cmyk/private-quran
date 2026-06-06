@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard Private Qur'an</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <h1>📖 Dashboard Private Qur'an</h1>
+    <button onclick="exportCSV()">
+    Export Excel
+    <div class="form">
+
+        <input
+            type="text"
+            id="nama"
+            placeholder="Nama Santri"
+        >
+
+        <input
+            type="text"
+            id="hafalan"
+            placeholder="Hafalan"
+        >
+
+        <select id="kehadiran">
+            <option>Hadir</option>
+            <option>Izin</option>
+            <option>Sakit</option>
+            <option>Alpa</option>
+        </select>
+
+        <button onclick="tambahSantri()">
+            Tambah
+        </button>
+
+    </div>
+
+    <table>
+
+        <thead>
+            <tr>
+                <th>Nama</th>
+                <th>Hafalan</th>
+                <th>Kehadiran</th>
+                <th>Aksi</th>
+            </tr>
+        </thead>
+
+        <tbody id="tabelSantri"></tbody>
+
+    </table>
+
+    <script src="script.js"></script>
+
+</body>
+</html>
