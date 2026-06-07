@@ -2,7 +2,7 @@
 // CONFIGURATION GOOGLE SPREADSHEET
 // ==========================================
 // GANTI teks di bawah ini dengan URL Web App dari Google Apps Script Anda
-const GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbz5qm16k1YwkuzRG0Q3DCb0rWS1_tzIyIo6ENzxMcW238RD1QMqBnDLzmD-g1EpweW5/exec";
+const GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbwaUxlHpQJBN4pS9MbHCCy_IAhhqXxaMAYARPKJVyv7A6w1QMk04uSjZ_iYB9y7NNr1/exec";
 
 // Memuat data dari localStorage terlebih dahulu sebagai cache awal agar UI langsung berjalan lancar
 let dataSantri = JSON.parse(localStorage.getItem("dataSantri")) || [];
@@ -122,14 +122,13 @@ const databaseJuz = {
 const subTeksJuz = { 30: "Amma Yatasa'alun", 29: "Tabarakalladhi", 28: "Qad Sami'allah", 1: "Alif Lam Mim" };
 let juzTerbuka = null; 
 
-document.addEventListener("DOMContentLoaded", async () => {
-    // 1. Ambil data dulu, TUNGGU sampai selesai
-    await sinkronisasiDataOnline();
-    
-    // 2. Baru jalankan inisialisasi lainnya
+document.addEventListener("DOMContentLoaded", () => {
     initGreeting();
-    initUser(); // Sekarang data sudah pasti ada
+    initUser();
     updateLiveDashboardStats();
+    
+    // Jalankan sinkronisasi data online dari Spreadsheet di latar belakang
+    syncDataDariSheets();
 });
 
 // GREETING DINAMIS BERDASARKAN WAKTU REALTIME
@@ -505,23 +504,30 @@ function circularProgress(persen, color) {
 
 // FUNGSI MENYIMPAN DATA (HYBRID: LOCAL + SPREADSHEET ONLINE)
 async function save() { 
+    // 1. Simpan lokal dulu (Instan)
     localStorage.setItem("dataSantri", JSON.stringify(dataSantri)); 
+    
+    // 2. Tampilkan indikator (Opsional: Tambahkan <div id="status"> di HTML Anda)
     const statusEl = document.getElementById("statusSimpan");
     if (statusEl) statusEl.innerText = "🔄 Menyimpan...";
+
+    if (!GOOGLE_SHEET_URL || GOOGLE_SHEET_URL.includes("PASTE_URL")) return;
 
     try {
         await fetch(GOOGLE_SHEET_URL, {
             method: "POST",
-            headers: { "Content-Type": "application/json" }, // Gunakan JSON
-            body: JSON.stringify({ dataSantri: dataSantri }) // Kirim objek langsung
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ dataSantri: JSON.stringify(dataSantri) })
         });
         
+        // 3. Ubah indikator jadi sukses
         if (statusEl) {
             statusEl.innerText = "✅ Tersimpan";
-            setTimeout(() => { statusEl.innerText = ""; }, 2000);
+            setTimeout(() => { statusEl.innerText = ""; }, 2000); // Hilang setelah 2 detik
         }
     } catch (error) {
         if (statusEl) statusEl.innerText = "❌ Gagal!";
+        console.error("Gagal:", error);
     }
 }
 
