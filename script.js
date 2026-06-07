@@ -1,16 +1,4 @@
-const querySnapshot =
-await getDocs(
-  collection(db, "santri")
-);
-
-let dataSantri = [];
-
-querySnapshot.forEach((doc) => {
-  dataSantri.push({
-    id: doc.id,
-    ...doc.data()
-  });
-});
+let dataSantri = JSON.parse(localStorage.getItem("dataSantri")) || [];
 let santriAktif = null;
 let currentView = 'viewDashboard'; 
 
@@ -166,15 +154,7 @@ function initUser() {
         santriAktif = dataSantri.find(s => s.nama === namaLogin);
         if (!santriAktif) {
             santriAktif = { id: Date.now(), nama: namaLogin, progress: {}, huruf: {}, tajwid: {} };
-            await addDoc(
-                collection(db, "santri"),
-                {
-                    nama: nama,
-                    kelas: kelas,
-                    hafalan: hafalan,
-                    createdAt: new Date()
-  }
-);
+            dataSantri.push(santriAktif);
         }
         const input = document.getElementById("namaInput");
         if (input) { input.value = namaLogin; input.disabled = true; }
@@ -499,17 +479,5 @@ function circularProgress(persen, color) {
     </svg>`;
 }
 
-function save() { await deleteDoc(
-  doc(db, "santri", id)
-);
+function save() { localStorage.setItem("dataSantri", JSON.stringify(dataSantri)); }
 function logout() { localStorage.removeItem("login"); window.location.href = "login.html"; }
-
-import { db } from "./firebase.js";
-
-import {
-  collection,
-  addDoc,
-  getDocs,
-  deleteDoc,
-  doc
-} from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
