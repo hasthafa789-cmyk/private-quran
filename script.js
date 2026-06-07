@@ -216,3 +216,8 @@ function closeDetail() {
     document.getElementById("suratDetail").style.display = "none";
     document.getElementById("dashboardSurat").style.display = "grid";
 }
+
+function logout() {
+    localStorage.removeItem("login");
+    window.location.href = "login.html";
+}
