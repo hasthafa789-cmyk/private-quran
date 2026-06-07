@@ -535,8 +535,10 @@ async function save() {
             },
             body: new URLSearchParams({ dataSantri: JSON.stringify(dataSantri) })
         });
+        // TAMBAHKAN BARIS INI UNTUK TANDA DI CONSOLE:
+        console.log("🟢 Data Berhasil Disinkronkan ke Google Sheets!");
     } catch (error) {
-        console.error("Gagal menyimpan ke Google Sheets:", error);
+        console.error("🔴 Gagal menyimpan ke Google Sheets:", error);
     }
 }
 
