@@ -1,102 +1,213 @@
+
+
+:root{
+    --bg: #f5f7fb;
+    --card: rgba(255,255,255,0.85);
+    --text: #1f2937;
+
+    /* 🔵 UBAH INI */
+    --primary: #2563eb;   /* biru modern */
+    --primary-light: #3b82f6;
+
+    --danger: #ef4444;
+    --blue: #60a5fa;
+}
+
+body.dark{
+    --bg: #0f172a;
+    --card: rgba(30,41,59,0.7);
+    --text: #e5e7eb;
+}
+
 body{
     font-family: Arial, sans-serif;
     max-width: 1200px;
     margin: auto;
-    padding: 20px;
-    background: #f5f7fb;
+    padding: 24px;
+    background: var(--bg);
+    color: var(--text);
+    transition: 0.3s;
 }
 
+/* HEADER */
 h1{
-    color: #1e8e3e;
+    color: var(--primary);
+    font-size: 26px;
 }
 
+/* CARD */
 .cards{
     display:flex;
-    gap:20px;
+    gap:16px;
+    flex-wrap:wrap;
     margin:20px 0;
 }
 
 .card{
     flex:1;
-    background:white;
+    min-width:180px;
+    background: var(--card);
+    backdrop-filter: blur(10px);
     padding:20px;
-    border-radius:12px;
-    text-align:center;
-    box-shadow:0 2px 10px rgba(0,0,0,.1);
+    border-radius:16px;
+    box-shadow:0 8px 20px rgba(0,0,0,.08);
+    transition:0.2s;
 }
 
-.card h3{
-    margin:0;
-    color:#666;
+.card:hover{
+    transform: translateY(-3px);
 }
 
-.card h2{
-    color:#1e8e3e;
-    margin-top:10px;
-}
-
+/* FORM */
 .form{
-    background:white;
+    background: var(--card);
     padding:20px;
-    border-radius:12px;
+    border-radius:16px;
     margin-bottom:20px;
-    box-shadow:0 2px 10px rgba(0,0,0,.1);
 }
 
-.search{
+input, select{
     width:100%;
     padding:12px;
-    margin-bottom:20px;
+    margin:8px 0;
+    border-radius:10px;
     border:1px solid #ddd;
-    border-radius:8px;
+    outline:none;
 }
 
+/* TABLE */
 table{
     width:100%;
     border-collapse:collapse;
-    background:white;
-    border-radius:12px;
+    background: var(--card);
+    border-radius:16px;
     overflow:hidden;
-    box-shadow:0 2px 10px rgba(0,0,0,.1);
 }
 
 th{
-    background:#1e8e3e;
+    background: var(--primary);
     color:white;
     padding:12px;
 }
 
 td{
     padding:12px;
-    border-bottom:1px solid #eee;
+    border-bottom:1px solid rgba(0,0,0,.05);
 }
 
+/* BUTTON */
+button{
+    padding:8px 12px;
+    border:none;
+    border-radius:8px;
+    cursor:pointer;
+    transition:0.2s;
+}
+
+button:hover{
+    transform: scale(1.05);
+}
+
+.btn-edit{
+    background: var(--blue);
+    color:white;
+}
+
+.btn-delete{
+    background: var(--danger);
+    color:white;
+}
+
+.btn-primary{
+    background: var(--primary);
+    color:white;
+}
+
+/* LOGIN */
 .login-box{
-
-max-width:350px;
-
-margin:100px auto;
-
-background:white;
-
-padding:30px;
-
-border-radius:12px;
-
-box-shadow:0 2px 10px rgba(0,0,0,.1);
-
-text-align:center;
-
+    max-width:380px;
+    margin:120px auto;
+    background: var(--card);
+    padding:32px;
+    border-radius:16px;
+    text-align:center;
+}
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
 }
 
-.login-box input{
+.card-surat {
+    background: white;
+    padding: 15px;
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    cursor: pointer;
+    transition: 0.2s;
+}
 
-width:100%;
+.card-surat:hover {
+    transform: scale(1.05);
+}
 
-padding:12px;
+#dashboardSurat{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+    gap:12px;
+}
 
-margin:10px 0;
+.card-surat{
+    background:white;
+    padding:12px;
+    border-radius:12px;
+    box-shadow:0 4px 10px rgba(0,0,0,0.08);
+    cursor:pointer;
+    transition:0.2s;
+}
 
-box-sizing:border-box;
+.card-surat:hover{
+    transform:scale(1.03);
+}
 
+.bar{
+    height:6px;
+    background:#e5e7eb;
+    border-radius:10px;
+    overflow:hidden;
+    margin:6px 0;
+}
+
+.fill{
+    height:100%;
+    background:#22c55e;
+    transition:0.3s;
+}
+
+.ayat-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(55px,1fr));
+    gap:8px;
+    margin-top:10px;
+    max-width:400px;
+}
+
+.ayat-card{
+    width:55px;
+    height:55px;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    border-radius:12px;
+    cursor:pointer;
+    font-weight:bold;
+    background:#e5e7eb;
+    transition:0.2s;
+    user-select:none;
+}
+
+.ayat-card.active{
+    background:#22c55e;
+    color:white;
+    transform:scale(1.05);
 }

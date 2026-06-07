@@ -1,109 +1,116 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
-    <title>Dashboard Private Qur'an</title>
+    <meta charset="UTF-8">
+    <title>Hasnan Private - Tahfidz App</title>
     <link rel="stylesheet" href="style.css">
-    
+
+    <style>
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 10px;
+        }
+
+        .ayat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+            gap: 6px;
+            max-width: 500px;
+        }
+
+        .card {
+            padding: 10px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f7fb;
+        }
+
+        .header {
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            padding:10px;
+            background:white;
+        }
+
+        .container {
+            padding: 10px;
+        }
+
+        .card-surat {
+            background: white;
+            border-radius: 12px;
+            padding: 10px;
+        }
+
+        button {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+    </style>
 </head>
+
 <body>
 
-    <h1>📖 Dashboard Private Qur'an</h1>
-    <button onclick="exportCSV()">
-    Export Excel
-    </button>
-
-    <button onclick="logout()">
-🚪 Logout
-</button>
-
-    <div class="cards">
-
-    <div class="card">
-        <h3>Total Santri</h3>
-        <h2 id="totalSantri">0</h2>
+<!-- HEADER -->
+<header class="header">
+    <div>
+        <h1>📚 Dashboard Hafalan Qur'an</h1>
+        <p class="subtitle">Tracking Hafalan Juz 30 (Duolingo Style)</p>
     </div>
 
-    <div class="card">
-        <h3>Hadir</h3>
-        <h2 id="totalHadir">0</h2>
+    <div class="top-actions">
+        <input id="namaInput" placeholder="Nama Santri" oninput="setSantriAktif()">
+        <button onclick="logout()">🚪 Logout</button>
     </div>
+</header>
 
-    <div class="card">
-        <h3>Izin</h3>
-        <h2 id="totalIzin">0</h2>
-    </div>
-    <div class="card">
-    <h3>Sakit</h3>
-    <h2 id="totalSakit">0</h2>
-</div>
+<!-- STATS -->
+<div class="container">
 
-<div class="card">
-    <h3>Alpa</h3>
-    <h2 id="totalAlpa">0</h2>
-</div>
+    <section class="cards">
 
-</div>
-    <div class="form">
+        <div class="card">
+            <h3>Nama Santri Aktif</h3>
+            <h2 id="namaSantri">-</h2>
+        </div>
 
-        <input
-            type="text"
-            id="nama"
-            placeholder="Nama Santri"
-        >
+        <div class="card">
+            <h3>Total Santri</h3>
+            <h2 id="avgProgress">0</h2>
+        </div>
 
-        <input
-    type="text"
-    id="hafalan"
-    placeholder="Hafalan">
+    </section>
 
-<input
-    type="text"
-    id="catatan"
-    placeholder="Catatan">
-        >
-<input
-    type="text"
-    id="catatan"
-    placeholder="catatan">
+    <!-- DASHBOARD SURAT -->
+    <section>
+        <h3>📖 Pilih Surat</h3>
+        <div id="dashboardSurat" class="grid"></div>
+    </section>
 
-        <select id="kehadiran">
-            <option>Hadir</option>
-            <option>Izin</option>
-            <option>Sakit</option>
-            <option>Alpa</option>
-        </select>
+    <!-- DETAIL SURAT -->
+    <section id="suratDetail" style="display:none; margin-top:15px;">
 
-        <button onclick="tambahSantri()">
-            Tambah
+        <h2 id="judulSurat"></h2>
+
+        <div id="ayatList" class="ayat-grid"></div>
+
+        <button onclick="closeDetail()" style="margin-top:10px;">
+            ⬅ Kembali
         </button>
+    </section>
 
-    </div>
+</div>
 
-  <input
-  type="text"
-  id="cari"
-  placeholder="🔍 Cari Santri..."
-  onkeyup="cariSantri()"
-  class="search">
+<script src="script.js"></script>
 
-    <table>
-
-        <thead>
-            <tr>
-                <th>Nama</th>
-                <th>No HP Wali</th>
-                <th>Hafalan</th>
-                <th>Catatan</th>
-                <th>Kehadiran</th>
-                <th>Aksi</th>
-            </tr>
-
-        </thead>
-
-        <tbody id="tabelSantri"></tbody>
-
-    </table>
-
-    <script src="script.js"></script>
 </body>
 </html>
