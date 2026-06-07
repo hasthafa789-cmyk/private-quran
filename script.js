@@ -2,7 +2,7 @@
 // CONFIGURATION GOOGLE SPREADSHEET
 // ==========================================
 // GANTI teks di bawah ini dengan URL Web App dari Google Apps Script Anda
-const GOOGLE_SHEET_URL = "PASTE_URL_WEB_APP_ANDA_DI_SINI";
+const GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbxqfftK_IST2v_BrGlbwwTB0MVZd6mA_yUgl7U7ohjo09WL7AFNcZku_f1CqB82c8oQ/exec";
 
 // Memuat data dari localStorage terlebih dahulu sebagai cache awal agar UI langsung berjalan lancar
 let dataSantri = JSON.parse(localStorage.getItem("dataSantri")) || [];
@@ -133,7 +133,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // SINKRONISASI DATA DARI GOOGLE SPREADSHEET
 async function syncDataDariSheets() {
-    if (!GOOGLE_SHEET_URL || GOOGLE_SHEET_URL.includes("PASTE_URL")) return;
+    if (!GOOGLE_SHEET_URL || GOOGLE_SHEET_URL.includes("https://script.google.com/macros/s/AKfycbxqfftK_IST2v_BrGlbwwTB0MVZd6mA_yUgl7U7ohjo09WL7AFNcZku_f1CqB82c8oQ/exec")) return;
     try {
         const response = await fetch(GOOGLE_SHEET_URL);
         const data = await response.json();
@@ -183,7 +183,7 @@ function navigateTo(viewId) {
 
 function initUser() {
     if (role === "murid") {
-        santriAktif = dataSantri.find(s => s.nama === namaLogin);
+       santriAktif = dataSantri.find(s => s.nama.toLowerCase() === namaLogin.toLowerCase());
         if (!santriAktif) {
             santriAktif = { id: Date.now(), nama: namaLogin, progress: {}, huruf: {}, tajwid: {} };
             dataSantri.push(santriAktif);
