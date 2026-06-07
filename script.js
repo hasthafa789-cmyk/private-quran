@@ -165,7 +165,11 @@ function initUser() {
         if (!santriAktif) {
             santriAktif = { id: Date.now(), nama: namaLogin, progress: {}, huruf: {}, tajwid: {} };
             dataSantri.push(santriAktif);
+            save();
+        } else {
+            santriAktif.nama = santriAktif.nama; 
         }
+
         const input = document.getElementById("namaInput");
         if (input) { input.value = namaLogin; input.disabled = true; }
         const namaEl = document.getElementById("namaSantri");
