@@ -1,29 +1,23 @@
-function login(){
+function login() {
+    const username = document.getElementById("username").value.trim();
+    const password = document.getElementById("password").value.trim();
 
-    const username =
-    document.getElementById("username").value;
-
-    const password =
-    document.getElementById("password").value;
-
-    if(
-        username === "admin" &&
-        password === "123456"
-    ){
-
-        localStorage.setItem(
-            "login",
-            "true"
-        );
-
-        window.location.href =
-        "index.html";
-
-    }else{
-
-        alert(
-            "Username atau Password salah"
-        );
-
+    // ADMIN LOGIN
+    if (username === "admin" && password === "1234") {
+        localStorage.setItem("role", "admin");
+        localStorage.setItem("login", "true");
+        window.location.href = "index.html";
+        return;
     }
+
+    // MURID LOGIN
+    if (username !== "") {
+        localStorage.setItem("role", "murid");
+        localStorage.setItem("login", "true");
+        localStorage.setItem("nama", username);
+        window.location.href = "index.html";
+        return;
+    }
+
+    alert("Isi username!");
 }

@@ -1,6 +1,9 @@
 let dataSantri = JSON.parse(localStorage.getItem("dataSantri")) || [];
 let santriAktif = null;
 
+const role = localStorage.getItem("role");
+const namaLogin = localStorage.getItem("nama");
+
 // ======================
 // LOGIN CHECK
 // ======================
@@ -9,7 +12,7 @@ if (localStorage.getItem("login") !== "true") {
 }
 
 // ======================
-// JUZ 30 DATA
+// DATA JUZ 30
 // ======================
 const juz30 = [
   { nama: "An-Naba", ayat: 40 },
@@ -54,15 +57,51 @@ const juz30 = [
 // ======================
 // INIT
 // ======================
-document.addEventListener("DOMContentLoaded", function () {
+document.addEventListener("DOMContentLoaded", () => {
+    initUser();
     renderDashboard();
     updateStats();
+
+    setInterval(() => {
+        localStorage.setItem("dataSantri", JSON.stringify(dataSantri));
+    }, 3000);
 });
 
 // ======================
-// SET SANTRI AKTIF
+// INIT USER
+// ======================
+function initUser() {
+
+    if (role === "murid") {
+
+        santriAktif = dataSantri.find(s => s.nama === namaLogin);
+
+        if (!santriAktif) {
+            santriAktif = {
+                id: Date.now(),
+                nama: namaLogin,
+                progress: {}
+            };
+            dataSantri.push(santriAktif);
+        }
+
+        const input = document.getElementById("namaInput");
+        if (input) {
+            input.value = namaLogin;
+            input.disabled = true;
+        }
+
+        const namaEl = document.getElementById("namaSantri");
+        if (namaEl) namaEl.innerText = namaLogin;
+    }
+}
+
+// ======================
+// SET SANTRI
 // ======================
 function setSantriAktif() {
+    if (role === "murid") return;
+
     const nama = document.getElementById("namaInput").value.trim();
     if (!nama) return;
 
@@ -79,18 +118,51 @@ function setSantriAktif() {
 
     santriAktif = found;
 
-    document.getElementById("namaSantri").innerText = santriAktif.nama;
+    document.getElementById("namaSantri").innerText = nama;
 
     save();
     renderDashboard();
 }
 
 // ======================
-// DASHBOARD SURAT (CARD STYLE)
+// CIRCULAR PROGRESS UI
+// ======================
+function circularProgress(persen, color) {
+    const size = 60;
+    const stroke = 6;
+    const radius = (size - stroke) / 2;
+    const circumference = 2 * Math.PI * radius;
+    const offset = circumference - (persen / 100) * circumference;
+
+    return `
+    <svg width="${size}" height="${size}">
+        <circle
+            cx="${size/2}" cy="${size/2}" r="${radius}"
+            stroke="#e5e7eb" stroke-width="${stroke}"
+            fill="none" />
+        <circle
+            cx="${size/2}" cy="${size/2}" r="${radius}"
+            stroke="${color}" stroke-width="${stroke}"
+            fill="none"
+            stroke-linecap="round"
+            stroke-dasharray="${circumference}"
+            stroke-dashoffset="${offset}"
+            transform="rotate(-90 ${size/2} ${size/2})"/>
+        <text x="50%" y="50%" text-anchor="middle"
+            dy=".3em" font-size="12" font-weight="bold">
+            ${persen}%
+        </text>
+    </svg>`;
+}
+
+// ======================
+// DASHBOARD SURAT
 // ======================
 function renderDashboard() {
 
     const container = document.getElementById("dashboardSurat");
+    if (!container) return;
+
     container.innerHTML = "";
 
     juz30.forEach((s, i) => {
@@ -98,7 +170,7 @@ function renderDashboard() {
         const total = s.ayat;
         const progress = santriAktif?.progress?.[i] || Array(total).fill(false);
 
-        const done = progress.filter(v => v).length;
+        const done = progress.filter(Boolean).length;
         const persen = Math.round((done / total) * 100);
 
         let color = "#ef4444";
@@ -106,18 +178,18 @@ function renderDashboard() {
         if (persen >= 80) color = "#22c55e";
 
         container.innerHTML += `
-        <div class="card-surat" onclick="openSurat(${i})"
-            style="padding:12px;border-radius:12px;background:#fff;
-            box-shadow:0 2px 8px rgba(0,0,0,0.08);cursor:pointer">
+        <div onclick="openSurat(${i})"
+            style="padding:14px;border-radius:14px;background:#fff;
+            box-shadow:0 2px 10px rgba(0,0,0,0.08);
+            cursor:pointer;display:flex;align-items:center;gap:12px">
 
-            <h4>${s.nama}</h4>
-            <small>${s.ayat} ayat</small>
+            <div>${circularProgress(persen, color)}</div>
 
-            <div style="height:6px;background:#eee;border-radius:6px;margin-top:8px">
-                <div style="width:${persen}%;height:6px;background:${color};border-radius:6px"></div>
+            <div>
+                <h4 style="margin:0">${s.nama}</h4>
+                <small>${s.ayat} ayat</small>
             </div>
 
-            <small>${persen}%</small>
         </div>`;
     });
 }
@@ -126,7 +198,8 @@ function renderDashboard() {
 // OPEN SURAT
 // ======================
 function openSurat(index) {
-    if (!santriAktif) return alert("Isi nama santri dulu!");
+
+    if (!santriAktif) return alert("Isi santri dulu!");
 
     document.getElementById("dashboardSurat").style.display = "none";
     document.getElementById("suratDetail").style.display = "block";
@@ -138,7 +211,7 @@ function openSurat(index) {
 }
 
 // ======================
-// RENDER AYAT (DUOLINGO STYLE)
+// RENDER AYAT
 // ======================
 function renderAyat(index) {
 
@@ -157,18 +230,13 @@ function renderAyat(index) {
 
         container.innerHTML += `
         <div onclick="toggleAyat(${index}, ${i})"
-            style="
-            display:inline-block;
-            width:40px;
-            height:40px;
-            margin:4px;
-            border-radius:8px;
-            text-align:center;
-            line-height:40px;
-            cursor:pointer;
+            style="display:inline-flex;
+            width:45px;height:45px;margin:5px;
+            border-radius:10px;
+            align-items:center;justify-content:center;
             background:${done ? '#22c55e' : '#e5e7eb'};
             color:${done ? 'white' : 'black'};
-            font-size:12px;">
+            font-weight:bold;cursor:pointer;">
             ${i + 1}
         </div>`;
     }
@@ -196,17 +264,11 @@ function toggleAyat(suratIndex, ayatIndex) {
 }
 
 // ======================
-// SAVE
-// ======================
-function save() {
-    localStorage.setItem("dataSantri", JSON.stringify(dataSantri));
-}
-
-// ======================
 // STATS
 // ======================
 function updateStats() {
-    document.getElementById("avgProgress").innerText = dataSantri.length;
+    const el = document.getElementById("avgProgress");
+    if (el) el.innerText = dataSantri.length;
 }
 
 // ======================
@@ -217,6 +279,16 @@ function closeDetail() {
     document.getElementById("dashboardSurat").style.display = "grid";
 }
 
+// ======================
+// SAVE
+// ======================
+function save() {
+    localStorage.setItem("dataSantri", JSON.stringify(dataSantri));
+}
+
+// ======================
+// LOGOUT
+// ======================
 function logout() {
     localStorage.removeItem("login");
     window.location.href = "login.html";

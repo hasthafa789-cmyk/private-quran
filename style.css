@@ -211,45 +211,157 @@ button:hover{
     color:white;
     transform:scale(1.05);
 }
-
 /* ===================== */
-/* MOBILE RESPONSIVE FIX */
+/* MOBILE APP STYLE FIX */
 /* ===================== */
 
 @media (max-width: 768px) {
 
     body {
-        padding: 0;
         margin: 0;
+        padding: 0;
+        background: #f5f7fb;
     }
 
     .container {
-        padding: 10px;
+        padding: 12px;
     }
 
-    /* GRID SURAT */
-    .grid {
-       display: grid;
-       grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-       gap: 10px;
-       padding: 10px;
-    }
-
-    /* CARD SURAT BIAR TIDAK KECIL */
-    .card-surat {
-        font-size: 12px;
-        padding: 10px;
-    }
-
-    /* HEADER SUPAYA TIDAK MELEBAR */
+    /* HEADER jadi app style */
     .header {
         flex-direction: column;
         align-items: flex-start;
+        padding: 12px;
+        gap: 8px;
+    }
+
+    /* GRID SURAT = LIST MOBILE */
+    .grid {
+        display: grid;
+        grid-template-columns: 1fr; /* 🔥 FULL WIDTH */
         gap: 10px;
     }
 
-    /* AYAT GRID */
-    .ayat-grid {
-        grid-template-columns: repeat(6, 1fr);
+    /* CARD SURAT FULL WIDTH */
+    .card-surat {
+        width: 100%;
+        border-radius: 14px;
+        padding: 14px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.08);
     }
+
+    /* AYAT JADI GRID KECIL */
+    .ayat-grid {
+        grid-template-columns: repeat(5, 1fr);
+        gap: 6px;
+    }
+
+    /* CARD UMUM */
+    .card {
+        width: 100%;
+        margin-bottom: 10px;
+    }
+
+    /* TEXT LEBIH BESAR SEDIKIT BIAR ENAK DI HP */
+    h1 {
+        font-size: 18px;
+    }
+
+    h2 {
+        font-size: 16px;
+    }
+
+    h3 {
+        font-size: 14px;
+    }
+}
+/* =========================
+   LOGIN PAGE MODERN BLUE
+========================= */
+
+.login-body {
+    margin: 0;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    background: linear-gradient(135deg, #2563eb, #1e40af);
+    font-family: Arial, sans-serif;
+}
+
+.login-container {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+}
+
+.login-card {
+    width: 320px;
+    padding: 30px;
+    border-radius: 18px;
+
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(10px);
+
+    box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+    color: white;
+    text-align: center;
+}
+
+.login-card h1 {
+    margin-bottom: 5px;
+    font-size: 22px;
+    color: #ffffff; /* ini bikin tulisan LOGIN jadi putih */
+}
+
+.subtitle {
+    font-size: 13px;
+    opacity: 0.8;
+    margin-bottom: 20px;
+}
+
+/* samakan semua elemen login */
+.login-card input,
+.login-card button {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* input style */
+.login-card input {
+    padding: 12px;
+    margin: 8px 0;
+
+    border: none;
+    border-radius: 10px;
+    outline: none;
+
+    font-size: 14px;
+}
+
+/* button style */
+.login-card button {
+    padding: 12px;
+    margin-top: 10px;
+
+    border: none;
+    border-radius: 10px;
+
+    background: #ffffff;
+    color: #1e40af;
+    font-weight: bold;
+
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.login-card button:hover {
+    background: #e5e7eb;
+}
+
+.hint {
+    font-size: 11px;
+    margin-top: 15px;
+    opacity: 0.7;
 }
