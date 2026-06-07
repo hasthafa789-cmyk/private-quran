@@ -504,23 +504,30 @@ function circularProgress(persen, color) {
 
 // FUNGSI MENYIMPAN DATA (HYBRID: LOCAL + SPREADSHEET ONLINE)
 async function save() { 
-    // Simpan ke local storage instan agar UI tidak lag
+    // 1. Simpan lokal dulu (Instan)
     localStorage.setItem("dataSantri", JSON.stringify(dataSantri)); 
     
-    // Kirim data ke Google Spreadsheet di background
+    // 2. Tampilkan indikator (Opsional: Tambahkan <div id="status"> di HTML Anda)
+    const statusEl = document.getElementById("statusSimpan");
+    if (statusEl) statusEl.innerText = "🔄 Menyimpan...";
+
     if (!GOOGLE_SHEET_URL || GOOGLE_SHEET_URL.includes("PASTE_URL")) return;
+
     try {
         await fetch(GOOGLE_SHEET_URL, {
             method: "POST",
-            headers: { 
-                "Content-Type": "application/x-www-form-urlencoded" 
-            },
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
             body: new URLSearchParams({ dataSantri: JSON.stringify(dataSantri) })
         });
-        // TAMBAHKAN BARIS INI UNTUK TANDA DI CONSOLE:
-        console.log("🟢 Data Berhasil Disinkronkan ke Google Sheets!");
+        
+        // 3. Ubah indikator jadi sukses
+        if (statusEl) {
+            statusEl.innerText = "✅ Tersimpan";
+            setTimeout(() => { statusEl.innerText = ""; }, 2000); // Hilang setelah 2 detik
+        }
     } catch (error) {
-        console.error("🔴 Gagal menyimpan ke Google Sheets:", error);
+        if (statusEl) statusEl.innerText = "❌ Gagal!";
+        console.error("Gagal:", error);
     }
 }
 
