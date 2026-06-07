@@ -2,7 +2,7 @@
 // CONFIGURATION GOOGLE SPREADSHEET
 // ==========================================
 // GANTI teks di bawah ini dengan URL Web App dari Google Apps Script Anda
-const GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbxNqwPnTxMkH9yZ4MiL86Qkl69gHKcJM9sTCQhfZEa0XxV_F7u0san2pncUhI9EcTfP/exec";
+const GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbxL6aS79HoboYfV8Kv54ZZyqEFO8dFaKVMDROQVqGvzR6OQdjovG9-pPE0CFxP4arcG/exec";
 
 // Memuat data dari localStorage terlebih dahulu sebagai cache awal agar UI langsung berjalan lancar
 let dataSantri = JSON.parse(localStorage.getItem("dataSantri")) || [];
