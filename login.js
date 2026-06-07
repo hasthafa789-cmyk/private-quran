@@ -2,20 +2,26 @@
 const databaseUser = [
     {
         username: "guru",
-        password: "123",
+        password: "3492",
         nama: "Ustadz Hasnan",
         role: "guru"
     },
     {
         username: "bintang",
         password: "123",
-        nama: "bintang",
+        nama: "Bintang",
         role: "murid"
     },
     {
         username: "dimaz",
         password: "123",
-        nama: "dimaz",
+        nama: "Dimaz",
+        role: "murid"
+    },
+    {
+        username: "trial",
+        password: "123",
+        nama: "Sahabat",
         role: "murid"
     }
 ];
