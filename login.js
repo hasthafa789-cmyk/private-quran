@@ -7,15 +7,15 @@ const databaseUser = [
         role: "guru"
     },
     {
-        username: "santri1",
+        username: "bintang",
         password: "123",
-        nama: "Ahmad",
+        nama: "bintang",
         role: "murid"
     },
     {
-        username: "santri2",
+        username: "dimaz",
         password: "123",
-        nama: "Zainab",
+        nama: "dimaz",
         role: "murid"
     }
 ];

@@ -29,7 +29,15 @@ const klasifikasiTajwid = [
         kategori: "3. Hukum Mad (Panjang Bacaan)",
         items: [
             { id: "mad_thabii", nama: "Mad Thabi'i" }, { id: "mad_wajib", nama: "Mad Wajib Muttasil" },
-            { id: "mad_jaiz", nama: "Mad Jaiz Munfasil" }, { id: "mad_arid", nama: "Mad 'Arid Lissukun" }
+            { id: "mad_jaiz", nama: "Mad Jaiz Munfasil" }, { id: "mad_arid", nama: "Mad 'Arid Lissukun" },
+            { id: "mad_iwadl", nama: "Mad Iwadl" }, { id: "mad_shilah_qashirah", nama: "Mad Shilah Qashirah" },
+            { id: "mad_shilah_thawilah", nama: "Mad Shilah Thawilah" }, { id: "mad_badal", nama: "Mad Badal" },
+            { id: "mad_tamkin", nama: "Mad Tamkin" }, { id: "mad_lin", nama: "Mad Lin" },
+            { id: "mad_lazim_mutsaqal_kalimi", nama: "Mad Lazim Mutsaqal Kalimi" },
+            { id: "mad_lazim_mukhoffaf_kalimi", nama: "Mad Lazim Mukhoffaf Kalimi" },
+            { id: "mad_lazim_mutsaqol_harfi", nama: "Mad Lazim Mutsaqol Harfi" },
+            { id: "mad_lazim_mukhoffaf_harfi", nama: "Mad Lazim Mukhoffaf Harfi" },
+            { id: "mad_farq", nama: "Mad Farq" }
         ]
     },
     {
@@ -37,6 +45,38 @@ const klasifikasiTajwid = [
         items: [
             { id: "sif_qalqalah", nama: "Qalqalah (Sughra/Kubra)" }, { id: "sif_ghunnah", nama: "Ghunnah Musyaddadah" },
             { id: "sif_tafkhim", nama: "Tafkhim & Tarqiq" }
+        ]
+    },
+    {
+        kategori: "5. Hukum Alif Lam",
+        items: [
+            { id: "al_qomariyah", nama: "Alif Lam Qomariyah" },
+            { id: "al_syamsiah", nama: "Alif Lam Syamsiah" }
+        ]
+    },
+    {
+        kategori: "6. Hukum Idgham (Pertemuan Dua Huruf)",
+        items: [
+            { id: "idg_mutamasilain", nama: "Idgham Mutamasilain" },
+            { id: "idg_mutajanisain", nama: "Idgham Mutajanisain" },
+            { id: "idg_mutaqaribain", nama: "Idgham Mutaqaribain" }
+        ]
+    },
+    {
+        kategori: "7. Bacaan Gharib",
+        items: [
+            { id: "gh_saktah", nama: "Saktah" }, { id: "gh_isymam", nama: "Isymam" },
+            { id: "gh_imalah", nama: "Imalah" }, { id: "gh_tashil", nama: "Tashil" },
+            { id: "gh_naql", nama: "Naql" }, { id: "gh_shad_sin", nama: "Shad dibaca Sin" }
+        ]
+    },
+    {
+        kategori: "8. Tanda Waqaf",
+        items: [
+            { id: "wq_lazim", nama: "Waqaf Lazim (م)" }, { id: "wq_mutlaq", nama: "Waqaf Mutlaq (ط)" },
+            { id: "wq_jaiz", nama: "Waqaf Jaiz (ج)" }, { id: "wq_washlu_aula", nama: "Waqaf Al-Washlu Aula (صلى)" },
+            { id: "wq_waqfu_aula", nama: "Waqaf Al-Waqfu Aula (قلى)" }, { id: "wq_la_washal", nama: "Waqaf La Washal (لا)" },
+            { id: "wq_muanaqah", nama: "Waqaf Mu'anaqah (∴)" }, { id: "wq_saktah", nama: "Saktah (س)" }
         ]
     }
 ];
