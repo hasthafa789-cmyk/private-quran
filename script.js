@@ -131,28 +131,6 @@ document.addEventListener("DOMContentLoaded", () => {
     syncDataDariSheets();
 });
 
-// SINKRONISASI DATA DARI GOOGLE SPREADSHEET
-async function syncDataDariSheets() {
-    if (!GOOGLE_SHEET_URL || GOOGLE_SHEET_URL.includes("https://script.google.com/macros/s/AKfycbxqfftK_IST2v_BrGlbwwTB0MVZd6mA_yUgl7U7ohjo09WL7AFNcZku_f1CqB82c8oQ/exec")) return;
-    try {
-        const response = await fetch(GOOGLE_SHEET_URL);
-        const data = await response.json();
-        
-        if (Array.isArray(data)) {
-            dataSantri = data;
-            localStorage.setItem("dataSantri", JSON.stringify(dataSantri));
-            
-            // Re-render UI agar data online terbaru langsung tampil secara dinamis
-            initUser();
-            updateLiveDashboardStats();
-            if(currentView === 'viewHafalan') renderJuzContainers();
-            if(currentView === 'viewPenilaian') renderPenilaianModul();
-        }
-    } catch (error) {
-        console.error("Gagal sinkronisasi dengan Google Sheets:", error);
-    }
-}
-
 // GREETING DINAMIS BERDASARKAN WAKTU REALTIME
 function initGreeting() {
     const jam = new Date().getHours();
@@ -541,6 +519,47 @@ async function save() {
         console.error("🔴 Gagal menyimpan ke Google Sheets:", error);
     }
 }
+
+// =========================================================================
+// PERBAIKAN SINKRONISASI OTOMATIS (UNTUK HP & PERANGKAT BARU)
+// =========================================================================
+
+async function sinkronisasiDataOnline() {
+    // Jika URL Google Sheet belum diisi, hentikan fungsi
+    if (!GOOGLE_SHEET_URL || GOOGLE_SHEET_URL.includes("PASTE_URL")) {
+        console.log("URL Google Sheets belum dikonfigurasi.");
+        return;
+    }
+    
+    try {
+        console.log("Menghubungkan ke Google Sheets untuk mengambil data terbaru...");
+        
+        // Mengambil data dari fungsi doGet() Web App Apps Script
+        const response = await fetch(GOOGLE_SHEET_URL);
+        const dataTerbaru = await response.json();
+        
+        // Jika data dari Google Sheets ditemukan dan tidak kosong
+        if (dataTerbaru && dataTerbaru.length > 0) {
+            dataSantri = dataTerbaru;
+            
+            // Paksa simpan ke localStorage HP / Browser agar tidak kosong lagi
+            localStorage.setItem("dataSantri", JSON.stringify(dataSantri));
+            console.log("Sinkronisasi berhasil! Data diperbarui.");
+            
+            // Segarkan ulang data user yang sedang login agar nilainya langsung muncul
+            if (typeof initUser === "function") initUser();
+            if (typeof renderDashboard === "function") renderDashboard();
+            if (typeof renderPenilaianModul === "function") renderPenilaianModul();
+        }
+    } catch (error) {
+        console.error("Gagal mengambil data online, menggunakan data lokal:", error);
+    }
+}
+
+// JALANKAN FUNGSI INI OTOMATIS SETIAP KALI HALAMAN DIBUKA
+document.addEventListener("DOMContentLoaded", () => {
+    sinkronisasiDataOnline();
+});
 
 function logout() { 
     localStorage.removeItem("login"); 
