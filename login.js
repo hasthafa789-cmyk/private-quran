@@ -1,23 +1,58 @@
+// Data Akun yang Didaftarkan ke Sistem (Gunakan ini untuk login)
+const databaseUser = [
+    {
+        username: "guru",
+        password: "123",
+        nama: "Ustadz Hasnan",
+        role: "guru"
+    },
+    {
+        username: "santri1",
+        password: "123",
+        nama: "Ahmad",
+        role: "murid"
+    },
+    {
+        username: "santri2",
+        password: "123",
+        nama: "Zainab",
+        role: "murid"
+    }
+];
+
 function login() {
-    const username = document.getElementById("username").value.trim();
-    const password = document.getElementById("password").value.trim();
+    const usernameInput = document.getElementById("username").value.trim();
+    const passwordInput = document.getElementById("password").value.trim();
 
-    // ADMIN LOGIN
-    if (username === "admin" && password === "1234") {
-        localStorage.setItem("role", "admin");
-        localStorage.setItem("login", "true");
-        window.location.href = "index.html";
+    if (!usernameInput || !passwordInput) {
+        alert("Username dan password tidak boleh kosong!");
         return;
     }
 
-    // MURID LOGIN
-    if (username !== "") {
-        localStorage.setItem("role", "murid");
-        localStorage.setItem("login", "true");
-        localStorage.setItem("nama", username);
-        window.location.href = "index.html";
-        return;
-    }
+    // Cari user di dalam databaseUser
+    const userTerpilih = databaseUser.find(
+        user => user.username.toLowerCase() === usernameInput.toLowerCase() && user.password === passwordInput
+    );
 
-    alert("Isi username!");
+    if (userTerpilih) {
+        // Set semua session data ke LocalStorage sesuai kebutuhan script.js utama
+        localStorage.setItem("login", "true");
+        localStorage.setItem("username", userTerpilih.username);
+        localStorage.setItem("nama", userTerpilih.nama);
+        localStorage.setItem("role", userTerpilih.role);
+
+        alert(`Login Berhasil! Selamat datang, ${userTerpilih.nama} (${userTerpilih.role})`);
+        
+        // Pindah ke halaman dashboard utama
+        window.location.href = "index.html";
+    } else {
+        alert("Username atau Password salah! Periksa kembali data Anda.");
+    }
 }
+
+// Fitur Tambahan: Mengaktifkan tombol Enter untuk login
+document.addEventListener("keydown", function(event) {
+    if (event.key === "Enter") {
+        login();
+    }
+});
