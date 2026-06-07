@@ -1,3 +1,10 @@
+// ==========================================
+// CONFIGURATION GOOGLE SPREADSHEET
+// ==========================================
+// GANTI teks di bawah ini dengan URL Web App dari Google Apps Script Anda
+const GOOGLE_SHEET_URL = "PASTE_URL_WEB_APP_ANDA_DI_SINI";
+
+// Memuat data dari localStorage terlebih dahulu sebagai cache awal agar UI langsung berjalan lancar
 let dataSantri = JSON.parse(localStorage.getItem("dataSantri")) || [];
 let santriAktif = null;
 let currentView = 'viewDashboard'; 
@@ -104,7 +111,7 @@ const databaseJuz = {
     ],
     28: [
         { nama: "Al-Mujadilah", ayat: 22 }, { nama: "Al-Hashr", ayat: 24 }, { nama: "Al-Mumtahanah", ayat: 13 },
-        { nama: "As-Saff", ayat: 14 }, { media: "Al-Jumu'ah", ayat: 11 }, { nama: "Al-Munafiqun", ayat: 11 },
+        { nama: "As-Saff", ayat: 14 }, { nama: "Al-Jumu'ah", ayat: 11 }, { nama: "Al-Munafiqun", ayat: 11 },
         { nama: "At-Taghabun", ayat: 18 }, { nama: "At-Talaq", ayat: 12 }, { nama: "At-Tahrim", ayat: 12 }
     ],
     1: [
@@ -119,7 +126,32 @@ document.addEventListener("DOMContentLoaded", () => {
     initGreeting();
     initUser();
     updateLiveDashboardStats();
+    
+    // Jalankan sinkronisasi data online dari Spreadsheet di latar belakang
+    syncDataDariSheets();
 });
+
+// SINKRONISASI DATA DARI GOOGLE SPREADSHEET
+async function syncDataDariSheets() {
+    if (!GOOGLE_SHEET_URL || GOOGLE_SHEET_URL.includes("PASTE_URL")) return;
+    try {
+        const response = await fetch(GOOGLE_SHEET_URL);
+        const data = await response.json();
+        
+        if (Array.isArray(data)) {
+            dataSantri = data;
+            localStorage.setItem("dataSantri", JSON.stringify(dataSantri));
+            
+            // Re-render UI agar data online terbaru langsung tampil secara dinamis
+            initUser();
+            updateLiveDashboardStats();
+            if(currentView === 'viewHafalan') renderJuzContainers();
+            if(currentView === 'viewPenilaian') renderPenilaianModul();
+        }
+    } catch (error) {
+        console.error("Gagal sinkronisasi dengan Google Sheets:", error);
+    }
+}
 
 // GREETING DINAMIS BERDASARKAN WAKTU REALTIME
 function initGreeting() {
@@ -188,7 +220,7 @@ function setSantriAktif() {
     if(currentView === 'viewPenilaian') renderPenilaianModul();
 }
 
-// UPDATE STATS UTAMA DASHBOARD SECARA TOTAL & VISUAL KREATIVE
+// UPDATE STATS UTAMA DASHBOARD
 function updateLiveDashboardStats() {
     let totalAyatSistem = 0; 
     let totalAyatSelesai = 0;
@@ -222,15 +254,21 @@ function updateLiveDashboardStats() {
     const persenHijaiyah = Math.round((totalLulusH / 28) * 100);
     const persenTajwid = totalItemTajwid > 0 ? Math.round((totalFasihT / totalItemTajwid) * 100) : 0;
 
-    // Masukkan data angka ke komponen teks dashboard
-    document.getElementById("totalSelesaiAyat").innerText = totalAyatSelesai;
-    document.getElementById("totalLulusHijaiyah").innerText = `${totalLulusH} / 28`;
-    document.getElementById("totalFasihTajwid").innerText = `${totalFasihT} / ${totalItemTajwid}`;
+    const elAyat = document.getElementById("totalSelesaiAyat");
+    const elHuruf = document.getElementById("totalLulusHijaiyah");
+    const elTajwid = document.getElementById("totalFasihTajwid");
 
-    // Render lingkaran progres mini pada setiap card di dashboard utama
-    document.getElementById("statCircleHafalan").innerHTML = circularProgress(persenHafalan, "#3b82f6");
-    document.getElementById("statCircleHijaiyah").innerHTML = circularProgress(persenHijaiyah, "#10b981");
-    document.getElementById("statCircleTajwid").innerHTML = circularProgress(persenTajwid, "#6366f1");
+    if (elAyat) elAyat.innerText = totalAyatSelesai;
+    if (elHuruf) elHuruf.innerText = `${totalLulusH} / 28`;
+    if (elTajwid) elTajwid.innerText = `${totalFasihT} / ${totalItemTajwid}`;
+
+    const cHafalan = document.getElementById("statCircleHafalan");
+    const cHuruf = document.getElementById("statCircleHijaiyah");
+    const cTajwid = document.getElementById("statCircleTajwid");
+
+    if (cHafalan) cHafalan.innerHTML = circularProgress(persenHafalan, "#3b82f6");
+    if (cHuruf) cHuruf.innerHTML = circularProgress(persenHijaiyah, "#10b981");
+    if (cTajwid) cTajwid.innerHTML = circularProgress(persenTajwid, "#6366f1");
 }
 
 // ACCORDION JUZ HAFALAN
@@ -376,6 +414,7 @@ function toggleAyat(juzNum, suratIndex, ayatIndex) {
     fillSuratGrid(juzNum); 
 }
 
+// TUTUP PANEL POPUP DETAIL AYAT
 function closeDetail() {
     document.getElementById("suratDetail").classList.add("hidden");
     document.getElementById("backdropDetail").classList.add("hidden");
@@ -457,17 +496,19 @@ function siklusNilaiHuruf(idx, currentVal) {
     if (!santriAktif || role === "murid") return;
     if (!santriAktif.huruf) santriAktif.huruf = {};
     santriAktif.huruf[`h_${idx}`] = String((parseInt(currentVal) + 1) % 4);
-    save(); renderPenilaianModul();
+    save(); 
+    renderPenilaianModul();
 }
 
 function siklusNilaiTajwid(id, currentVal) {
     if (!santriAktif || role === "murid") return;
     if (!santriAktif.tajwid) santriAktif.tajwid = {};
     santriAktif.tajwid[id] = String((parseInt(currentVal) + 1) % 4);
-    save(); renderPenilaianModul();
+    save(); 
+    renderPenilaianModul();
 }
 
-// GLOBAL UTILITIES
+// GLOBAL VISUAL UTILITIES
 function circularProgress(persen, color) {
     const size = 48; const stroke = 4; const radius = (size - stroke) / 2;
     const circumference = 2 * Math.PI * radius; const offset = circumference - (persen / 100) * circumference;
@@ -479,5 +520,27 @@ function circularProgress(persen, color) {
     </svg>`;
 }
 
-function save() { localStorage.setItem("dataSantri", JSON.stringify(dataSantri)); }
-function logout() { localStorage.removeItem("login"); window.location.href = "login.html"; }
+// FUNGSI MENYIMPAN DATA (HYBRID: LOCAL + SPREADSHEET ONLINE)
+async function save() { 
+    // Simpan ke local storage instan agar UI tidak lag
+    localStorage.setItem("dataSantri", JSON.stringify(dataSantri)); 
+    
+    // Kirim data ke Google Spreadsheet di background
+    if (!GOOGLE_SHEET_URL || GOOGLE_SHEET_URL.includes("PASTE_URL")) return;
+    try {
+        await fetch(GOOGLE_SHEET_URL, {
+            method: "POST",
+            headers: { 
+                "Content-Type": "application/x-www-form-urlencoded" 
+            },
+            body: new URLSearchParams({ dataSantri: JSON.stringify(dataSantri) })
+        });
+    } catch (error) {
+        console.error("Gagal menyimpan ke Google Sheets:", error);
+    }
+}
+
+function logout() { 
+    localStorage.removeItem("login"); 
+    window.location.href = "login.html"; 
+}
