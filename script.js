@@ -122,13 +122,14 @@ const databaseJuz = {
 const subTeksJuz = { 30: "Amma Yatasa'alun", 29: "Tabarakalladhi", 28: "Qad Sami'allah", 1: "Alif Lam Mim" };
 let juzTerbuka = null; 
 
-document.addEventListener("DOMContentLoaded", () => {
-    initGreeting();
-    initUser();
-    updateLiveDashboardStats();
+document.addEventListener("DOMContentLoaded", async () => {
+    // 1. Tunggu sinkronisasi selesai SEBELUM melakukan apa pun
+    await sinkronisasiDataOnline(); 
     
-    // Jalankan sinkronisasi data online dari Spreadsheet di latar belakang
-    syncDataDariSheets();
+    // 2. Baru jalankan inisialisasi setelah data ada
+    initGreeting();
+    initUser(); 
+    updateLiveDashboardStats();
 });
 
 // GREETING DINAMIS BERDASARKAN WAKTU REALTIME
@@ -160,21 +161,27 @@ function navigateTo(viewId) {
 }
 
 function initUser() {
-    if (role === "murid") {
-       santriAktif = dataSantri.find(s => s.nama.toLowerCase() === namaLogin.toLowerCase());
-        if (!santriAktif) {
-            santriAktif = { id: Date.now(), nama: namaLogin, progress: {}, huruf: {}, tajwid: {} };
-            dataSantri.push(santriAktif);
-            save();
-        } else {
-            santriAktif.nama = santriAktif.nama; 
-        }
+    // Pastikan dataSantri sudah berisi data (bukan array kosong)
+    if (dataSantri.length === 0) {
+        console.log("Data masih kosong, menunggu input user...");
+        return;
+    }
 
-        const input = document.getElementById("namaInput");
-        if (input) { input.value = namaLogin; input.disabled = true; }
-        const namaEl = document.getElementById("namaSantri");
-        if (namaEl) namaEl.innerText = namaLogin;
-        updateLiveDashboardStats();
+    if (role === "murid") {
+       // Cari santri berdasarkan nama dari dataSantri yang SUDAH terupdate (hasil sinkronisasi)
+       santriAktif = dataSantri.find(s => s.nama.toLowerCase() === namaLogin.toLowerCase());
+       
+       if (!santriAktif) {
+           // Jika benar-benar baru, buat entri baru
+           santriAktif = { id: Date.now(), nama: namaLogin, progress: {}, huruf: {}, tajwid: {} };
+           dataSantri.push(santriAktif);
+           save(); // Simpan ke server
+       }
+
+       const input = document.getElementById("namaInput");
+       if (input) { input.value = namaLogin; input.disabled = true; }
+       const namaEl = document.getElementById("namaSantri");
+       if (namaEl) namaEl.innerText = namaLogin;
     }
 }
 
@@ -536,37 +543,22 @@ async function save() {
 // =========================================================================
 
 async function sinkronisasiDataOnline() {
-    // Jika URL Google Sheet belum diisi, hentikan fungsi
-    if (!GOOGLE_SHEET_URL || GOOGLE_SHEET_URL.includes("PASTE_URL")) {
-        console.log("URL Google Sheets belum dikonfigurasi.");
-        return;
-    }
+    if (!GOOGLE_SHEET_URL || GOOGLE_SHEET_URL.includes("PASTE_URL")) return;
     
     try {
-        console.log("Menghubungkan ke Google Sheets untuk mengambil data terbaru...");
-        
-        // Mengambil data dari fungsi doGet() Web App Apps Script
         const response = await fetch(GOOGLE_SHEET_URL);
         const dataTerbaru = await response.json();
         
-        // Jika data dari Google Sheets ditemukan dan tidak kosong
-        if (dataTerbaru && dataTerbaru.length > 0) {
-            dataSantri = dataTerbaru;
-            
-            // Paksa simpan ke localStorage HP / Browser agar tidak kosong lagi
+        // Cek apakah data benar-benar ada (bukan error atau kosong)
+        if (Array.isArray(dataTerbaru) && dataTerbaru.length > 0) {
+            dataSantri = dataTerbaru; // Ganti dengan data terbaru
             localStorage.setItem("dataSantri", JSON.stringify(dataSantri));
-            console.log("Sinkronisasi berhasil! Data diperbarui.");
-            
-            // Segarkan ulang data user yang sedang login agar nilainya langsung muncul
-            if (typeof initUser === "function") initUser();
-            if (typeof renderDashboard === "function") renderDashboard();
-            if (typeof renderPenilaianModul === "function") renderPenilaianModul();
+            console.log("Data berhasil disinkronisasi!");
         }
     } catch (error) {
-        console.error("Gagal mengambil data online, menggunakan data lokal:", error);
+        console.error("Gagal sinkronisasi, menggunakan data lama:", error);
     }
 }
-
 // JALANKAN FUNGSI INI OTOMATIS SETIAP KALI HALAMAN DIBUKA
 document.addEventListener("DOMContentLoaded", () => {
     sinkronisasiDataOnline();
