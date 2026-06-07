@@ -54,10 +54,10 @@ const juz30 = [
 // ======================
 // INIT
 // ======================
-window.onload = function () {
+document.addEventListener("DOMContentLoaded", function () {
     renderDashboard();
     updateStats();
-};
+});
 
 // ======================
 // SET SANTRI AKTIF
