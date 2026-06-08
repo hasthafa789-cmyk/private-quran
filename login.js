@@ -1,32 +1,7 @@
-// Data Akun yang Didaftarkan ke Sistem (Gunakan ini untuk login)
-const databaseUser = [
-    {
-        username: "guru",
-        password: "3492",
-        nama: "Ustadz Hasnan",
-        role: "guru"
-    },
-    {
-        username: "bintang",
-        password: "123",
-        nama: "Bintang",
-        role: "murid"
-    },
-    {
-        username: "dimaz",
-        password: "123",
-        nama: "Dimaz",
-        role: "murid"
-    },
-    {
-        username: "trial",
-        password: "123",
-        nama: "Sahabat",
-        role: "murid"
-    }
-];
+// URL Web App Google Apps Script Anda
+const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyGx6yRAZEc98peIMYxQ-aNo3rvsoBfMmNWhSADDfthQoAa7CBumg2ma5EWenXXxroY/exec"; 
 
-function login() {
+async function login() {
     const usernameInput = document.getElementById("username").value.trim();
     const passwordInput = document.getElementById("password").value.trim();
 
@@ -35,27 +10,50 @@ function login() {
         return;
     }
 
-    // Cari user di dalam databaseUser
-    const userTerpilih = databaseUser.find(
-        user => user.username.toLowerCase() === usernameInput.toLowerCase() && user.password === passwordInput
-    );
+    // Indikator loading sederhana
+    const btn = document.querySelector("button"); 
+    const originalText = btn.innerText;
+    btn.innerText = "Memproses...";
+    btn.disabled = true;
 
-    if (userTerpilih) {
-        // Set semua session data ke LocalStorage sesuai kebutuhan script.js utama
-        localStorage.setItem("login", "true");
-        localStorage.setItem("username", userTerpilih.username);
-        localStorage.setItem("nama", userTerpilih.nama);
-        localStorage.setItem("role", userTerpilih.role);
+    try {
+        const response = await fetch(GOOGLE_SCRIPT_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ 
+                action: "login", 
+                username: usernameInput, 
+                password: passwordInput 
+            })
+        });
 
-        
-        // Pindah ke halaman dashboard utama
-        window.location.href = "index.html";
-    } else {
-        alert("Username atau Password salah! Periksa kembali data Anda.");
+        // Mengambil respons dari server
+        const result = await response.json();
+
+        if (result.status === "success") {
+            // Set data ke LocalStorage
+            localStorage.setItem("login", "true");
+            localStorage.setItem("nama", result.nama);
+            localStorage.setItem("role", result.role);
+            localStorage.setItem("username", usernameInput);
+
+            // Pindah ke halaman dashboard utama
+            window.location.href = "index.html";
+        } else {
+            // Menampilkan error (Entah itu salah password atau error dari Google Script)
+            alert(result.message);
+            btn.innerText = originalText;
+            btn.disabled = false;
+        }
+    } catch (error) {
+        console.error("Error:", error);
+        alert("Gagal terhubung ke server. Periksa koneksi internet atau konfigurasi Deployment Anda.");
+        btn.innerText = originalText;
+        btn.disabled = false;
     }
 }
 
-// Fitur Tambahan: Mengaktifkan tombol Enter untuk login
+// Fitur Tombol Enter
 document.addEventListener("keydown", function(event) {
     if (event.key === "Enter") {
         login();
