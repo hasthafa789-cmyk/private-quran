@@ -509,3 +509,16 @@ window.addEventListener("load", () => {
         }, 1000); 
     }, 1200);
 });
+
+// ==========================================
+// TAMBAHAN: SOLUSI TOMBOL BACK DI HP
+// ==========================================
+window.addEventListener('pageshow', function(event) {
+    // Mengecek apakah user masih login (di HP, terkadang halaman dimuat dari cache)
+    const isLogin = localStorage.getItem("login");
+    
+    // Jika tidak ada data login, paksa pindah ke halaman login
+    if (isLogin !== "true") {
+        window.location.replace("login.html");
+    }
+});
