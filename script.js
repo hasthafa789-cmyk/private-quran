@@ -81,7 +81,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     initUser(); 
     updateLiveDashboardStats();
     tampilkanHaditsAcak(); // Menjalankan hadits acak saat aplikasi dimuat
-    document.body.style.opacity = '1';
+    
 });
 
 function initGreeting() {
