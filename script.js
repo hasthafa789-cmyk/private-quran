@@ -457,20 +457,35 @@ function circularProgress(persen, color) {
 // ==========================================
 // SYSTEM & DATABASE LOGIC
 // ==========================================
+
+// 1. Tambahkan variabel penahan waktu di luar fungsi
+let timeoutSimpan = null; 
+
 async function save() { 
+    // Selalu simpan ke PC/perangkat lokal secepatnya agar UI tidak delay
     localStorage.setItem("dataSantri", JSON.stringify(dataSantri)); 
     
     if (!GOOGLE_SHEET_URL || GOOGLE_SHEET_URL.includes("PASTE_URL")) return;
 
-    try {
-        await fetch(GOOGLE_SHEET_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: new URLSearchParams({ dataSantri: JSON.stringify(dataSantri) })
-        });
-    } catch (error) {
-        console.error("Gagal menyimpan ke Google Sheets:", error);
-    }
+    // 2. Teknik Debounce: 
+    // Hentikan proses kirim ke server sebelumnya jika user mengeklik lagi dalam waktu dekat
+    clearTimeout(timeoutSimpan);
+    
+    // 3. Buat timer baru: Tunggu user selesai klik-klik (jeda 1.5 detik)
+    // Setelah 1.5 detik tidak ada klik tambahan, baru kirim 1 data FINAL secara utuh ke server
+    timeoutSimpan = setTimeout(async () => {
+        try {
+            console.log("Mengirim data rekap final ke server Google...");
+            await fetch(GOOGLE_SHEET_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: new URLSearchParams({ dataSantri: JSON.stringify(dataSantri) })
+            });
+            console.log("Data berhasil tersimpan penuh di Google Sheet!");
+        } catch (error) {
+            console.error("Gagal menyimpan ke Google Sheets:", error);
+        }
+    }, 1500); // 1500 milidetik = 1.5 detik
 }
 
 async function sinkronisasiDataOnline() {
