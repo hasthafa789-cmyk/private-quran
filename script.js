@@ -132,18 +132,33 @@ document.addEventListener("DOMContentLoaded", async () => {
     updateLiveDashboardStats();
 });
 
-// GREETING DINAMIS BERDASARKAN WAKTU REALTIME
 function initGreeting() {
     const jam = new Date().getHours();
-    let ucapan = "Selamat Malam 🌙";
-    if (jam >= 4 && jam < 10) ucapan = "Selamat Pagi 🌅";
-    else if (jam >= 10 && jam < 15) ucapan = "Selamat Siang ☀️";
-    else if (jam >= 15 && jam < 18) ucapan = "Selamat Sore 🌤️";
-    
-    const el = document.getElementById("txtGreeting");
-    if(el) el.innerText = ucapan;
-}
+    let ucapan = "Selamat Malam";
+    let iconName = "nights_stay"; // Ikon untuk malam
 
+    if (jam >= 4 && jam < 10) {
+        ucapan = "Selamat Pagi";
+        iconName = "sunny";
+    } else if (jam >= 10 && jam < 15) {
+        ucapan = "Selamat Siang";
+        iconName = "wb_sunny";
+    } else if (jam >= 15 && jam < 18) {
+        ucapan = "Selamat Sore";
+        iconName = "partly_cloudy_day";
+    }
+
+    const el = document.getElementById("txtGreeting");
+    if (el) {
+        // Kita gunakan flex agar ikon dan teks sejajar dengan rapi
+        el.innerHTML = `
+            <span class="flex items-center justify-center gap-1.5">
+                <span class="material-symbols-outlined text-sm leading-none">${iconName}</span>
+                ${ucapan}
+            </span>
+        `;
+    }
+}
 function navigateTo(viewId) {
     document.getElementById("viewDashboard").classList.add("hidden");
     document.getElementById("viewHafalan").classList.add("hidden");
