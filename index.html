@@ -7,12 +7,10 @@
     
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Font Plus Jakarta Sans -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 
-    <!-- Google Material Symbols (Icon HD) -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
 
     <style>
@@ -20,19 +18,9 @@
         .page-view {
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .accordion-content {
-            display: grid;
-            grid-template-rows: 0fr;
-            transition: grid-template-rows 0.25s ease-out, opacity 0.2s ease-out;
-            opacity: 0;
-        }
-        .accordion-content.open {
-            grid-template-rows: 1fr;
-            opacity: 1;
-        }
         
         /* ==========================================
-           ANIMASI MASUK (FADE IN UP & DOWN)
+           ANIMASI MASUK
            ========================================== */
         @keyframes fadeInDown {
             0% { opacity: 0; transform: translateY(-20px); }
@@ -42,29 +30,49 @@
             0% { opacity: 0; transform: translateY(30px); }
             100% { opacity: 1; transform: translateY(0); }
         }
-        
-        /* Class Animasi untuk Header */
-        .animate-header {
-            animation: fadeInDown 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+        @keyframes scaleIn {
+            0% { opacity: 0; transform: scale(0.95); }
+            100% { opacity: 1; transform: scale(1); }
         }
         
-        /* Class Animasi untuk Konten Dashboard */
-        .animate-entry {
-            animation: fadeInUp 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-            opacity: 0; /* Mulai dari tidak terlihat */
+        .animate-header { animation: fadeInDown 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+        .animate-entry { animation: fadeInUp 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+        .animate-modal { animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+        
+        .delay-1 { animation-delay: 0.1s; opacity: 0; }
+        .delay-2 { animation-delay: 0.2s; opacity: 0; }
+        .delay-3 { animation-delay: 0.3s; opacity: 0; }
+        .delay-4 { animation-delay: 0.4s; opacity: 0; }
+
+        /* ==========================================
+           FIX OFFSIDE / TEKS MELUBER PADA CARD
+           ========================================== */
+        /* Memaksa teks (terutama huruf Arab panjang tanpa spasi) untuk turun ke baris baru */
+        #listHukumTajwidKlasifikasi *, #listHurufHijaiyah * {
+            word-wrap: break-word !important;
+            overflow-wrap: break-word !important;
+            word-break: break-word !important;
+            white-space: normal !important;
+            max-width: 100%;
         }
         
-        /* Delay bergantian agar munculnya berurutan */
-        .delay-1 { animation-delay: 0.1s; }
-        .delay-2 { animation-delay: 0.2s; }
-        .delay-3 { animation-delay: 0.3s; }
-        .delay-4 { animation-delay: 0.4s; }
+        /* Membatasi kontainer agar konten di dalamnya tidak keluar batas */
+        .card-container-fix {
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+         @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .animate-fade-in { animation: fadeIn 0.8s ease-in-out; }
+
     </style>
 </head>
 
 <body class="bg-slate-50/50 text-slate-800 min-h-screen selection:bg-blue-100 selection:text-blue-600">
 
-    <!-- Header dengan animasi turun dari atas -->
     <header class="animate-header bg-white/80 border-b border-slate-100 sticky top-0 z-40 shadow-sm backdrop-blur-xl">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
@@ -82,7 +90,7 @@
                     <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
                         <span class="material-symbols-outlined text-lg">search</span>
                     </span>
-                    <input id="namaInput" type="text" placeholder="Masukkan Nama Santri..." onchange="setSantriAktif()" class="w-full sm:w-64 pl-10 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-semibold text-slate-700 placeholder:text-slate-400">
+                    <input id="namaInput" type="text" placeholder="Masukkan Nama Santri..." oninput="setSantriAktif()" class="w-full sm:w-64 pl-10 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-semibold text-slate-700 placeholder:text-slate-400">
                 </div>
                 <button onclick="logout()" class="p-2.5 sm:px-4 sm:py-2.5 text-sm font-bold bg-rose-50 text-rose-600 hover:bg-rose-100 active:scale-95 rounded-xl transition-all flex items-center gap-2 border border-rose-100">
                     <span class="material-symbols-outlined text-lg">logout</span> 
@@ -96,21 +104,17 @@
 
         <div id="viewDashboard" class="page-view space-y-8">
             
-            <!-- Tambahan animasi naik (delay-1) -->
             <section class="animate-entry delay-1 relative overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-950 to-blue-950 p-6 sm:p-8 rounded-3xl text-white shadow-xl shadow-slate-900/10 transition-all duration-300 hover:scale-[1.03] hover:-translate-y-1.5 hover:shadow-2xl hover:z-10">
                 <div class="absolute -right-10 -top-10 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl"></div>
                 <div class="absolute -left-10 -bottom-10 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl"></div>
                 
                 <div class="relative z-10 space-y-2">
-                    <span id="txtGreeting" class="inline-flex items-center text-xs font-bold uppercase tracking-widest text-indigo-300 bg-indigo-500/20 px-3 py-1 rounded-full">
-    <!-- Konten akan diisi oleh JS -->
-</span>
+                    <span id="txtGreeting" class="inline-flex items-center text-xs font-bold uppercase tracking-widest text-indigo-300 bg-indigo-500/20 px-3 py-1 rounded-full"></span>
                     <h2 class="text-2xl sm:text-3xl font-extrabold tracking-tight">Assalamualaikum, <span id="namaSantri" class="text-blue-400">-</span>!</h2>
                     <p class="text-slate-300 text-xs sm:text-sm max-w-xl font-medium leading-relaxed">Semoga hari ini penuh keberkahan. Terus tingkatkan hafalan, tajwid, dan sempurnakan makharijul huruf demi mahkota kemuliaan.</p>
                 </div>
             </section>
 
-            <!-- Tambahan animasi naik (delay-2) -->
             <section class="animate-entry delay-2 space-y-3">
                 <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Dashboard Live Overview</h3>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -175,7 +179,6 @@
                 </div>
             </section>
 
-            <!-- Tambahan animasi naik (delay-3) -->
             <section class="animate-entry delay-3 space-y-3">
                 <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Akses Program Kelas</h3>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -198,7 +201,7 @@
 
                     <button onclick="navigateTo('viewPenilaian')" class="relative overflow-hidden p-6 rounded-3xl text-left bg-white border border-slate-200 shadow-md shadow-slate-100 group active:scale-[0.98] transition-all duration-300 flex flex-col justify-between min-h-[180px] w-full hover:border-slate-300 hover:scale-105 hover:-translate-y-2 hover:shadow-2xl hover:z-10">
                         <div class="absolute right-2 bottom-0 transform translate-x-2 translate-y-4 scale-120 text-slate-100/60 font-extrabold text-9xl pointer-events-none select-none">TJ</div>
-                        <div class="flex items-center justify-between w-full z-10">
+                        <div class="flex items-start justify-between w-full z-10">
                             <div class="p-3 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-2xl transition group-hover:scale-110 duration-300 flex items-center justify-center">
                                 <span class="material-symbols-outlined text-3xl">fact_check</span>
                             </div>
@@ -214,11 +217,10 @@
                     
                 </div>
             </section>
-
-            <!-- Tambahan animasi naik (delay-4) -->
+            
             <section class="animate-entry delay-4 space-y-3 pt-2">
                 <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Mutiara Hadits</h3>
-                <div class="relative overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 sm:p-8 shadow-xl shadow-slate-900/10 group transition-all duration-300 hover:scale-105 hover:-translate-y-2 hover:shadow-2xl">
+                <div class="relative overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 sm:p-8 shadow-xl shadow-slate-900/10 group transition-all duration-300 hover:scale-[1.02] hover:-translate-y-1 hover:shadow-2xl">
                     <div class="absolute -right-6 -bottom-8 text-white/5 text-9xl font-serif pointer-events-none transition-transform group-hover:scale-110 duration-500">”</div>
                     <div class="absolute -left-10 -top-10 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl"></div>
                     
@@ -226,11 +228,11 @@
                         <div class="p-2.5 bg-white/5 border border-white/10 text-indigo-300 rounded-2xl flex items-center justify-center">
                             <span class="material-symbols-outlined text-xl">format_quote</span>
                         </div>
-                        <blockquote class="text-base sm:text-lg font-bold text-slate-100 leading-relaxed max-w-2xl tracking-wide">
+                        <blockquote id="teksHadits" class="text-base sm:text-lg font-bold text-slate-100 leading-relaxed max-w-2xl tracking-wide">
                             "Sebaik-baik kalian adalah orang yang mempelajari Al-Qur'an dan mengajarkannya."
                         </blockquote>
                         <div class="w-12 h-0.5 bg-white/10 rounded-full"></div>
-                        <p class="text-xs font-bold text-indigo-400 uppercase tracking-widest">HR. Bukhari</p>
+                        <p id="riwayatHadits" class="text-xs font-bold text-indigo-400 uppercase tracking-widest">HR. Bukhari</p>
                     </div>
                 </div>
             </section>
@@ -246,37 +248,44 @@
                 <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Modul Hafalan</h3>
             </div>
 
-            <div class="bg-gradient-to-r from-blue-600 to-indigo-600 p-5 rounded-2xl text-white shadow-md flex justify-between items-center transition-all duration-300 hover:shadow-lg">
-                <div>
-                    <h2 class="text-lg font-bold tracking-tight">Daftar Menu Juz Al-Qur'an</h2>
-                    <p class="text-xs text-blue-100">Klik salah satu Juz untuk memantau detail setoran surat</p>
-                </div>
-                <span class="material-symbols-outlined text-3xl">menu_book</span>
-            </div>
-            
-            <div id="containerJuzAccordion" class="space-y-4"></div>
-
-            <section id="suratDetail" class="hidden max-w-2xl mx-auto bg-white rounded-3xl shadow-2xl border border-slate-200 fixed inset-x-4 bottom-4 md:bottom-auto md:top-24 z-50 max-h-[80vh] flex flex-col transition-all duration-300">
-                <div class="bg-gradient-to-r from-blue-600 to-indigo-600 p-5 text-white flex items-center justify-between flex-shrink-0">
-                    <button onclick="closeDetail()" class="p-2 hover:bg-white/10 rounded-xl transition active:scale-90 flex items-center justify-center">
-                        <span class="material-symbols-outlined text-base">close</span>
-                    </button>
-                    <h2 id="judulSurat" class="text-sm sm:text-base font-bold text-center flex-grow">Nama Surat</h2>
-                    <div class="w-9"></div>
-                </div>
-                <div class="p-6 space-y-4 overflow-y-auto flex-grow">
-                    <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
-                        <p class="text-[11px] text-slate-500 font-bold uppercase flex items-center justify-center gap-1">
-                            <span class="material-symbols-outlined text-xs">lightbulb</span> Ketuk nomor untuk menandai ayat yang sudah lulus (Warna Biru)
-                        </p>
+            <div id="subPageDaftarJuz" class="space-y-6 animate-entry">
+                <div class="bg-white rounded-3xl border border-slate-100 shadow-sm p-5 sm:p-6 space-y-6">
+                    <div class="flex items-center gap-3 pb-5 border-b border-slate-100">
+                        <div class="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+                            <span class="material-symbols-outlined">layers</span>
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-bold text-slate-800 tracking-tight">Pilih Juz Al-Qur'an</h2>
+                            <p class="text-xs text-slate-400 font-semibold mt-0.5">Silakan pilih Juz untuk melihat daftar surat di dalamnya</p>
+                        </div>
                     </div>
-                    <div id="ayatList" class="flex flex-wrap gap-2.5 justify-center"></div>
+                    
+                    <div id="gridContainerJuz" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                        </div>
                 </div>
-                <div class="p-4 border-t border-slate-100 bg-slate-50 flex justify-end flex-shrink-0">
-                    <button onclick="closeDetail()" class="px-5 py-2.5 text-xs font-bold bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl transition">Simpan & Tutup</button>
+            </div>
+
+            <div id="subPageDetailSuratJuz" class="hidden space-y-6 animate-entry">
+                <div class="bg-white rounded-3xl border border-slate-100 shadow-sm p-5 sm:p-6 space-y-6">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-100">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                                <span class="material-symbols-outlined">auto_stories</span>
+                            </div>
+                            <div>
+                                <h2 id="txtJudulHalamanJuz" class="text-lg font-bold text-slate-800 tracking-tight">Daftar Surat</h2>
+                                <p class="text-xs text-slate-400 font-semibold mt-0.5">Pilih kartu surat untuk menandai hafalan ayat</p>
+                            </div>
+                        </div>
+                        <button onclick="kembaliKeDaftarJuz()" class="px-4 py-2 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition flex items-center gap-1.5 self-start sm:self-auto">
+                            <span class="material-symbols-outlined text-sm">arrow_back</span> Kembali Ke List Juz
+                        </button>
+                    </div>
+
+                    <div id="containerListSuratJuz" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 break-words">
+                        </div>
                 </div>
-            </section>
-            <div id="backdropDetail" onclick="closeDetail()" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40"></div>
+            </div>
         </div>
 
 
@@ -286,50 +295,190 @@
                     <span class="material-symbols-outlined text-sm">arrow_back</span> Dashboard
                 </button>
                 <div class="h-5 w-[1px] bg-slate-300"></div>
-                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Modul Kualitas Bacaan</h3>
+                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Kualitas Bacaan</h3>
             </div>
 
-            <div class="space-y-4">
-                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all duration-300 hover:shadow-lg">
-                    <button onclick="toggleAccordionPenilaian('accHijaiyah')" class="w-full p-5 flex items-center justify-between bg-slate-50/60 hover:bg-slate-50 transition border-b border-slate-100">
-                        <div class="flex items-center gap-3">
-                            <span class="material-symbols-outlined text-2xl text-emerald-600">record_voice_over</span>
-                            <div class="text-left">
-                                <h3 class="font-bold text-slate-800 text-sm sm:text-base">Penilaian Huruf Hijaiyah</h3>
-                                <p class="text-xs text-slate-400 mt-0.5">Penilaian makharijul huruf Alif sampai Ya</p>
-                            </div>
+            <div id="subPageMenuPenilaian" class="grid grid-cols-1 md:grid-cols-2 gap-6 animate-entry">
+                <button onclick="bukaSubMenuPenilaian('hijaiyah')" class="text-left bg-white rounded-3xl border border-slate-200 shadow-sm p-6 hover:shadow-lg hover:border-emerald-300 hover:-translate-y-1 transition-all group flex flex-col justify-between min-h-[200px]">
+                    <div class="flex items-center justify-between">
+                        <div class="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <span class="material-symbols-outlined text-3xl">record_voice_over</span>
                         </div>
-                        <span id="icon-accHijaiyah" class="material-symbols-outlined text-slate-400 text-lg">remove</span>
-                    </button>
-                    <div id="accHijaiyah" class="accordion-content open">
-                        <div class="overflow-hidden p-5">
-                            <div id="listHurufHijaiyah" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"></div>
-                        </div>
+                        <span class="w-10 h-10 rounded-full bg-slate-50 text-slate-400 flex items-center justify-center group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
+                            <span class="material-symbols-outlined">arrow_forward</span>
+                        </span>
                     </div>
-                </div>
+                    <div class="mt-6">
+                        <h2 class="text-xl font-extrabold text-slate-800 tracking-tight">Makharijul Huruf</h2>
+                        <p class="text-sm text-slate-500 font-medium mt-1">Evaluasi 28 huruf Hijaiyah</p>
+                    </div>
+                </button>
 
-                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all duration-300 hover:shadow-lg">
-                    <button onclick="toggleAccordionPenilaian('accTajwid')" class="w-full p-5 flex items-center justify-between bg-slate-50/60 hover:bg-slate-50 transition border-b border-slate-100">
+                <button onclick="bukaSubMenuPenilaian('tajwid')" class="text-left bg-white rounded-3xl border border-slate-200 shadow-sm p-6 hover:shadow-lg hover:border-purple-300 hover:-translate-y-1 transition-all group flex flex-col justify-between min-h-[200px]">
+                    <div class="flex items-center justify-between">
+                        <div class="w-14 h-14 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <span class="material-symbols-outlined text-3xl">lightbulb</span>
+                        </div>
+                        <span class="w-10 h-10 rounded-full bg-slate-50 text-slate-400 flex items-center justify-center group-hover:bg-purple-100 group-hover:text-purple-600 transition-colors">
+                            <span class="material-symbols-outlined">arrow_forward</span>
+                        </span>
+                    </div>
+                    <div class="mt-6">
+                        <h2 class="text-xl font-extrabold text-slate-800 tracking-tight">Hukum Tajwid</h2>
+                        <p class="text-sm text-slate-500 font-medium mt-1">Klasifikasi hukum bacaan & tahsin</p>
+                    </div>
+                </button>
+            </div>
+
+            <div id="subPageDetailHijaiyah" class="hidden space-y-6 animate-entry">
+                <div class="bg-white rounded-3xl border border-slate-100 shadow-sm p-5 sm:p-6 card-container-fix">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-5 border-b border-slate-100">
                         <div class="flex items-center gap-3">
-                            <span class="material-symbols-outlined text-2xl text-purple-600">lightbulb</span>
-                            <div class="text-left">
-                                <h3 class="font-bold text-slate-800 text-sm sm:text-base">Hukum Tajwid Sesuai Klasifikasi</h3>
-                                <p class="text-xs text-slate-400 mt-0.5">Pemahaman hukum bacaan & ketukan</p>
+                            <div class="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+                                <span class="material-symbols-outlined">record_voice_over</span>
+                            </div>
+                            <div>
+                                <h2 class="text-lg font-bold text-slate-800 tracking-tight">Makharijul Huruf Hijaiyah</h2>
+                                <p class="text-xs text-slate-400 font-semibold mt-0.5">Penilaian kefasihan pelafalan huruf</p>
                             </div>
                         </div>
-                        <span id="icon-accTajwid" class="material-symbols-outlined text-slate-400 text-lg">remove</span>
-                    </button>
-                    <div id="accTajwid" class="accordion-content open">
-                        <div class="overflow-hidden p-5">
-                            <div id="listHukumTajwidKlasifikasi" class="space-y-6"></div>
-                        </div>
+                        <button onclick="kembaliKeMenuPenilaian()" class="px-4 py-2 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition flex items-center gap-1.5 self-start sm:self-auto">
+                            <span class="material-symbols-outlined text-sm">arrow_back</span> Kembali
+                        </button>
                     </div>
+                    <div id="listHurufHijaiyah" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4"></div>
+                </div>
+            </div>
+
+            <div id="subPageDetailTajwid" class="hidden space-y-6 animate-entry">
+                <div class="bg-white rounded-3xl border border-slate-100 shadow-sm p-5 sm:p-6 card-container-fix">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-5 border-b border-slate-100">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600">
+                                <span class="material-symbols-outlined">lightbulb</span>
+                            </div>
+                            <div>
+                                <h2 class="text-lg font-bold text-slate-800 tracking-tight">Hukum Tajwid</h2>
+                                <p class="text-xs text-slate-400 font-semibold mt-0.5">Pemahaman hukum & sifat huruf</p>
+                            </div>
+                        </div>
+                        <button onclick="kembaliKeMenuPenilaian()" class="px-4 py-2 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition flex items-center gap-1.5 self-start sm:self-auto">
+                            <span class="material-symbols-outlined text-sm">arrow_back</span> Kembali
+                        </button>
+                    </div>
+                    <div id="listHukumTajwidKlasifikasi" class="space-y-8 flex flex-col w-full"></div>
                 </div>
             </div>
         </div>
 
     </main>
 
+    <div id="backdropDetail" onclick="closeDetail()" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] transition-all duration-300 w-screen h-screen"></div>
+
+    <section id="suratDetail" class="hidden fixed inset-0 z-[110] flex items-center justify-center p-4 transition-all duration-300">
+        <div class="w-full max-w-xl bg-white rounded-3xl shadow-2xl border border-slate-100 flex flex-col max-h-[85vh] overflow-hidden animate-modal">
+            
+            <div class="bg-gradient-to-r from-blue-600 to-indigo-600 p-5 text-white flex items-center justify-between flex-shrink-0">
+                <button onclick="closeDetail()" class="p-2 hover:bg-white/10 rounded-xl transition active:scale-90 flex items-center justify-center">
+                    <span class="material-symbols-outlined text-base">close</span>
+                </button>
+                <h2 id="judulSurat" class="text-sm sm:text-base font-bold text-center flex-grow tracking-wide">Nama Surat</h2>
+                <div class="w-9"></div>
+            </div>
+            
+            <div class="p-6 space-y-5 overflow-y-auto flex-grow bg-white">
+                <div class="bg-blue-50/80 p-3.5 rounded-2xl border border-blue-100 text-center">
+                    <p class="text-xs text-blue-700 font-bold uppercase flex items-center justify-center gap-1.5 tracking-wide">
+                        <span class="material-symbols-outlined text-base text-blue-600">info</span> 
+                        Ketuk nomor untuk menandai ayat
+                    </p>
+                </div>
+                <div id="ayatList" class="flex flex-wrap gap-2.5 justify-center"></div>
+            </div>
+            
+            <div class="p-4 border-t border-slate-100 bg-slate-50 flex justify-end flex-shrink-0">
+                <button onclick="closeDetail()" class="px-5 py-2.5 text-xs font-bold bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl transition shadow-sm active:scale-95">Simpan & Tutup</button>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        // 1. AUTO GENERATE KOTAK JUZ 1 - 30 AGAR PASTI MUNCUL
+        document.addEventListener("DOMContentLoaded", function() {
+            const containerJuz = document.getElementById('gridContainerJuz');
+            let htmlJuz = '';
+            for(let i = 1; i <= 30; i++) {
+                htmlJuz += `
+                <button onclick="bukaHalamanJuz(${i})" class="bg-slate-50 border border-slate-200 p-4 rounded-2xl hover:bg-blue-50 hover:border-blue-300 hover:shadow-md hover:-translate-y-1 transition-all flex flex-col items-center justify-center gap-3 group">
+                    <div class="w-12 h-12 bg-white rounded-full flex items-center justify-center text-blue-600 text-lg font-bold shadow-sm group-hover:scale-110 group-hover:bg-blue-600 group-hover:text-white transition-all">
+                        ${i}
+                    </div>
+                    <span class="text-sm font-extrabold text-slate-700 group-hover:text-blue-700">Juz ${i}</span>
+                </button>
+                `;
+            }
+            containerJuz.innerHTML = htmlJuz;
+        });
+
+        // 2. NAVIGASI MODAL JUZ & SURAT
+        function bukaHalamanJuz(nomorJuz) {
+            document.getElementById('subPageDaftarJuz').classList.add('hidden');
+            document.getElementById('subPageDetailSuratJuz').classList.remove('hidden');
+            document.getElementById('txtJudulHalamanJuz').innerText = "Daftar Surat - Juz " + nomorJuz;
+            
+            // Re-trigger animasi
+            const detailPage = document.getElementById('subPageDetailSuratJuz');
+            detailPage.style.animation = 'none';
+            detailPage.offsetHeight; 
+            detailPage.style.animation = null;
+
+            // Memanggil fungsi dari script.js Anda untuk menampilkan surat sesuai juz
+            if(typeof renderSuratBerdasarkanJuz === "function") {
+                renderSuratBerdasarkanJuz(nomorJuz);
+            }
+        }
+
+        function kembaliKeDaftarJuz() {
+            document.getElementById('subPageDetailSuratJuz').classList.add('hidden');
+            document.getElementById('subPageDaftarJuz').classList.remove('hidden');
+            
+            const listPage = document.getElementById('subPageDaftarJuz');
+            listPage.style.animation = 'none'; listPage.offsetHeight; listPage.style.animation = null;
+        }
+
+        // 3. NAVIGASI MODUL KUALITAS BACAAN
+        function bukaSubMenuPenilaian(tipe) {
+            document.getElementById('subPageMenuPenilaian').classList.add('hidden');
+            if (tipe === 'hijaiyah') {
+                const page = document.getElementById('subPageDetailHijaiyah');
+                page.classList.remove('hidden');
+                page.style.animation = 'none'; page.offsetHeight; page.style.animation = null;
+            } else if (tipe === 'tajwid') {
+                const page = document.getElementById('subPageDetailTajwid');
+                page.classList.remove('hidden');
+                page.style.animation = 'none'; page.offsetHeight; page.style.animation = null;
+            }
+        }
+
+        function kembaliKeMenuPenilaian() {
+            document.getElementById('subPageDetailHijaiyah').classList.add('hidden');
+            document.getElementById('subPageDetailTajwid').classList.add('hidden');
+            const menuPage = document.getElementById('subPageMenuPenilaian');
+            menuPage.classList.remove('hidden');
+            menuPage.style.animation = 'none'; menuPage.offsetHeight; menuPage.style.animation = null;
+        }
+    </script>
+    
     <script src="script.js"></script>
 </body>
+
+<div id="splashScreen" class="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-white transition-opacity duration-1000 ease-in-out">
+    <div class="animate-fade-in flex flex-col items-center">
+        <div class="w-20 h-20 bg-blue-600 rounded-3xl flex items-center justify-center text-white shadow-lg mb-4">
+            <span class="material-symbols-outlined text-5xl">menu_book</span>
+        </div>
+        <h1 class="text-2xl font-extrabold text-slate-800 tracking-tight">Hasnan Private</h1>
+    </div>
+</div>
+
 </html>

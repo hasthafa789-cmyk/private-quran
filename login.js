@@ -47,7 +47,6 @@ function login() {
         localStorage.setItem("nama", userTerpilih.nama);
         localStorage.setItem("role", userTerpilih.role);
 
-        alert(`Login Berhasil! Selamat datang, ${userTerpilih.nama} (${userTerpilih.role})`);
         
         // Pindah ke halaman dashboard utama
         window.location.href = "index.html";
