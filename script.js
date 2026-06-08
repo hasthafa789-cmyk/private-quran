@@ -81,6 +81,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     initUser(); 
     updateLiveDashboardStats();
     tampilkanHaditsAcak(); // Menjalankan hadits acak saat aplikasi dimuat
+    document.body.style.opacity = '1';
 });
 
 function initGreeting() {
@@ -523,4 +524,16 @@ window.addEventListener("load", () => {
             splash.style.display = 'none';
         }, 1000); 
     }, 1200);
+});
+
+// ==========================================
+// SOLUSI KUAT: CEK CACHE & REDIRECT
+// ==========================================
+window.addEventListener('pageshow', function(event) {
+    // Jika halaman dimuat dari cache atau tidak ada sesi login
+    if (event.persisted || localStorage.getItem("login") !== "true") {
+        if (localStorage.getItem("login") !== "true") {
+            window.location.replace("login.html");
+        }
+    }
 });
