@@ -81,6 +81,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     initUser(); 
     updateLiveDashboardStats();
     tampilkanHaditsAcak(); // Menjalankan hadits acak saat aplikasi dimuat
+    
+    document.body.style.opacity = '1';
+
 });
 
 function initGreeting() {
@@ -511,14 +514,13 @@ window.addEventListener("load", () => {
 });
 
 // ==========================================
-// TAMBAHAN: SOLUSI TOMBOL BACK DI HP
+// SOLUSI KUAT: CEK CACHE & REDIRECT
 // ==========================================
 window.addEventListener('pageshow', function(event) {
-    // Mengecek apakah user masih login (di HP, terkadang halaman dimuat dari cache)
-    const isLogin = localStorage.getItem("login");
-    
-    // Jika tidak ada data login, paksa pindah ke halaman login
-    if (isLogin !== "true") {
-        window.location.replace("login.html");
+    // Jika halaman dimuat dari cache atau tidak ada sesi login
+    if (event.persisted || localStorage.getItem("login") !== "true") {
+        if (localStorage.getItem("login") !== "true") {
+            window.location.replace("login.html");
+        }
     }
 });
