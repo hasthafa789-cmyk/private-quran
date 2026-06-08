@@ -1,7 +1,7 @@
 // ==========================================
 // CONFIGURATION GOOGLE SPREADSHEET
 // ==========================================
-// GANTI teks di bawah ini dengan URL Web App dari Google Apps Script Anda
+// URL Web App dari Google Apps Script Anda
 const GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbwaUxlHpQJBN4pS9MbHCCy_IAhhqXxaMAYARPKJVyv7A6w1QMk04uSjZ_iYB9y7NNr1/exec";
 
 // Memuat data dari localStorage terlebih dahulu sebagai cache awal agar UI langsung berjalan lancar
@@ -161,21 +161,18 @@ function navigateTo(viewId) {
 }
 
 function initUser() {
-    // Pastikan dataSantri sudah berisi data (bukan array kosong)
     if (dataSantri.length === 0) {
         console.log("Data masih kosong, menunggu input user...");
         return;
     }
 
     if (role === "murid") {
-       // Cari santri berdasarkan nama dari dataSantri yang SUDAH terupdate (hasil sinkronisasi)
        santriAktif = dataSantri.find(s => s.nama.toLowerCase() === namaLogin.toLowerCase());
        
        if (!santriAktif) {
-           // Jika benar-benar baru, buat entri baru
            santriAktif = { id: Date.now(), nama: namaLogin, progress: {}, huruf: {}, tajwid: {} };
            dataSantri.push(santriAktif);
-           save(); // Simpan ke server
+           save(); 
        }
 
        const input = document.getElementById("namaInput");
@@ -211,16 +208,21 @@ function setSantriAktif() {
 
 // UPDATE STATS UTAMA DASHBOARD
 function updateLiveDashboardStats() {
-    let totalAyatSistem = 0; 
-    let totalAyatSelesai = 0;
+    let totalSuratSistem = 0; 
+    let totalSuratSelesai = 0;
     
     Object.keys(databaseJuz).forEach(juzNum => {
         databaseJuz[juzNum].forEach((surat, sIdx) => {
-            totalAyatSistem += surat.ayat;
+            totalSuratSistem++; // Menghitung total jumlah surat di sistem
             const keyProgres = `juz${juzNum}_surat${sIdx}`;
             const progressSurat = santriAktif?.progress?.[keyProgres];
+            
             if (progressSurat && Array.isArray(progressSurat)) {
-                totalAyatSelesai += progressSurat.filter(Boolean).length;
+                const jumlahAyatDisetor = progressSurat.filter(Boolean).length;
+                // Sebuah surat dianggap selesai JIKA seluruh ayat di dalamnya sudah dicentang
+                if (jumlahAyatDisetor === surat.ayat) {
+                    totalSuratSelesai++;
+                }
             }
         });
     });
@@ -239,15 +241,19 @@ function updateLiveDashboardStats() {
         });
     });
 
-    const persenHafalan = totalAyatSistem > 0 ? Math.round((totalAyatSelesai / totalAyatSistem) * 100) : 0;
+    const persenHafalan = totalSuratSistem > 0 ? Math.round((totalSuratSelesai / totalSuratSistem) * 100) : 0;
     const persenHijaiyah = Math.round((totalLulusH / 28) * 100);
     const persenTajwid = totalItemTajwid > 0 ? Math.round((totalFasihT / totalItemTajwid) * 100) : 0;
 
-    const elAyat = document.getElementById("totalSelesaiAyat");
+    const elHafalan = document.getElementById("totalSelesaiAyat");
     const elHuruf = document.getElementById("totalLulusHijaiyah");
     const elTajwid = document.getElementById("totalFasihTajwid");
 
-    if (elAyat) elAyat.innerText = totalAyatSelesai;
+    if (elHafalan) {
+        // Cukup perbarui angkanya saja, karena teks "Surat Disetor" sudah ada di HTML
+        elHafalan.innerText = totalSuratSelesai; 
+    }
+    
     if (elHuruf) elHuruf.innerText = `${totalLulusH} / 28`;
     if (elTajwid) elTajwid.innerText = `${totalFasihT} / ${totalItemTajwid}`;
 
@@ -294,7 +300,7 @@ function renderJuzContainers() {
                         <span class="text-[9px] uppercase font-bold text-slate-400 block">Progress</span>
                         <p class="text-xs font-bold text-slate-700">${persenJuz}%</p>
                     </div>
-                    <span id="icon-juz-${num}" class="text-slate-400 font-bold">${juzTerbuka === num ? '➖' : '➕'}</span>
+                    <span id="icon-juz-${num}" class="material-symbols-outlined text-slate-400 text-lg">${juzTerbuka === num ? 'remove' : 'add'}</span>
                 </div>
             </button>
 
@@ -316,21 +322,21 @@ function toggleJuzAccordion(num) {
     if (juzTerbuka === num) {
         content.classList.remove("open");
         setTimeout(() => content.classList.add("hidden"), 250);
-        icon.innerText = "➕";
+        icon.innerText = "add";
         juzTerbuka = null;
     } else {
         if (juzTerbuka !== null) {
             const oldContent = document.getElementById(`content-juz-${juzTerbuka}`);
             const oldIcon = document.getElementById(`icon-juz-${juzTerbuka}`);
             if (oldContent) { oldContent.classList.remove("open"); oldContent.classList.add("hidden"); }
-            if (oldIcon) oldIcon.innerText = "➕";
+            if (oldIcon) oldIcon.innerText = "add";
         }
 
         juzTerbuka = num;
         content.classList.remove("hidden");
         content.offsetHeight; 
         content.classList.add("open");
-        icon.innerText = "➖";
+        icon.innerText = "remove";
         fillSuratGrid(num);
     }
 }
@@ -412,15 +418,15 @@ function closeDetail() {
 }
 
 // MODUL KUALITAS BACAAN
-function toggleAccordionPenilaian(id) {
+function toggleAccordionPenilaian(id) { 
     const el = document.getElementById(id);
     const icon = document.getElementById(`icon-${id}`);
     if (el.classList.contains("open")) {
         el.classList.remove("open");
-        icon.innerText = "➕";
+        icon.innerText = "add"; 
     } else {
         el.classList.add("open");
-        icon.innerText = "➖";
+        icon.innerText = "remove"; 
     }
 }
 
@@ -475,7 +481,7 @@ function renderPenilaianModul() {
         itemsHtml += `</div>`;
         containerTajwid.innerHTML += `
         <div class="space-y-3">
-            <h4 class="text-xs font-bold text-indigo-600 uppercase tracking-widest flex items-center gap-1.5">📁 ${klasor.kategori}</h4>
+            <h4 class="text-xs font-bold text-indigo-600 uppercase tracking-widest flex items-center gap-1.5">${klasor.kategori}</h4>
             ${itemsHtml}
         </div>`;
     });
@@ -511,10 +517,8 @@ function circularProgress(persen, color) {
 
 // FUNGSI MENYIMPAN DATA (HYBRID: LOCAL + SPREADSHEET ONLINE)
 async function save() { 
-    // 1. Simpan lokal dulu (Instan)
     localStorage.setItem("dataSantri", JSON.stringify(dataSantri)); 
     
-    // 2. Tampilkan indikator (Opsional: Tambahkan <div id="status"> di HTML Anda)
     const statusEl = document.getElementById("statusSimpan");
     if (statusEl) statusEl.innerText = "🔄 Menyimpan...";
 
@@ -527,10 +531,9 @@ async function save() {
             body: new URLSearchParams({ dataSantri: JSON.stringify(dataSantri) })
         });
         
-        // 3. Ubah indikator jadi sukses
         if (statusEl) {
             statusEl.innerText = "✅ Tersimpan";
-            setTimeout(() => { statusEl.innerText = ""; }, 2000); // Hilang setelah 2 detik
+            setTimeout(() => { statusEl.innerText = ""; }, 2000);
         }
     } catch (error) {
         if (statusEl) statusEl.innerText = "❌ Gagal!";
@@ -539,7 +542,7 @@ async function save() {
 }
 
 // =========================================================================
-// PERBAIKAN SINKRONISASI OTOMATIS (UNTUK HP & PERANGKAT BARU)
+// SINKRONISASI OTOMATIS (UNTUK HP & PERANGKAT BARU)
 // =========================================================================
 
 async function sinkronisasiDataOnline() {
@@ -549,9 +552,8 @@ async function sinkronisasiDataOnline() {
         const response = await fetch(GOOGLE_SHEET_URL);
         const dataTerbaru = await response.json();
         
-        // Cek apakah data benar-benar ada (bukan error atau kosong)
         if (Array.isArray(dataTerbaru) && dataTerbaru.length > 0) {
-            dataSantri = dataTerbaru; // Ganti dengan data terbaru
+            dataSantri = dataTerbaru; 
             localStorage.setItem("dataSantri", JSON.stringify(dataSantri));
             console.log("Data berhasil disinkronisasi!");
         }
@@ -559,10 +561,6 @@ async function sinkronisasiDataOnline() {
         console.error("Gagal sinkronisasi, menggunakan data lama:", error);
     }
 }
-// JALANKAN FUNGSI INI OTOMATIS SETIAP KALI HALAMAN DIBUKA
-document.addEventListener("DOMContentLoaded", () => {
-    sinkronisasiDataOnline();
-});
 
 function logout() { 
     localStorage.removeItem("login"); 
