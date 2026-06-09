@@ -50,7 +50,7 @@ const klasifikasiTajwid = [
 const databaseJuz = {
     30: [{ nama: "An-Naba", ayat: 40 }, { nama: "An-Nazi'at", ayat: 46 }, { nama: "Abasa", ayat: 42 }, { nama: "At-Takwir", ayat: 29 }, { nama: "Al-Infitar", ayat: 19 }, { nama: "Al-Mutaffifin", ayat: 36 }, { nama: "Al-Inshiqaq", ayat: 25 }, { nama: "Al-Buruj", ayat: 22 }, { nama: "At-Tariq", ayat: 17 }, { nama: "Al-A'la", ayat: 19 }, { nama: "Al-Ghashiyah", ayat: 26 }, { nama: "Al-Fajr", ayat: 30 }, { nama: "Al-Balad", ayat: 20 }, { nama: "Ash-Shams", ayat: 15 }, { nama: "Al-Lail", ayat: 21 }, { nama: "Ad-Duha", ayat: 11 }, { nama: "Al-Inshirah", ayat: 8 }, { nama: "At-Tin", ayat: 8 }, { nama: "Al-Alaq", ayat: 19 }, { nama: "Al-Qadr", ayat: 5 }, { nama: "Al-Bayyinah", ayat: 8 }, { nama: "Az-Zalzalah", ayat: 8 }, { nama: "Al-Adiyat", ayat: 11 }, { nama: "Al-Qari'ah", ayat: 11 }, { nama: "At-Takathur", ayat: 8 }, { nama: "Al-Asr", ayat: 3 }, { nama: "Al-Humazah", ayat: 9 }, { nama: "Al-Fil", ayat: 5 }, { nama: "Quraysh", ayat: 4 }, { nama: "Al-Ma'un", ayat: 7 }, { nama: "Al-Kawthar", ayat: 3 }, { nama: "Al-Kafirun", ayat: 6 }, { nama: "An-Nasr", ayat: 3 }, { nama: "Al-Lahab", ayat: 5 }, { nama: "Al-Ikhlas", ayat: 4 }, { nama: "Al-Falaq", ayat: 5 }, { nama: "An-Nas", ayat: 6 }],
     29: [{ nama: "Al-Mulk", ayat: 30 }, { nama: "Al-Qalam", ayat: 52 }, { nama: "Al-Haqqah", ayat: 52 }, { nama: "Al-Ma'arij", ayat: 44 }, { nama: "Nuh", ayat: 28 }, { nama: "Al-Jinn", ayat: 28 }, { nama: "Al-Muzzammil", ayat: 20 }, { nama: "Al-Muddaththir", ayat: 56 }, { nama: "Al-Qiyamah", ayat: 40 }, { nama: "Al-Insan", ayat: 31 }, { nama: "Al-Mursalat", ayat: 50 }],
-    28: [{ nama: "Al-Mujadilah", ayat: 22 }, { nama: "Al-Hashr", ayat: 24 }, { nama: "Al-Mumtahanah", ayat: 13 }, { nama: "As-Saff", ayat: 14 }, { nama: "Al-Jumu'ah", ayat: 11 }, { nama: "Al-Munafiqun", ayat: 11 }, { nama: "At-Taghabun", ayat: 18 }, { nama: "At-Talaq", ayat: 12 }, { nama: "At-Tahrim", ayat: 12 }],
+    28: [{ nama: "Al-Mujadilah", ayat: 22 }, { nama: "Al-Hashr", ayat: 24 }, { nama: "Al-Mumtahanah", ayat: 13 }, { nama: "As-Saff", ayat: 14 }, { nama: "Al-Jumu'ah", ayat: 11 }, { nama: "Al-Munafiqun", ayat: 11 }, { fontName: "At-Taghabun", nama: "At-Taghabun", ayat: 18 }, { nama: "At-Talaq", ayat: 12 }, { nama: "At-Tahrim", ayat: 12 }],
     1: [{ nama: "Al-Fatihah", ayat: 7 }, { nama: "Al-Baqarah (Ayat 1-141)", ayat: 141 }]
 };
 
@@ -69,21 +69,22 @@ function mulaiSinkronisasiOtomatis() {
     db.collection("database_hafalan").onSnapshot((snapshot) => {
         dataSantri = []; 
         snapshot.forEach((doc) => {
-            dataSantri.push({ id: doc.id, ...doc.data() });
+            const docData = doc.data();
+            if (docData && docData.nama) {
+                dataSantri.push({ id: doc.id, ...docData });
+            }
         });
 
         localStorage.setItem("dataSantri", JSON.stringify(dataSantri));
         console.log("Database hafalan berhasil sinkron secara Real-Time!");
         
         updateDatalistSantri();
-        initUser(); // Panggil ulang init untuk merefresh data santri yang sedang login
+        initUser(); 
         
-        if (santriAktif) {
-            // Perbarui objek santriAktif jika ada perubahan dari database
-            const found = dataSantri.find(s => s.nama === santriAktif.nama);
+        if (santriAktif && santriAktif.nama) {
+            const found = dataSantri.find(s => s.nama && s.nama.toLowerCase() === santriAktif.nama.toLowerCase());
             if (found) santriAktif = found;
             
-            // Refresh tampilan secara otomatis
             updateLiveDashboardStats();
             if (currentView === 'viewHafalan' && currentJuzAkses) renderSuratBerdasarkanJuz(currentJuzAkses);
             if (currentView === 'viewPenilaian') renderPenilaianModul();
@@ -104,14 +105,30 @@ function save() {
     .catch((error) => console.error("Gagal menyimpan progres:", error));
 }
 
-
 // ==========================================
 // 5. INISIALISASI HALAMAN
 // ==========================================
 document.addEventListener("DOMContentLoaded", () => {
-    mulaiSinkronisasiOtomatis(); // Menggantikan fetch Apps Script lama
+    mulaiSinkronisasiOtomatis(); 
     initGreeting();
     tampilkanHaditsAcak();
+
+    // JINAKKAN INPUT NAMA (Sterilisasi Atribut Ketik Otomatis dari HTML)
+    const namaInput = document.getElementById("namaInput");
+    if (namaInput) {
+        // Hapus paksa atribut bawaan HTML agar tidak trigger saat ketik per huruf
+        namaInput.removeAttribute("oninput");
+        namaInput.removeAttribute("onkeyup");
+        namaInput.removeAttribute("onchange");
+        
+        // Pasang event khusus: Cek database HANYA jika tombol ENTER ditekan
+        namaInput.addEventListener("keydown", function(event) {
+            if (event.key === "Enter") {
+                event.preventDefault(); // Mencegah form reload instan
+                setSantriAktif(); // Jalankan pencarian resmi
+            }
+        });
+    }
 });
 
 function initGreeting() {
@@ -126,14 +143,13 @@ function initGreeting() {
 }
 
 function initUser() {
-    if (dataSantri.length === 0) return;
+    if (dataSantri.length === 0 || !namaLogin) return;
     
     if (role === "murid") {
-       santriAktif = dataSantri.find(s => s.nama.toLowerCase() === namaLogin.toLowerCase());
+       santriAktif = dataSantri.find(s => s.nama && s.nama.toLowerCase() === namaLogin.toLowerCase());
        
-       // Jika murid pertama kali login dan belum ada datanya, buatkan dokumen kosong
        if (!santriAktif) {
-           santriAktif = { id: Date.now(), nama: namaLogin, progress: {}, huruf: {}, tajwid: {} };
+           santriAktif = { id: String(Date.now()), nama: namaLogin, progress: {}, huruf: {}, tajwid: {} };
            save(); 
        }
        
@@ -185,17 +201,19 @@ function setSantriAktif() {
     
     if (!nama) {
         santriAktif = null;
-        document.getElementById("namaSantri").innerText = "-";
+        const txtNama = document.getElementById("namaSantri");
+        if (txtNama) txtNama.innerText = "-";
         updateLiveDashboardStats();
         return;
     }
 
-    let found = dataSantri.find(s => s.nama.toLowerCase() === nama.toLowerCase());
+    // Proteksi pencarian menggunakan pengecekan eksistensi s.nama
+    let found = dataSantri.find(s => s.nama && s.nama.toLowerCase() === nama.toLowerCase());
     
     if (!found) {
         const konfirmasi = confirm(`Santri bernama "${nama}" belum memiliki data. Buat lembar progress baru?`);
         if (konfirmasi) {
-            found = { id: Date.now(), nama: nama, progress: {}, huruf: {}, tajwid: {} };
+            found = { id: String(Date.now()), nama: nama, progress: {}, huruf: {}, tajwid: {} };
             santriAktif = found;
             save(); 
         } else {
@@ -205,7 +223,9 @@ function setSantriAktif() {
         santriAktif = found;
     }
 
-    document.getElementById("namaSantri").innerText = found.nama;
+    const txtNama = document.getElementById("namaSantri");
+    if (txtNama) txtNama.innerText = found.nama;
+    
     updateLiveDashboardStats();
     if (currentView === 'viewHafalan' && currentJuzAkses) renderSuratBerdasarkanJuz(currentJuzAkses);
     if (currentView === 'viewPenilaian') renderPenilaianModul();
@@ -375,7 +395,7 @@ function toggleAyat(juzNum, suratIndex, ayatIndex) {
     if (!santriAktif || role === "murid") return; 
     const keyProgres = `juz${juzNum}_surat${suratIndex}`;
     santriAktif.progress[keyProgres][ayatIndex] = !santriAktif.progress[keyProgres][ayatIndex];
-    save(); // Otomatis tersimpan ke Firebase
+    save(); 
     renderAyat(juzNum, suratIndex);
     if (currentJuzAkses) renderSuratBerdasarkanJuz(currentJuzAkses); 
 }
@@ -476,7 +496,7 @@ function siklusNilaiHuruf(idx, currentVal) {
     if (!santriAktif || role === "murid") return;
     if (!santriAktif.huruf) santriAktif.huruf = {};
     santriAktif.huruf[`h_${idx}`] = String((parseInt(currentVal) + 1) % 6);
-    save(); // Otomatis tersimpan ke Firebase
+    save(); 
     renderPenilaianModul();
 }
 
@@ -484,7 +504,7 @@ function siklusNilaiTajwid(id, currentVal) {
     if (!santriAktif || role === "murid") return;
     if (!santriAktif.tajwid) santriAktif.tajwid = {};
     santriAktif.tajwid[id] = String((parseInt(currentVal) + 1) % 6);
-    save(); // Otomatis tersimpan ke Firebase
+    save(); 
     renderPenilaianModul();
 }
 
