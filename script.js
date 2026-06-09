@@ -115,6 +115,7 @@ function initUser() {
 
 function setSantriAktif() {
     if (role === "murid") return;
+    
     const nama = document.getElementById("namaInput").value.trim();
     
     if (!nama) {
@@ -124,15 +125,23 @@ function setSantriAktif() {
         return;
     }
 
+    // Mencari santri yang persis sama dengan ketikan
     let found = dataSantri.find(s => s.nama.toLowerCase() === nama.toLowerCase());
+    
     if (!found) {
-        found = { id: Date.now(), nama, progress: {}, huruf: {}, tajwid: {} };
-        dataSantri.push(found);
+        // JIKA NAMA TIDAK DITEMUKAN:
+        // Kosongkan tampilan, dan JANGAN panggil save() atau dataSantri.push()
+        santriAktif = null;
+        document.getElementById("namaSantri").innerText = "-";
+        updateLiveDashboardStats();
+        return; // Hentikan proses di sini
     }
+
+    // JIKA NAMA DITEMUKAN (Sudah Terdaftar):
     santriAktif = found;
     document.getElementById("namaSantri").innerText = found.nama;
-    save();
     
+    // Perbarui Tampilan Sesuai Data Santri Tersebut
     updateLiveDashboardStats();
     if (currentView === 'viewHafalan' && currentJuzAkses) renderSuratBerdasarkanJuz(currentJuzAkses);
     if (currentView === 'viewPenilaian') renderPenilaianModul();
