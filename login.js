@@ -1,59 +1,82 @@
-// URL Web App Google Apps Script Anda
-const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyGx6yRAZEc98peIMYxQ-aNo3rvsoBfMmNWhSADDfthQoAa7CBumg2ma5EWenXXxroY/exec"; 
+// ==========================================
+// CONFIG & INITIALIZATION FIREBASE
+// ==========================================
+const firebaseConfig = {
+    apiKey: "AIzaSyCIBGqJVfrRZikYeQDtQynWDxybsFFtY-0",
+    authDomain: "hasnanprivate.firebaseapp.com",
+    projectId: "hasnanprivate",
+    storageBucket: "hasnanprivate.firebasestorage.app",
+    messagingSenderId: "737022132780",
+    appId: "1:737022132780:web:8ab47b587f13ee53900789"
+};
 
+// Aktifkan Firebase
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+// ==========================================
+// FUNGSI UTAMA LOGIN
+// ==========================================
 async function login() {
-    const usernameInput = document.getElementById("username").value.trim();
+    const emailInput = document.getElementById("username").value.trim();
     const passwordInput = document.getElementById("password").value.trim();
 
-    if (!usernameInput || !passwordInput) {
-        alert("Username dan password tidak boleh kosong!");
+    if (!emailInput || !passwordInput) {
+        alert("Email dan password tidak boleh kosong!");
         return;
     }
 
-    // Indikator loading sederhana
+    // Indikator loading tombol
     const btn = document.querySelector("button"); 
     const originalText = btn.innerText;
     btn.innerText = "Memproses...";
     btn.disabled = true;
 
     try {
-        const response = await fetch(GOOGLE_SCRIPT_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: new URLSearchParams({ 
-                action: "login", 
-                username: usernameInput, 
-                password: passwordInput 
-            })
-        });
+        // 1. Verifikasi akun ke Firebase Authentication
+        const userCredential = await auth.signInWithEmailAndPassword(emailInput, passwordInput);
+        const user = userCredential.user;
 
-        // Mengambil respons dari server
-        const result = await response.json();
+        // 2. Ambil data profil tambahan (nama & role) dari Firestore
+        const userDoc = await db.collection("users").doc(user.uid).get();
 
-        if (result.status === "success") {
-            // Set data ke LocalStorage
+        if (userDoc.exists) {
+            const userData = userDoc.data();
+
+            // Set data ke LocalStorage untuk dipakai index.js
             localStorage.setItem("login", "true");
-            localStorage.setItem("nama", result.nama);
-            localStorage.setItem("role", result.role);
-            localStorage.setItem("username", usernameInput);
+            localStorage.setItem("nama", userData.nama || "Tanpa Nama");
+            localStorage.setItem("role", userData.role || "murid");
+            localStorage.setItem("username", emailInput);
 
-            // Pindah ke halaman dashboard utama
+            // Arahkan ke halaman utama monitoring
             window.location.href = "index.html";
         } else {
-            // Menampilkan error (Entah itu salah password atau error dari Google Script)
-            alert(result.message);
+            // Jika akun terdaftar di auth tapi data role tidak ditemukan di firestore database
+            alert("Data profil akun Anda belum terkonfigurasi di sistem Firestore.");
             btn.innerText = originalText;
             btn.disabled = false;
         }
+
     } catch (error) {
-        console.error("Error:", error);
-        alert("Gagal terhubung ke server. Periksa koneksi internet atau konfigurasi Deployment Anda.");
+        console.error("Error Login:", error);
+        
+        // Pemetaan error sederhana agar user mengerti masalahnya
+        let pesanError = "Gagal masuk. Periksa kembali jaringan internet Anda.";
+        if (error.code === "auth/user-not-found" || error.code === "auth/wrong-password") {
+            pesanError = "Email atau Password salah! Periksa kembali ketikan Anda.";
+        } else if (error.code === "auth/invalid-email") {
+            pesanError = "Format penulisan email salah (Contoh: nama@gmail.com).";
+        }
+        
+        alert(pesanError);
         btn.innerText = originalText;
         btn.disabled = false;
     }
 }
 
-// Fitur Tombol Enter
+// Fitur Tombol Enter Keyboard
 document.addEventListener("keydown", function(event) {
     if (event.key === "Enter") {
         login();

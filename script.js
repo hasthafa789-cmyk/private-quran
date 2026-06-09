@@ -1,32 +1,45 @@
 // ==========================================
-// CONFIGURATION GOOGLE SPREADSHEET
+// 1. INISIALISASI FIREBASE (VERSI 8 / COMPAT)
 // ==========================================
-// URL Web App dari Google Apps Script Anda
-const GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbwaUxlHpQJBN4pS9MbHCCy_IAhhqXxaMAYARPKJVyv7A6w1QMk04uSjZ_iYB9y7NNr1/exec";
+const firebaseConfig = {
+    apiKey: "AIzaSyCIBGqJVfrRZikYeQDtQynWDxybsFFtY-0",
+    authDomain: "hasnanprivate.firebaseapp.com",
+    projectId: "hasnanprivate",
+    storageBucket: "hasnanprivate.firebasestorage.app",
+    messagingSenderId: "737022132780",
+    appId: "1:737022132780:web:8ab47b587f13ee53900789"
+};
 
-// Memuat data dari localStorage terlebih dahulu sebagai cache awal agar UI langsung berjalan lancar
+// Nyalakan Mesin Firebase
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+// ==========================================
+// 2. VARIABEL GLOBAL APLIKASI
+// ==========================================
 let dataSantri = JSON.parse(localStorage.getItem("dataSantri")) || [];
 let santriAktif = null;
 let currentView = 'viewDashboard'; 
-let currentJuzAkses = null; // Menyimpan Juz yang sedang dibuka
+let currentJuzAkses = null;
 
 const role = localStorage.getItem("role");
 const namaLogin = localStorage.getItem("nama");
 
-// Proteksi Halaman
+// Proteksi Halaman Sementara (Menyesuaikan sistem lama)
 if (localStorage.getItem("login") !== "true") {
-    window.location.href = "login.html";
+    window.location.replace("login.html");
 }
 
 // ==========================================
-// DATA REFERENSI (HIJAIYAH, TAJWID, SURAT)
+// 3. DATA REFERENSI
 // ==========================================
 const daftarHijaiyah = ["Alif (ا)", "Ba (ب)", "Ta (ت)", "Tsa (ث)", "Jim (ج)", "Ha (ح)", "Kho (خ)", "Dal (د)", "Dzal (ذ)", "Ro (ر)", "Zai (ز)", "Sin (س)", "Syin (ش)", "Shod (ص)", "Dhod (ض)", "Tho (ط)", "Zho (ظ)", "Ain (ع)", "Gho (غ)", "Fa (ف)", "Qof (ق)", "Kaf (ك)", "Lam (ل)", "Mim (م)", "Nun (ن)", "Wawu (و)", "Ha' (هـ)", "Ya (ي)"];
 
 const klasifikasiTajwid = [
     { kategori: "1. Hukum Nun Sukun & Tanwin", items: [{ id: "ns_izhar", nama: "Idzhar Halqi" }, { id: "ns_idg_bi", nama: "Idgham Bighunnah" }, { id: "ns_idg_bila", nama: "Idgham Bilaghunnah" }, { id: "ns_iqlab", nama: "Iqlab" }, { id: "ns_ikhfa", nama: "Ikhfa Haqiqi" }] },
     { kategori: "2. Hukum Mim Sukun", items: [{ id: "ms_ikhfa", nama: "Ikhfa Syafawi" }, { id: "ms_idgham", nama: "Idgham Mimi" }, { id: "ms_izhar", nama: "Idzhar Syafawi" }] },
-    { kategori: "3. Hukum Mad (Panjang Bacaan)", items: [{ id: "mad_thabii", nama: "Mad Thabi'i" }, { id: "mad_wajib", nama: "Mad Wajib Muttasil" }, { id: "mad_jaiz", nama: "Mad Jaiz Munfasil" }, { id: "mad_arid", nama: "Mad 'Arid Lissukun" }, { id: "mad_iwadl", nama: "Mad Iwadl" }, { id: "mad_shilah_qashirah", nama: "Mad Shilah Qashirah" }, { id: "mad_shilah_thawilah", nama: "Mad Shilah Thawilah" }, { id: "mad_badal", nama: "Mad Badal" }, { id: "mad_tamkin", nama: "Mad Tamkin" }, { id: "mad_lin", nama: "Mad Lin" }, { id: "mad_lazim_mutsaqal_kalimi", nama: "Mad Lazim Mutsaqal Kalimi" }, { id: "mad_lazim_mukhoffaf_kalimi", nama: "Mad Lazim Mukhoffaf Kalimi" }, { id: "mad_lazim_mutsaqol_harfi", nama: "Mad Lazim Mutsaqol Harfi" }, { id: "mad_lazim_mukhoffaf_harfi", nama: "Mad Lazim Mukhoffaf Harfi" }, { id: "mad_farq", nama: "Mad Farq" }] },
+    { kategori: "3. Hukum Mad (Panjang Bacaan)", items: [{ id: "mad_thabii", nama: "Mad Thabi'i" }, { id: "mad_wajib", nama: "Mad Wajib Muttasil" }, { id: "mad_jaiz", nama: "Mad Jaiz Munfasil" }, { id: "mad_arid", nama: "Mad 'Arid Lissukun" }, { id: "mad_iwadl", nama: "Mad Iwadl" }, { id: "mad_shilah_qashirah", nama: "Mad Shilah Qashirah" }, { id: "mad_shilah_thawilah", nama: "Mad Shilah Thawilah" }, { id: "mad_badal", nama: "Mad Badal" }, { id: "mad_tamkin", nama: "Mad Tamkin" }, { id: "mad_lin", nama: "Mad Lin" }, { id: "mad_lazim_mutsaqal_kalimi", nama: "Mad Lazim Mutsaqal Kalimi" }, { id: "mad_lazim_mukhoffaf_kalimi", nama: "Mad Lazim Mukhoffaf Kalimi" }, { id: "mad_lazim_mutsaqol_harfi", nama: "Mad Lazim Mukhoffaf Harfi" }, { id: "mad_farq", nama: "Mad Farq" }] },
     { kategori: "4. Sifat & Hukum Huruf Utama", items: [{ id: "sif_qalqalah", nama: "Qalqalah (Sughra/Kubra)" }, { id: "sif_ghunnah", nama: "Ghunnah Musyaddadah" }, { id: "sif_tafkhim", nama: "Tafkhim & Tarqiq" }] },
     { kategori: "5. Hukum Alif Lam", items: [{ id: "al_qomariyah", nama: "Alif Lam Qomariyah" }, { id: "al_syamsiah", nama: "Alif Lam Syamsiah" }] },
     { kategori: "6. Hukum Idgham", items: [{ id: "idg_mutamasilain", nama: "Idgham Mutamasilain" }, { id: "idg_mutajanisain", nama: "Idgham Mutajanisain" }, { id: "idg_mutaqaribain", nama: "Idgham Mutaqaribain" }] },
@@ -41,9 +54,6 @@ const databaseJuz = {
     1: [{ nama: "Al-Fatihah", ayat: 7 }, { nama: "Al-Baqarah (Ayat 1-141)", ayat: 141 }]
 };
 
-// ==========================================
-// MUTIARA HADITS DINAMIS (ACAK)
-// ==========================================
 const kumpulanHadits = [
     { teks: "Sebaik-baik kalian adalah orang yang mempelajari Al-Qur'an dan mengajarkannya.", riwayat: "HR. Bukhari" },
     { teks: "Bacalah Al-Qur'an, karena sesungguhnya ia akan datang pada hari kiamat memberikan syafaat bagi pembacanya.", riwayat: "HR. Muslim" },
@@ -52,12 +62,95 @@ const kumpulanHadits = [
     { teks: "Tidaklah berkumpul suatu kaum di salah satu rumah Allah (masjid) membaca Kitabullah dan saling mempelajarinya, melainkan akan turun kepada mereka ketenangan.", riwayat: "HR. Muslim" }
 ];
 
+// ==========================================
+// 4. FIREBASE LOGIC (SINKRONISASI & SIMPAN)
+// ==========================================
+function mulaiSinkronisasiOtomatis() {
+    db.collection("database_hafalan").onSnapshot((snapshot) => {
+        dataSantri = []; 
+        snapshot.forEach((doc) => {
+            dataSantri.push({ id: doc.id, ...doc.data() });
+        });
+
+        localStorage.setItem("dataSantri", JSON.stringify(dataSantri));
+        console.log("Database hafalan berhasil sinkron secara Real-Time!");
+        
+        updateDatalistSantri();
+        initUser(); // Panggil ulang init untuk merefresh data santri yang sedang login
+        
+        if (santriAktif) {
+            // Perbarui objek santriAktif jika ada perubahan dari database
+            const found = dataSantri.find(s => s.nama === santriAktif.nama);
+            if (found) santriAktif = found;
+            
+            // Refresh tampilan secara otomatis
+            updateLiveDashboardStats();
+            if (currentView === 'viewHafalan' && currentJuzAkses) renderSuratBerdasarkanJuz(currentJuzAkses);
+            if (currentView === 'viewPenilaian') renderPenilaianModul();
+        }
+    });
+}
+
+function save() {
+    if (!santriAktif || !santriAktif.nama) return;
+
+    db.collection("database_hafalan").doc(santriAktif.nama).set({
+        nama: santriAktif.nama,
+        progress: santriAktif.progress || {},
+        huruf: santriAktif.huruf || {},
+        tajwid: santriAktif.tajwid || {}
+    }, { merge: true })
+    .then(() => console.log(`Progres hafalan ${santriAktif.nama} berhasil diamankan ke Cloud!`))
+    .catch((error) => console.error("Gagal menyimpan progres:", error));
+}
+
+
+// ==========================================
+// 5. INISIALISASI HALAMAN
+// ==========================================
+document.addEventListener("DOMContentLoaded", () => {
+    mulaiSinkronisasiOtomatis(); // Menggantikan fetch Apps Script lama
+    initGreeting();
+    tampilkanHaditsAcak();
+});
+
+function initGreeting() {
+    const jam = new Date().getHours();
+    let ucapan = "Selamat Malam"; let iconName = "nights_stay";
+    if (jam >= 4 && jam < 10) { ucapan = "Selamat Pagi"; iconName = "sunny"; } 
+    else if (jam >= 10 && jam < 15) { ucapan = "Selamat Siang"; iconName = "wb_sunny"; } 
+    else if (jam >= 15 && jam < 18) { ucapan = "Selamat Sore"; iconName = "partly_cloudy_day"; }
+
+    const el = document.getElementById("txtGreeting");
+    if (el) el.innerHTML = `<span class="flex items-center justify-center gap-1.5"><span class="material-symbols-outlined text-sm leading-none">${iconName}</span>${ucapan}</span>`;
+}
+
+function initUser() {
+    if (dataSantri.length === 0) return;
+    
+    if (role === "murid") {
+       santriAktif = dataSantri.find(s => s.nama.toLowerCase() === namaLogin.toLowerCase());
+       
+       // Jika murid pertama kali login dan belum ada datanya, buatkan dokumen kosong
+       if (!santriAktif) {
+           santriAktif = { id: Date.now(), nama: namaLogin, progress: {}, huruf: {}, tajwid: {} };
+           save(); 
+       }
+       
+       const input = document.getElementById("namaInput");
+       if (input) { input.value = namaLogin; input.disabled = true; }
+       
+       const namaEl = document.getElementById("namaSantri");
+       if (namaEl) namaEl.innerText = namaLogin;
+       
+       updateLiveDashboardStats();
+    }
+}
+
 function tampilkanHaditsAcak() {
-    // Mencari elemen berdasarkan Tag tanpa memerlukan penambahan ID di HTML
     const teksEl = document.querySelector("blockquote");
     if (!teksEl) return;
 
-    // Mencari elemen paragraf (riwayat) yang berada setelah blockquote
     let riwayatEl = teksEl.nextElementSibling;
     if (riwayatEl && riwayatEl.tagName === 'DIV') {
         riwayatEl = riwayatEl.nextElementSibling;
@@ -71,46 +164,18 @@ function tampilkanHaditsAcak() {
     }
 }
 
-
 // ==========================================
-// INIT APP
+// 6. FUNGSI PENCARIAN GURU (DATALIST)
 // ==========================================
-document.addEventListener("DOMContentLoaded", async () => {
-    await sinkronisasiDataOnline(); 
-    initGreeting();
-    initUser(); 
-    updateLiveDashboardStats();
-    tampilkanHaditsAcak(); // Menjalankan hadits acak saat aplikasi dimuat
-    
-});
-
-function initGreeting() {
-    const jam = new Date().getHours();
-    let ucapan = "Selamat Malam"; let iconName = "nights_stay";
-    if (jam >= 4 && jam < 10) { ucapan = "Selamat Pagi"; iconName = "sunny"; } 
-    else if (jam >= 10 && jam < 15) { ucapan = "Selamat Siang"; iconName = "wb_sunny"; } 
-    else if (jam >= 15 && jam < 18) { ucapan = "Selamat Sore"; iconName = "partly_cloudy_day"; }
-
-    const el = document.getElementById("txtGreeting");
-    if (el) {
-        el.innerHTML = `<span class="flex items-center justify-center gap-1.5"><span class="material-symbols-outlined text-sm leading-none">${iconName}</span>${ucapan}</span>`;
-    }
-}
-
-function initUser() {
-    if (dataSantri.length === 0) return;
-    if (role === "murid") {
-       santriAktif = dataSantri.find(s => s.nama.toLowerCase() === namaLogin.toLowerCase());
-       if (!santriAktif) {
-           santriAktif = { id: Date.now(), nama: namaLogin, progress: {}, huruf: {}, tajwid: {} };
-           dataSantri.push(santriAktif);
-           save(); 
-       }
-       const input = document.getElementById("namaInput");
-       if (input) { input.value = namaLogin; input.disabled = true; }
-       const namaEl = document.getElementById("namaSantri");
-       if (namaEl) namaEl.innerText = namaLogin;
-    }
+function updateDatalistSantri() {
+    const datalist = document.getElementById("listSantriTerdaftar");
+    if (!datalist) return;
+    datalist.innerHTML = "";
+    dataSantri.forEach(s => {
+        if (s.nama && s.nama.length > 2) { 
+            datalist.innerHTML += `<option value="${s.nama}"></option>`;
+        }
+    });
 }
 
 function setSantriAktif() {
@@ -125,36 +190,34 @@ function setSantriAktif() {
         return;
     }
 
-    // Mencari santri yang persis sama dengan ketikan
     let found = dataSantri.find(s => s.nama.toLowerCase() === nama.toLowerCase());
     
     if (!found) {
-        // JIKA NAMA TIDAK DITEMUKAN:
-        // Kosongkan tampilan, dan JANGAN panggil save() atau dataSantri.push()
-        santriAktif = null;
-        document.getElementById("namaSantri").innerText = "-";
-        updateLiveDashboardStats();
-        return; // Hentikan proses di sini
+        const konfirmasi = confirm(`Santri bernama "${nama}" belum memiliki data. Buat lembar progress baru?`);
+        if (konfirmasi) {
+            found = { id: Date.now(), nama: nama, progress: {}, huruf: {}, tajwid: {} };
+            santriAktif = found;
+            save(); 
+        } else {
+            return;
+        }
+    } else {
+        santriAktif = found;
     }
 
-    // JIKA NAMA DITEMUKAN (Sudah Terdaftar):
-    santriAktif = found;
     document.getElementById("namaSantri").innerText = found.nama;
-    
-    // Perbarui Tampilan Sesuai Data Santri Tersebut
     updateLiveDashboardStats();
     if (currentView === 'viewHafalan' && currentJuzAkses) renderSuratBerdasarkanJuz(currentJuzAkses);
     if (currentView === 'viewPenilaian') renderPenilaianModul();
 }
 
 // ==========================================
-// NAVIGASI UTAMA & SUB-HALAMAN
+// 7. NAVIGASI UTAMA
 // ==========================================
 function navigateTo(viewId) {
     currentView = viewId;
     const views = ["viewDashboard", "viewHafalan", "viewPenilaian"];
 
-    // 1. Sembunyikan semua view & Reset animasi
     views.forEach(id => {
         const el = document.getElementById(id);
         if (el) {
@@ -163,13 +226,11 @@ function navigateTo(viewId) {
         }
     });
 
-    // 2. Reset Sub-Pages untuk Hafalan agar selalu mulai dari daftar Juz
     if(viewId === 'viewHafalan') {
         document.getElementById('subPageDaftarJuz').classList.remove('hidden');
         document.getElementById('subPageDetailSuratJuz').classList.add('hidden');
     }
 
-    // 3. Reset Sub-Pages untuk Penilaian agar selalu mulai dari Menu Utama
     if(viewId === 'viewPenilaian') {
         document.getElementById('subPageMenuPenilaian').classList.remove('hidden');
         document.getElementById('subPageDetailHijaiyah').classList.add('hidden');
@@ -177,13 +238,11 @@ function navigateTo(viewId) {
         renderPenilaianModul();
     }
     
-    // 4. Update Hadits & Stats tiap kali balik ke Dashboard
     if(viewId === 'viewDashboard') {
         tampilkanHaditsAcak();
         updateLiveDashboardStats();
     }
 
-    // 5. Tampilkan Target View dengan delay untuk re-trigger animasi CSS
     const target = document.getElementById(viewId);
     if (target) {
         target.classList.remove("hidden");
@@ -192,7 +251,7 @@ function navigateTo(viewId) {
 }
 
 // ==========================================
-// STATISTIK DASHBOARD
+// 8. STATISTIK DASHBOARD
 // ==========================================
 function updateLiveDashboardStats() {
     let totalSuratSistem = 0; let totalSuratSelesai = 0;
@@ -243,7 +302,7 @@ function updateLiveDashboardStats() {
 }
 
 // ==========================================
-// MODUL HAFALAN (RENDER SURAT & AYAT)
+// 9. MODUL HAFALAN & TAJWID
 // ==========================================
 function renderSuratBerdasarkanJuz(num) {
     currentJuzAkses = num;
@@ -316,7 +375,7 @@ function toggleAyat(juzNum, suratIndex, ayatIndex) {
     if (!santriAktif || role === "murid") return; 
     const keyProgres = `juz${juzNum}_surat${suratIndex}`;
     santriAktif.progress[keyProgres][ayatIndex] = !santriAktif.progress[keyProgres][ayatIndex];
-    save();
+    save(); // Otomatis tersimpan ke Firebase
     renderAyat(juzNum, suratIndex);
     if (currentJuzAkses) renderSuratBerdasarkanJuz(currentJuzAkses); 
 }
@@ -330,10 +389,6 @@ function closeDetail() {
     updateLiveDashboardStats();
 }
 
-
-// ==========================================
-// MODUL KUALITAS BACAAN (HIJAIYAH & TAJWID)
-// ==========================================
 function renderPenilaianModul() {
     const containerHuruf = document.getElementById("listHurufHijaiyah");
     const containerTajwid = document.getElementById("listHukumTajwidKlasifikasi");
@@ -368,7 +423,6 @@ function renderPenilaianModul() {
     });
 
     klasifikasiTajwid.forEach((klasor) => {
-        // Responsif grid internal untuk card tajwid di dalam kategori
         let itemsHtml = `<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">`;
         
         klasor.items.forEach((item) => {
@@ -376,37 +430,25 @@ function renderPenilaianModul() {
             const persenCard = Math.round((currentVal / 5) * 100); 
             const infoLevel = levelHijaiyah[currentVal] || levelHijaiyah[0];
 
-            // 1. Pewarnaan border & shadow halus berdasarkan tingkat kelulusan/nilai
             const borderColors = [
-                "border-slate-200 hover:border-slate-300", 
-                "border-rose-200/80 shadow-sm shadow-rose-100/30", 
-                "border-orange-200/80 shadow-sm shadow-orange-100/30", 
-                "border-amber-200/80 shadow-sm shadow-amber-100/30", 
-                "border-blue-200/80 shadow-sm shadow-blue-100/30", 
-                "border-emerald-200/80 shadow-sm shadow-emerald-100/30"
+                "border-slate-200 hover:border-slate-300", "border-rose-200/80 shadow-sm shadow-rose-100/30", 
+                "border-orange-200/80 shadow-sm shadow-orange-100/30", "border-amber-200/80 shadow-sm shadow-amber-100/30", 
+                "border-blue-200/80 shadow-sm shadow-blue-100/30", "border-emerald-200/80 shadow-sm shadow-emerald-100/30"
             ];
             const bColor = borderColors[currentVal] || borderColors[0];
 
-            // 2. Desain warna teks badge status agar kontras dan estetik
             const badgeStyles = [
-                "bg-slate-100 text-slate-600",
-                "bg-rose-100 text-rose-700",
-                "bg-orange-100 text-orange-700",
-                "bg-amber-100 text-amber-700",
-                "bg-blue-100 text-blue-700",
-                "bg-emerald-100 text-emerald-700"
+                "bg-slate-100 text-slate-600", "bg-rose-100 text-rose-700", "bg-orange-100 text-orange-700",
+                "bg-amber-100 text-amber-700", "bg-blue-100 text-blue-700", "bg-emerald-100 text-emerald-700"
             ];
             const badgeStyle = badgeStyles[currentVal] || badgeStyles[0];
 
-            // HTML Card baru: Tanpa truncate, mendukung pembungkusan kata otomatis (wrap text)
             itemsHtml += `
             <div onclick="${isMurid ? '' : `siklusNilaiTajwid('${item.id}', ${currentVal})`}" 
                  class="flex items-center gap-4 p-4 bg-white rounded-2xl border ${bColor} ${infoLevel.bg} ${isMurid ? '' : 'cursor-pointer hover:-translate-y-1 active:scale-[0.98] transition-all duration-300 hover:shadow-md hover:shadow-slate-100 group'}">
-                
                 <div class="flex-shrink-0 transition-transform duration-300 group-hover:scale-105">
                     ${circularProgress(persenCard, infoLevel.warna)}
                 </div>
-                
                 <div class="flex-1 min-w-0 space-y-1.5">
                     <h4 class="font-bold text-slate-800 text-sm tracking-tight leading-snug whitespace-normal break-words" title="${item.nama}">
                         ${item.nama}
@@ -417,10 +459,8 @@ function renderPenilaianModul() {
                 </div>
             </div>`;
         });
-        
         itemsHtml += `</div>`;
         
-        // Memasukkan seluruh paket kategori hukum tajwid ke container utama
         containerTajwid.innerHTML += `
         <div class="space-y-4 w-full">
             <h4 class="text-xs font-bold text-indigo-600 uppercase tracking-widest flex items-center gap-2 mt-2 mb-1">
@@ -436,7 +476,7 @@ function siklusNilaiHuruf(idx, currentVal) {
     if (!santriAktif || role === "murid") return;
     if (!santriAktif.huruf) santriAktif.huruf = {};
     santriAktif.huruf[`h_${idx}`] = String((parseInt(currentVal) + 1) % 6);
-    save(); 
+    save(); // Otomatis tersimpan ke Firebase
     renderPenilaianModul();
 }
 
@@ -444,13 +484,12 @@ function siklusNilaiTajwid(id, currentVal) {
     if (!santriAktif || role === "murid") return;
     if (!santriAktif.tajwid) santriAktif.tajwid = {};
     santriAktif.tajwid[id] = String((parseInt(currentVal) + 1) % 6);
-    save(); 
+    save(); // Otomatis tersimpan ke Firebase
     renderPenilaianModul();
 }
 
-
 // ==========================================
-// GLOBAL VISUAL UTILITIES
+// 10. VISUAL UTILITIES & LAINNYA
 // ==========================================
 function circularProgress(persen, color) {
     const size = 48; const stroke = 4; const radius = (size - stroke) / 2;
@@ -463,86 +502,37 @@ function circularProgress(persen, color) {
     </svg>`;
 }
 
-
-// ==========================================
-// SYSTEM & DATABASE LOGIC
-// ==========================================
-
-// 1. Tambahkan variabel penahan waktu di luar fungsi
-let timeoutSimpan = null; 
-
-async function save() { 
-    // Selalu simpan ke PC/perangkat lokal secepatnya agar UI tidak delay
-    localStorage.setItem("dataSantri", JSON.stringify(dataSantri)); 
-    
-    if (!GOOGLE_SHEET_URL || GOOGLE_SHEET_URL.includes("PASTE_URL")) return;
-
-    // 2. Teknik Debounce: 
-    // Hentikan proses kirim ke server sebelumnya jika user mengeklik lagi dalam waktu dekat
-    clearTimeout(timeoutSimpan);
-    
-    // 3. Buat timer baru: Tunggu user selesai klik-klik (jeda 1.5 detik)
-    // Setelah 1.5 detik tidak ada klik tambahan, baru kirim 1 data FINAL secara utuh ke server
-    timeoutSimpan = setTimeout(async () => {
-        try {
-            console.log("Mengirim data rekap final ke server Google...");
-            await fetch(GOOGLE_SHEET_URL, {
-                method: "POST",
-                headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                body: new URLSearchParams({ dataSantri: JSON.stringify(dataSantri) })
-            });
-            console.log("Data berhasil tersimpan penuh di Google Sheet!");
-        } catch (error) {
-            console.error("Gagal menyimpan ke Google Sheets:", error);
-        }
-    }, 1500); // 1500 milidetik = 1.5 detik
-}
-
-async function sinkronisasiDataOnline() {
-    if (!GOOGLE_SHEET_URL || GOOGLE_SHEET_URL.includes("PASTE_URL")) return;
-    try {
-        const response = await fetch(GOOGLE_SHEET_URL);
-        const dataTerbaru = await response.json();
-        if (Array.isArray(dataTerbaru) && dataTerbaru.length > 0) {
-            dataSantri = dataTerbaru; 
-            localStorage.setItem("dataSantri", JSON.stringify(dataSantri));
-            console.log("Data berhasil disinkronisasi!");
-        }
-    } catch (error) {
-        console.error("Gagal sinkronisasi, menggunakan data lama:", error);
-    }
-}
-
 function logout() { 
     localStorage.removeItem("login"); 
     window.location.href = "login.html"; 
 }
 
-// ==========================================
-// LOGIKA SPLASH SCREEN (INSTAGRAM STYLE)
-// ==========================================
 window.addEventListener("load", () => {
     const splash = document.getElementById("splashScreen");
-    
-    // Tahan splash screen selama 1.2 detik (cukup cepat tapi terlihat)
-    setTimeout(() => {
-        splash.style.opacity = '0'; // Memudar perlahan
-        
-        // Hapus elemen setelah animasi memudar selesai
+    if(splash) {
         setTimeout(() => {
-            splash.style.display = 'none';
-        }, 1000); 
-    }, 1200);
+            splash.style.opacity = '0'; 
+            setTimeout(() => { splash.style.display = 'none'; }, 1000); 
+        }, 1200);
+    }
 });
 
-// ==========================================
-// SOLUSI KUAT: CEK CACHE & REDIRECT
-// ==========================================
 window.addEventListener('pageshow', function(event) {
-    // Jika halaman dimuat dari cache atau tidak ada sesi login
     if (event.persisted || localStorage.getItem("login") !== "true") {
         if (localStorage.getItem("login") !== "true") {
             window.location.replace("login.html");
         }
     }
 });
+
+// FUNGSI INI HANYA DIPAKAI SAAT ANDA INGIN MENDAFTARKAN AKUN BARU LEWAT CONSOLE
+async function daftarkanUserBaru(email, password, namaLengkap, role) {
+    try {
+        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+        const user = userCredential.user;
+        await db.collection("users").doc(user.uid).set({ nama: namaLengkap, role: role });
+        console.log(`Akun ${namaLengkap} berhasil dibuat!`);
+    } catch (error) {
+        console.error("Gagal mendaftarkan user:", error.message);
+    }
+}
