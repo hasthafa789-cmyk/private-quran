@@ -22,6 +22,8 @@ let dataSantri = JSON.parse(localStorage.getItem("dataSantri")) || [];
 let santriAktif = null;
 let currentView = 'viewDashboard'; 
 let currentJuzAkses = null;
+let currentJilidAkses = null; 
+let currentEditUmmi = { jilidId: null, index: null }; // Variabel penampung form nilai
 
 const role = localStorage.getItem("role");
 const namaLogin = localStorage.getItem("nama");
@@ -30,6 +32,7 @@ const namaLogin = localStorage.getItem("nama");
 if (localStorage.getItem("login") !== "true") {
     window.location.replace("login.html");
 }
+
 
 // ==========================================
 // 3. DATA REFERENSI
@@ -53,6 +56,21 @@ const databaseJuz = {
     28: [{ nama: "Al-Mujadilah", ayat: 22 }, { nama: "Al-Hashr", ayat: 24 }, { nama: "Al-Mumtahanah", ayat: 13 }, { nama: "As-Saff", ayat: 14 }, { nama: "Al-Jumu'ah", ayat: 11 }, { nama: "Al-Munafiqun", ayat: 11 }, { fontName: "At-Taghabun", nama: "At-Taghabun", ayat: 18 }, { nama: "At-Talaq", ayat: 12 }, { nama: "At-Tahrim", ayat: 12 }],
     1: [{ nama: "Al-Fatihah", ayat: 7 }, { nama: "Al-Baqarah (Ayat 1-141)", ayat: 141 }]
 };
+
+const daftarJilidUmmi = [
+    { id: "_1", nama: "Jilid 1", halaman: 40 },
+    { id: "jilid_2", nama: "Jilid 2", halaman: 40 },
+    { id: "jilid_3", nama: "Jilid 3", halaman: 40 },
+    { id: "jilid_4", nama: "Jilid 4", halaman: 40 },
+    { id: "jilid_5", nama: "Jilid 5", halaman: 40 },
+    { id: "jilid_6", nama: "Jilid 6", halaman: 40 },
+    { id: "tadarus", nama: "Jilid Tadarus", halaman: 50 },
+    { id: "gharib", nama: "Jilid Gharib", halaman: 28 },
+    { id: "tajwid", nama: "Jilid Tajwid", halaman: 20 },
+    { id: "turjuman_1", nama: "Jilid Turjuman 1", halaman: 20 },
+    { id: "turjuman_2", nama: "Jilid Turjuman 2", halaman: 20 },
+    { id: "turjuman_3", nama: "Jilid Turjuman 3", halaman: 20 }
+];
 
 const kumpulanHadits = [
     { teks: "Sebaik-baik kalian adalah orang yang mempelajari Al-Qur'an dan mengajarkannya.", riwayat: "HR. Bukhari" },
@@ -88,6 +106,10 @@ function mulaiSinkronisasiOtomatis() {
             updateLiveDashboardStats();
             if (currentView === 'viewHafalan' && currentJuzAkses) renderSuratBerdasarkanJuz(currentJuzAkses);
             if (currentView === 'viewPenilaian') renderPenilaianModul();
+            if (currentView === 'viewUmmi') {
+                renderDaftarUmmi();
+                if(currentJilidAkses) renderHalamanUmmi(currentJilidAkses); // Update Live jika modal terbuka
+            }
         }
     });
 }
@@ -99,7 +121,8 @@ function save() {
         nama: santriAktif.nama,
         progress: santriAktif.progress || {},
         huruf: santriAktif.huruf || {},
-        tajwid: santriAktif.tajwid || {}
+        tajwid: santriAktif.tajwid || {},
+        ummi: santriAktif.ummi || {} 
     }, { merge: true })
     .then(() => console.log(`Progres hafalan ${santriAktif.nama} berhasil diamankan ke Cloud!`))
     .catch((error) => console.error("Gagal menyimpan progres:", error));
@@ -113,19 +136,17 @@ document.addEventListener("DOMContentLoaded", () => {
     initGreeting();
     tampilkanHaditsAcak();
 
-    // JINAKKAN INPUT NAMA (Sterilisasi Atribut Ketik Otomatis dari HTML)
+    // JINAKKAN INPUT NAMA
     const namaInput = document.getElementById("namaInput");
     if (namaInput) {
-        // Hapus paksa atribut bawaan HTML agar tidak trigger saat ketik per huruf
         namaInput.removeAttribute("oninput");
         namaInput.removeAttribute("onkeyup");
         namaInput.removeAttribute("onchange");
         
-        // Pasang event khusus: Cek database HANYA jika tombol ENTER ditekan
         namaInput.addEventListener("keydown", function(event) {
             if (event.key === "Enter") {
-                event.preventDefault(); // Mencegah form reload instan
-                setSantriAktif(); // Jalankan pencarian resmi
+                event.preventDefault(); 
+                setSantriAktif(); 
             }
         });
     }
@@ -149,7 +170,7 @@ function initUser() {
        santriAktif = dataSantri.find(s => s.nama && s.nama.toLowerCase() === namaLogin.toLowerCase());
        
        if (!santriAktif) {
-           santriAktif = { id: String(Date.now()), nama: namaLogin, progress: {}, huruf: {}, tajwid: {} };
+           santriAktif = { id: String(Date.now()), nama: namaLogin, progress: {}, huruf: {}, tajwid: {}, ummi: {} };
            save(); 
        }
        
@@ -168,9 +189,7 @@ function tampilkanHaditsAcak() {
     if (!teksEl) return;
 
     let riwayatEl = teksEl.nextElementSibling;
-    if (riwayatEl && riwayatEl.tagName === 'DIV') {
-        riwayatEl = riwayatEl.nextElementSibling;
-    }
+    if (riwayatEl && riwayatEl.tagName === 'DIV') { riwayatEl = riwayatEl.nextElementSibling; }
     
     if (teksEl && riwayatEl && riwayatEl.tagName === 'P') {
         const indexAcak = Math.floor(Math.random() * kumpulanHadits.length);
@@ -181,23 +200,23 @@ function tampilkanHaditsAcak() {
 }
 
 // ==========================================
-// 6. FUNGSI PENCARIAN GURU (DATALIST)
+// 6. FUNGSI PENCARIAN GURU
 // ==========================================
 function updateDatalistSantri() {
     const datalist = document.getElementById("listSantriTerdaftar");
     if (!datalist) return;
     datalist.innerHTML = "";
     dataSantri.forEach(s => {
-        if (s.nama && s.nama.length > 2) { 
-            datalist.innerHTML += `<option value="${s.nama}"></option>`;
-        }
+        if (s.nama && s.nama.length > 2) { datalist.innerHTML += `<option value="${s.nama}"></option>`; }
     });
 }
 
 function setSantriAktif() {
     if (role === "murid") return;
     
-    const nama = document.getElementById("namaInput").value.trim();
+    const namaInput = document.getElementById("namaInput");
+    if (!namaInput) return;
+    const nama = namaInput.value.trim();
     
     if (!nama) {
         santriAktif = null;
@@ -207,13 +226,12 @@ function setSantriAktif() {
         return;
     }
 
-    // Proteksi pencarian menggunakan pengecekan eksistensi s.nama
     let found = dataSantri.find(s => s.nama && s.nama.toLowerCase() === nama.toLowerCase());
     
     if (!found) {
         const konfirmasi = confirm(`Santri bernama "${nama}" belum memiliki data. Buat lembar progress baru?`);
         if (konfirmasi) {
-            found = { id: String(Date.now()), nama: nama, progress: {}, huruf: {}, tajwid: {} };
+            found = { id: String(Date.now()), nama: nama, progress: {}, huruf: {}, tajwid: {}, ummi: {} };
             santriAktif = found;
             save(); 
         } else {
@@ -229,6 +247,7 @@ function setSantriAktif() {
     updateLiveDashboardStats();
     if (currentView === 'viewHafalan' && currentJuzAkses) renderSuratBerdasarkanJuz(currentJuzAkses);
     if (currentView === 'viewPenilaian') renderPenilaianModul();
+    if (currentView === 'viewUmmi') renderDaftarUmmi();
 }
 
 // ==========================================
@@ -236,28 +255,38 @@ function setSantriAktif() {
 // ==========================================
 function navigateTo(viewId) {
     currentView = viewId;
-    const views = ["viewDashboard", "viewHafalan", "viewPenilaian"];
+    const views = ["viewDashboard", "viewHafalan", "viewPenilaian", "viewUmmi"];
 
     views.forEach(id => {
         const el = document.getElementById(id);
-        if (el) {
-            el.classList.add("hidden");
-            el.classList.remove("animate-entry");
-        }
+        if (el) { el.classList.add("hidden"); el.classList.remove("animate-entry"); }
     });
 
     if(viewId === 'viewHafalan') {
-        document.getElementById('subPageDaftarJuz').classList.remove('hidden');
-        document.getElementById('subPageDetailSuratJuz').classList.add('hidden');
+        const sub1 = document.getElementById('subPageDaftarJuz');
+        const sub2 = document.getElementById('subPageDetailSuratJuz');
+        if(sub1) sub1.classList.remove('hidden');
+        if(sub2) sub2.classList.add('hidden');
     }
 
     if(viewId === 'viewPenilaian') {
-        document.getElementById('subPageMenuPenilaian').classList.remove('hidden');
-        document.getElementById('subPageDetailHijaiyah').classList.add('hidden');
-        document.getElementById('subPageDetailTajwid').classList.add('hidden');
+        const sub1 = document.getElementById('subPageMenuPenilaian');
+        const sub2 = document.getElementById('subPageDetailHijaiyah');
+        const sub3 = document.getElementById('subPageDetailTajwid');
+        if(sub1) sub1.classList.remove('hidden');
+        if(sub2) sub2.classList.add('hidden');
+        if(sub3) sub3.classList.add('hidden');
         renderPenilaianModul();
     }
     
+    if(viewId === 'viewUmmi') {
+        const sub1 = document.getElementById('subPageDaftarUmmi');
+        const sub2 = document.getElementById('subPageDetailUmmi');
+        if(sub1) sub1.classList.remove('hidden');
+        if(sub2) sub2.classList.add('hidden');
+        renderDaftarUmmi();
+    }
+
     if(viewId === 'viewDashboard') {
         tampilkanHaditsAcak();
         updateLiveDashboardStats();
@@ -275,7 +304,9 @@ function navigateTo(viewId) {
 // ==========================================
 function updateLiveDashboardStats() {
     let totalSuratSistem = 0; let totalSuratSelesai = 0;
+    let totalUmmiSistem = 0; let totalUmmiSelesai = 0;
     
+    // Perhitungan Hafalan
     Object.keys(databaseJuz).forEach(juzNum => {
         databaseJuz[juzNum].forEach((surat, sIdx) => {
             totalSuratSistem++; 
@@ -285,6 +316,22 @@ function updateLiveDashboardStats() {
                 if (progressSurat.filter(Boolean).length === surat.ayat) totalSuratSelesai++;
             }
         });
+    });
+
+    // Perhitungan Ummi (Telah Disesuaikan Untuk Format Object Baru)
+    daftarJilidUmmi.forEach(jilid => {
+        totalUmmiSistem++;
+        const progressUmmi = santriAktif?.ummi?.[jilid.id];
+        if (progressUmmi && Array.isArray(progressUmmi)) {
+            // Hitung halaman yang sudah dinilai
+            let halamanSelesai = 0;
+            for(let i=0; i<jilid.halaman; i++) {
+                let dataP = progressUmmi[i];
+                if(dataP === true) halamanSelesai++; // Kompatibilitas data lama
+                else if(dataP && dataP.nilai !== undefined && dataP.nilai > 0) halamanSelesai++; // Format data baru
+            }
+            if (halamanSelesai === jilid.halaman) totalUmmiSelesai++;
+        }
     });
 
     let totalLulusH = 0;
@@ -301,28 +348,33 @@ function updateLiveDashboardStats() {
     });
 
     const persenHafalan = totalSuratSistem > 0 ? Math.round((totalSuratSelesai / totalSuratSistem) * 100) : 0;
+    const persenUmmi = totalUmmiSistem > 0 ? Math.round((totalUmmiSelesai / totalUmmiSistem) * 100) : 0;
     const persenHijaiyah = Math.round((totalLulusH / 28) * 100);
     const persenTajwid = totalItemTajwid > 0 ? Math.round((totalFasihT / totalItemTajwid) * 100) : 0;
 
     const elHafalan = document.getElementById("totalSelesaiAyat");
+    const elUmmi = document.getElementById("totalSelesaiUmmi");
     const elHuruf = document.getElementById("totalLulusHijaiyah");
     const elTajwid = document.getElementById("totalFasihTajwid");
 
     if (elHafalan) elHafalan.innerText = totalSuratSelesai; 
+    if (elUmmi) elUmmi.innerText = `${totalUmmiSelesai} / ${totalUmmiSistem}`; 
     if (elHuruf) elHuruf.innerText = `${totalLulusH} / 28`;
     if (elTajwid) elTajwid.innerText = `${totalFasihT} / ${totalItemTajwid}`;
 
     const cHafalan = document.getElementById("statCircleHafalan");
+    const cUmmi = document.getElementById("statCircleUmmi"); 
     const cHuruf = document.getElementById("statCircleHijaiyah");
     const cTajwid = document.getElementById("statCircleTajwid");
 
     if (cHafalan) cHafalan.innerHTML = circularProgress(persenHafalan, "#3b82f6");
+    if (cUmmi) cUmmi.innerHTML = circularProgress(persenUmmi, "#8b5cf6"); 
     if (cHuruf) cHuruf.innerHTML = circularProgress(persenHijaiyah, "#10b981");
     if (cTajwid) cTajwid.innerHTML = circularProgress(persenTajwid, "#6366f1");
 }
 
 // ==========================================
-// 9. MODUL HAFALAN & TAJWID
+// 9. MODUL HAFALAN BACAAN (AL-QURAN)
 // ==========================================
 function renderSuratBerdasarkanJuz(num) {
     currentJuzAkses = num;
@@ -361,7 +413,7 @@ function renderSuratBerdasarkanJuz(num) {
 }
 
 function openSurat(juzNum, suratIndex) {
-    if (!santriAktif) return alert("Pilih atau masukkan nama santri terlebih dahulu di kolom pencarian atas!");
+    if (!santriAktif) return tampilkanPeringatan ("Pilih atau masukkan nama santri terlebih dahulu di kolom pencarian atas!");
     
     document.body.style.overflow = 'hidden'; 
     document.getElementById("backdropDetail").classList.remove("hidden");
@@ -384,7 +436,7 @@ function renderAyat(juzNum, suratIndex) {
     for (let i = 0; i < total; i++) {
         const done = santriAktif.progress[keyProgres][i];
         container.innerHTML += `
-        <button onclick="event.stopPropagation(); ${isMurid ? "alert('Penandaan ayat hanya boleh dilakukan oleh Guru!')" : `toggleAyat(${juzNum}, ${suratIndex}, ${i})`}" 
+        <button onclick="event.stopPropagation(); ${isMurid ? "tampilkanPeringatan ('Penandaan ayat hanya boleh dilakukan oleh Guru!')" : `toggleAyat(${juzNum}, ${suratIndex}, ${i})`}" 
                 class="w-10 h-10 rounded-xl font-bold text-xs flex items-center justify-center transition focus:outline-none ${done ? 'bg-blue-600 text-white shadow-md shadow-blue-500/40 ring-2 ring-blue-500 ring-offset-2' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">
             ${i + 1}
         </button>`;
@@ -402,13 +454,23 @@ function toggleAyat(juzNum, suratIndex, ayatIndex) {
 
 function closeDetail() {
     document.body.style.overflow = 'auto'; 
-    document.getElementById("suratDetail").classList.add("hidden");
-    document.getElementById("backdropDetail").classList.add("hidden");
+    const suratDetail = document.getElementById("suratDetail");
+    const backdropDetail = document.getElementById("backdropDetail");
+    
+    if(suratDetail) suratDetail.classList.add("hidden");
+    
+    const ummiDetail = document.getElementById("ummiDetail");
+    if (backdropDetail && (!ummiDetail || ummiDetail.classList.contains("hidden"))) {
+        backdropDetail.classList.add("hidden");
+    }
     
     if (currentJuzAkses) renderSuratBerdasarkanJuz(currentJuzAkses);
     updateLiveDashboardStats();
 }
 
+// ==========================================
+// 10. MODUL PENILAIAN HIJAIYAH & TAJWID
+// ==========================================
 function renderPenilaianModul() {
     const containerHuruf = document.getElementById("listHurufHijaiyah");
     const containerTajwid = document.getElementById("listHukumTajwidKlasifikasi");
@@ -444,7 +506,6 @@ function renderPenilaianModul() {
 
     klasifikasiTajwid.forEach((klasor) => {
         let itemsHtml = `<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">`;
-        
         klasor.items.forEach((item) => {
             const currentVal = parseInt(santriAktif?.tajwid?.[item.id] || "0");
             const persenCard = Math.round((currentVal / 5) * 100); 
@@ -456,7 +517,6 @@ function renderPenilaianModul() {
                 "border-blue-200/80 shadow-sm shadow-blue-100/30", "border-emerald-200/80 shadow-sm shadow-emerald-100/30"
             ];
             const bColor = borderColors[currentVal] || borderColors[0];
-
             const badgeStyles = [
                 "bg-slate-100 text-slate-600", "bg-rose-100 text-rose-700", "bg-orange-100 text-orange-700",
                 "bg-amber-100 text-amber-700", "bg-blue-100 text-blue-700", "bg-emerald-100 text-emerald-700"
@@ -480,12 +540,10 @@ function renderPenilaianModul() {
             </div>`;
         });
         itemsHtml += `</div>`;
-        
         containerTajwid.innerHTML += `
         <div class="space-y-4 w-full">
             <h4 class="text-xs font-bold text-indigo-600 uppercase tracking-widest flex items-center gap-2 mt-2 mb-1">
-                <span class="w-2 h-2 rounded-full bg-indigo-500 shadow-sm shadow-indigo-400"></span> 
-                ${klasor.kategori}
+                <span class="w-2 h-2 rounded-full bg-indigo-500 shadow-sm shadow-indigo-400"></span> ${klasor.kategori}
             </h4>
             ${itemsHtml}
         </div>`;
@@ -496,20 +554,275 @@ function siklusNilaiHuruf(idx, currentVal) {
     if (!santriAktif || role === "murid") return;
     if (!santriAktif.huruf) santriAktif.huruf = {};
     santriAktif.huruf[`h_${idx}`] = String((parseInt(currentVal) + 1) % 6);
-    save(); 
-    renderPenilaianModul();
+    save(); renderPenilaianModul();
 }
 
 function siklusNilaiTajwid(id, currentVal) {
     if (!santriAktif || role === "murid") return;
     if (!santriAktif.tajwid) santriAktif.tajwid = {};
     santriAktif.tajwid[id] = String((parseInt(currentVal) + 1) % 6);
-    save(); 
-    renderPenilaianModul();
+    save(); renderPenilaianModul();
 }
 
 // ==========================================
-// 10. VISUAL UTILITIES & LAINNYA
+// 11. MODUL METODE UMMI (REVISI NILAI 1-100) - FIXED FOR MURID ROLE
+// ==========================================
+function renderDaftarUmmi() {
+    const grid = document.getElementById("containerListUmmi");
+    if (!grid) return; 
+    grid.innerHTML = "";
+
+    daftarJilidUmmi.forEach((jilid) => {
+        const total = jilid.halaman;
+        const progress = santriAktif?.ummi?.[jilid.id] || [];
+        
+        let done = 0;
+        for(let i=0; i<total; i++) {
+            let dataP = progress[i];
+            if(dataP === true) done++; 
+            else if(dataP && dataP.nilai !== undefined && dataP.nilai > 0) done++;
+        }
+        
+        const persen = Math.round((done / total) * 100);
+
+        let color = "#ef4444"; let bgLight = "bg-white";
+        if (persen >= 50) color = "#f59e0b";
+        if (persen >= 80) color = "#8b5cf6"; 
+        if (persen === 100) bgLight = "bg-purple-50/50 border-purple-200";
+
+        grid.innerHTML += `
+        <div onclick="openJilidUmmi('${jilid.id}')" class="flex items-center gap-3 p-4 rounded-2xl border border-slate-100 cursor-pointer ${bgLight} hover:shadow-md hover:-translate-y-1 transition-all duration-300 group">
+            <div class="flex-shrink-0 group-hover:scale-105 transition-transform">${circularProgress(persen, color)}</div>
+            <div>
+                <h4 class="font-extrabold text-slate-800 text-sm tracking-tight group-hover:text-purple-700 transition-colors">${jilid.nama}</h4>
+                <span class="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md mt-1 inline-block">${jilid.halaman} Halaman</span>
+            </div>
+        </div>`;
+    });
+}
+
+function openJilidUmmi(jilidId) {
+    if (!santriAktif) return tampilkanPeringatan ("Pilih atau masukkan nama santri terlebih dahulu di kolom pencarian atas!");
+    
+    currentJilidAkses = jilidId;
+    document.body.style.overflow = 'hidden'; 
+    
+    const backdrop = document.getElementById("backdropDetail");
+    const modal = document.getElementById("ummiDetail");
+    
+    if(backdrop) backdrop.classList.remove("hidden");
+    if(modal) modal.classList.remove("hidden");
+    
+    const jilid = daftarJilidUmmi.find(j => j.id === jilidId);
+    const textJudul = document.getElementById("judulUmmi");
+    if(textJudul) textJudul.innerText = `${jilid.nama} (${jilid.halaman} Halaman)`;
+    
+    renderHalamanUmmi(jilidId);
+}
+
+function renderHalamanUmmi(jilidId) {
+    const container = document.getElementById("halamanUmmiList");
+    if (!container) return; 
+    container.innerHTML = "";
+    
+    const jilid = daftarJilidUmmi.find(j => j.id === jilidId);
+    const total = jilid.halaman;
+    const isMurid = (role === "murid");
+
+    if (!santriAktif.ummi) santriAktif.ummi = {};
+    if (!santriAktif.ummi[jilidId]) santriAktif.ummi[jilidId] = Array(total).fill(null);
+
+    for (let i = 0; i < total; i++) {
+        let dataHalaman = santriAktif.ummi[jilidId][i];
+        
+        // Kompatibilitas data lama
+        if(dataHalaman === true) dataHalaman = { nilai: 100, catatan: "Telah Diselesaikan (Data Lama)" };
+        
+        const isDone = dataHalaman && dataHalaman.nilai !== undefined && dataHalaman.nilai !== null;
+        const teksNilai = isDone ? dataHalaman.nilai : "";
+        const adaCatatan = isDone && dataHalaman.catatan && dataHalaman.catatan.trim() !== "";
+        
+        // --- LOGIKA WARNA DINAMIS BERDASARKAN NILAI ---
+        let bgStyle = 'bg-slate-100 text-slate-700 hover:bg-slate-200'; // Default belum dinilai
+        if (isDone) {
+            if (dataHalaman.nilai < 75) {
+                // Jika nilai di bawah 75: Berwarna merah (Merah Tailwind)
+                bgStyle = 'bg-rose-600 text-white shadow-md shadow-rose-500/40 ring-2 ring-rose-500 ring-offset-2';
+            } else {
+                // Jika nilai 70 ke atas: Berwarna ungu (Bawaan sistem sebelumnya)
+                bgStyle = 'bg-purple-600 text-white shadow-md shadow-purple-500/40 ring-2 ring-purple-500 ring-offset-2';
+            }
+        }
+
+        // Teks indikator warna kecil di bawah angka halaman jika sudah dinilai
+        let teksIndikatorWarna = isDone ? (dataHalaman.nilai < 75 ? 'text-rose-200' : 'text-purple-200') : '';
+        
+        const aksi = isMurid 
+            ? `bukaLihatNilaiUmmi('${jilidId}', ${i})` 
+            : `bukaFormNilaiUmmi('${jilidId}', ${i})`;
+
+        container.innerHTML += `
+        <button onclick="event.stopPropagation(); ${aksi}" 
+                title="${isDone ? 'Nilai: ' + dataHalaman.nilai : 'Belum dinilai'}"
+                class="relative w-12 h-12 rounded-xl font-bold text-xs flex flex-col items-center justify-center transition focus:outline-none ${bgStyle}">
+            
+            <span class="text-sm">${i + 1}</span>
+            ${isDone ? `<span class="text-[9px] font-bold ${teksIndikatorWarna} leading-none mt-0.5">${teksNilai}</span>` : ''}
+            
+            ${adaCatatan ? `<span class="absolute -top-1 -right-1 w-3.5 h-3.5 bg-amber-500 rounded-full flex items-center justify-center border-2 border-white"><span class="material-symbols-outlined text-[8px] text-white">edit_note</span></span>` : ''}
+        </button>`;
+    }
+}
+
+// FUNGSI UTK MURID MELIHAT POPUP NILAI & CATATAN (FIXED)
+window.bukaLihatNilaiUmmi = function(jilidId, index) {
+    console.log("Mencoba membuka nilai untuk murid:", jilidId, index);
+    if (!santriAktif) return alert("Data santri aktif tidak ditemukan.");
+
+    let data = santriAktif.ummi?.[jilidId]?.[index];
+    
+    // Normalisasi jika masih berupa format data lama (boolean)
+    if (data === true) data = { nilai: 100, catatan: "Telah Diselesaikan (Data Lama)" };
+    
+    if (!data || data.nilai === undefined || data.nilai === null) {
+        tampilkanPeringatan ("Halaman ini belum memiliki penilaian dari Guru.");
+        return;
+    }
+
+    const modalLihat = document.getElementById('modalLihatUmmi');
+    const displayNilai = document.getElementById('displayNilaiUmmi');
+    const displayCatatan = document.getElementById('displayCatatanUmmi');
+
+    // Opsi A: Jika elemen modalLihatUmmi ada di HTML, gunakan itu
+    if (modalLihat && displayNilai && displayCatatan) {
+        displayNilai.innerText = data.nilai;
+        displayCatatan.innerText = data.catatan || "- Tidak ada catatan -";
+        modalLihat.classList.remove('hidden');
+    } else {
+        // Opsi B (Fallback cerdas): Jika modal khusus murid belum dibuat di HTML, 
+        // kita gunakan modal penilaian guru saja tapi di-set READ-ONLY dan sembunyikan tombol aksi.
+        const modalForm = document.getElementById('modalPenilaianUmmi');
+        const inputNilai = document.getElementById('inputNilaiUmmi');
+        const inputCatatan = document.getElementById('inputCatatanUmmi');
+        const judulForm = document.getElementById('judulFormUmmi');
+
+        if (modalForm && inputNilai && inputCatatan) {
+            if (judulForm) judulForm.innerText = `Detail Nilai Halaman ${index + 1} (Hanya Baca)`;
+            
+            inputNilai.value = data.nilai;
+            inputNilai.disabled = true; // Kunci input nilai
+            
+            inputCatatan.value = data.catatan || '';
+            inputCatatan.disabled = true; // Kunci input catatan
+            
+            // Sembunyikan tombol Simpan & Hapus agar murid tidak bisa utak-atik
+            const btnSimpan = modalForm.querySelector('button[onclick*="simpanNilaiUmmi"]');
+            const btnHapus = modalForm.querySelector('button[onclick*="hapusNilaiUmmi"]');
+            if (btnSimpan) btnSimpan.classList.add('hidden');
+            if (btnHapus) btnHapus.classList.add('hidden');
+            
+            modalForm.classList.remove('hidden');
+        } else {
+            // Jalur terakhir jika seluruh elemen modal tidak ditemukan sama sekali
+            alert(`[Detail Nilai Halaman ${index + 1}]\n\nNilai: ${data.nilai}\nCatatan: ${data.catatan || '- Tidak ada catatan -'}`);
+        }
+    }
+}
+
+window.tutupLihatNilaiUmmi = function() {
+    const modal = document.getElementById('modalLihatUmmi');
+    if(modal) modal.classList.add('hidden');
+}
+
+// ------------------------------------------
+// Fungsi Formulir Input Nilai Ummi (UNTUK GURU)
+// ------------------------------------------
+function bukaFormNilaiUmmi(jilidId, index) {
+    if (role === "murid") return;
+    currentEditUmmi = { jilidId, index };
+    
+    let data = santriAktif.ummi?.[jilidId]?.[index] || { nilai: '', catatan: '' };
+    if(typeof data === 'boolean') data = { nilai: data ? 100 : '', catatan: '' }; 
+
+    const inputNilai = document.getElementById('inputNilaiUmmi');
+    const inputCatatan = document.getElementById('inputCatatanUmmi');
+    const judulForm = document.getElementById('judulFormUmmi');
+    const modalForm = document.getElementById('modalPenilaianUmmi');
+
+    if (inputNilai) { inputNilai.value = data.nilai || ''; inputNilai.disabled = false; }
+    if (inputCatatan) { inputCatatan.value = data.catatan || ''; inputCatatan.disabled = false; }
+    if (judulForm) judulForm.innerText = `Input Halaman ${index + 1}`;
+    
+    if (modalForm) {
+        // Kembalikan tombol simpan & hapus yang mungkin sempat tersembunyi karena role murid
+        const btnSimpan = modalForm.querySelector('button[onclick*="simpanNilaiUmmi"]');
+        const btnHapus = modalForm.querySelector('button[onclick*="hapusNilaiUmmi"]');
+        if (btnSimpan) btnSimpan.classList.remove('hidden');
+        if (btnHapus) btnHapus.classList.remove('hidden');
+        
+        modalForm.classList.remove('hidden');
+    }
+}
+
+function tutupFormNilaiUmmi() {
+    document.getElementById('modalPenilaianUmmi').classList.add('hidden');
+}
+
+function simpanNilaiUmmi() {
+    const nilaiInput = document.getElementById('inputNilaiUmmi').value;
+    const nilai = parseInt(nilaiInput);
+    const catatan = document.getElementById('inputCatatanUmmi').value;
+    const { jilidId, index } = currentEditUmmi;
+
+    if (!nilaiInput || isNaN(nilai) || nilai < 1 || nilai > 100) {
+        tampilkanPeringatan ("Mohon masukkan nilai berupa angka antara 1 sampai 100.");
+        return;
+    }
+
+    if (!santriAktif.ummi[jilidId]) santriAktif.ummi[jilidId] = [];
+    santriAktif.ummi[jilidId][index] = { nilai: nilai, catatan: catatan };
+    
+    save();
+    renderHalamanUmmi(jilidId);
+    tutupFormNilaiUmmi();
+    
+    if (currentView === 'viewUmmi') renderDaftarUmmi();
+    updateLiveDashboardStats();
+}
+
+function hapusNilaiUmmi() {
+    const { jilidId, index } = currentEditUmmi;
+    if (!santriAktif.ummi[jilidId]) return;
+    
+    santriAktif.ummi[jilidId][index] = null; 
+    save();
+    renderHalamanUmmi(jilidId);
+    tutupFormNilaiUmmi();
+    
+    if (currentView === 'viewUmmi') renderDaftarUmmi();
+    updateLiveDashboardStats();
+}
+
+function closeUmmiDetail() {
+    currentJilidAkses = null; 
+    document.body.style.overflow = 'auto'; 
+    
+    const modal = document.getElementById("ummiDetail");
+    const backdrop = document.getElementById("backdropDetail");
+    
+    if(modal) modal.classList.add("hidden");
+    
+    const suratDetail = document.getElementById("suratDetail");
+    if(backdrop && (!suratDetail || suratDetail.classList.contains("hidden"))) {
+         backdrop.classList.add("hidden");
+    }
+    
+    if (currentView === 'viewUmmi') renderDaftarUmmi();
+    updateLiveDashboardStats();
+}
+
+// ==========================================
+// 12. VISUAL UTILITIES & LAINNYA
 // ==========================================
 function circularProgress(persen, color) {
     const size = 48; const stroke = 4; const radius = (size - stroke) / 2;
@@ -533,19 +846,18 @@ window.addEventListener("load", () => {
         setTimeout(() => {
             splash.style.opacity = '0'; 
             setTimeout(() => { splash.style.display = 'none'; }, 1000); 
-        }, 1200);
+        }, 1200); 
     }
 });
 
 window.addEventListener('pageshow', function(event) {
-    if (event.persisted || localStorage.getItem("login") !== "true") {
-        if (localStorage.getItem("login") !== "true") {
-            window.location.replace("login.html");
-        }
+   if (event.persisted || localStorage.getItem("login") !== "true") {
+      if (localStorage.getItem("login") !== "true") {
+//             window.location.replace("login.html");
+       }
     }
-});
+ });
 
-// FUNGSI INI HANYA DIPAKAI SAAT ANDA INGIN MENDAFTARKAN AKUN BARU LEWAT CONSOLE
 async function daftarkanUserBaru(email, password, namaLengkap, role) {
     try {
         const userCredential = await auth.createUserWithEmailAndPassword(email, password);
@@ -555,4 +867,20 @@ async function daftarkanUserBaru(email, password, namaLengkap, role) {
     } catch (error) {
         console.error("Gagal mendaftarkan user:", error.message);
     }
+}
+
+// ==========================================
+// FUNGSI POPUP PERINGATAN KUSTOM
+// ==========================================
+function tampilkanPeringatan(pesan) {
+    const modal = document.getElementById("modalPeringatan");
+    const teksEl = document.getElementById("teksPeringatan");
+    
+    if (teksEl) teksEl.innerText = pesan;
+    if (modal) modal.classList.remove("hidden");
+}
+
+function tutupPeringatan() {
+    const modal = document.getElementById("modalPeringatan");
+    if (modal) modal.classList.add("hidden");
 }

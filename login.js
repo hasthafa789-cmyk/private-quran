@@ -23,7 +23,7 @@ async function login() {
     const passwordInput = document.getElementById("password").value.trim();
 
     if (!emailInput || !passwordInput) {
-        alert("Email dan password tidak boleh kosong!");
+        tampilkanPeringatan ("Email dan password tidak boleh kosong!");
         return;
     }
 
@@ -54,12 +54,12 @@ async function login() {
             window.location.href = "index.html";
         } else {
             // Jika akun terdaftar di auth tapi data role tidak ditemukan di firestore database
-            alert("Data profil akun Anda belum terkonfigurasi di sistem Firestore.");
+            tampilkanPeringatan ("Data profil akun Anda belum terkonfigurasi di sistem Firestore.");
             btn.innerText = originalText;
             btn.disabled = false;
         }
 
-    } catch (error) {
+} catch (error) {
         console.error("Error Login:", error);
         
         // Pemetaan error sederhana agar user mengerti masalahnya
@@ -70,7 +70,9 @@ async function login() {
             pesanError = "Format penulisan email salah (Contoh: nama@gmail.com).";
         }
         
-        alert(pesanError);
+        // BARIS YANG DIUBAH: Menggunakan popup kustom, bukan alert browser lagi
+        tampilkanPeringatan(pesanError);
+        
         btn.innerText = originalText;
         btn.disabled = false;
     }
@@ -82,3 +84,19 @@ document.addEventListener("keydown", function(event) {
         login();
     }
 });
+
+// ==========================================
+// FUNGSI POPUP PERINGATAN KUSTOM
+// ==========================================
+function tampilkanPeringatan(pesan) {
+    const modal = document.getElementById("modalPeringatan");
+    const teksEl = document.getElementById("teksPeringatan");
+    
+    if (teksEl) teksEl.innerText = pesan;
+    if (modal) modal.classList.remove("hidden");
+}
+
+function tutupPeringatan() {
+    const modal = document.getElementById("modalPeringatan");
+    if (modal) modal.classList.add("hidden");
+}
