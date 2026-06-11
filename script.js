@@ -125,10 +125,100 @@ function save() {
         ummi: santriAktif.ummi || {},
         terakhirHafalan: santriAktif.terakhirHafalan || null,
         terakhirHijaiyah: santriAktif.terakhirHijaiyah ?? null,
-        // --- TAMBAHAN BARU: Simpan histori tajwid terakhir ke Cloud ---
         terakhirTajwid: santriAktif.terakhirTajwid || null
     }, { merge: true })
-    .then(() => console.log(`Progres hafalan ${santriAktif.nama} berhasil diamankan ke Cloud!`))
+    .then(() => {
+        console.log(`Progres hafalan ${santriAktif.nama} berhasil diamankan ke Cloud!`);
+        
+        try {
+            // ==========================================================
+            // 1. TERJEMAHKAN FORMAT NAMA (DENGAN PELINDUNG ANTI-ERROR)
+            // ==========================================================
+            let formatHafalan = "-";
+            if (santriAktif.terakhirHafalan) {
+                let textHafalan = String(santriAktif.terakhirHafalan);
+                let match = textHafalan.match(/juz(\d+)_surat(\d+)/);
+
+
+                let keteranganAyat = "";
+                if (santriAktif.progress && santriAktif.progress[textHafalan]) {
+                    let dataAyat = santriAktif.progress[textHafalan];
+                    if (Array.isArray(dataAyat)) {
+                        keteranganAyat = " Ayat " + Math.max(...dataAyat);
+                    } else {
+                        keteranganAyat = " Ayat " + dataAyat; // Jika berupa angka/teks biasa
+                        }
+                    }
+
+                if (match && typeof databaseJuz !== 'undefined') {
+                    let j = parseInt(match[1]);
+                    let s = parseInt(match[2]);
+                    if (databaseJuz[j] && databaseJuz[j][s]) {
+                        formatHafalan = "Surat " + databaseJuz[j][s].nama + keteranganAyat;
+                    } else {
+                        formatHafalan = textHafalan + keteranganAyat;
+                    }
+                }
+            }
+
+            let formatHijaiyah = "-";
+            if (santriAktif.terakhirHijaiyah !== undefined && santriAktif.terakhirHijaiyah !== null) {
+                let idx = parseInt(santriAktif.terakhirHijaiyah);
+                if (typeof daftarHijaiyah !== 'undefined' && daftarHijaiyah[idx]) {
+                    formatHijaiyah = "Huruf " + daftarHijaiyah[idx].split(" ")[0]; 
+                }
+            }
+
+            let formatTajwid = "-";
+            if (santriAktif.terakhirTajwid && typeof klasifikasiTajwid !== 'undefined') {
+                let idTajwid = String(santriAktif.terakhirTajwid);
+                let foundItem = null;
+                for (let k of klasifikasiTajwid) {
+                    foundItem = k.items.find(item => item.id === idTajwid);
+                    if (foundItem) break;
+                }
+                if (foundItem) {
+                    formatTajwid = foundItem.nama; 
+                } else {
+                    formatTajwid = idTajwid.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+                }
+            }
+
+            // ==========================================================
+            // 2. KIRIM KE SPREADSHEET (MENCEGAH CORS & ERROR WEB)
+            // ==========================================================
+            
+            // PASTIKAN ANDA MENGHAPUS TULISAN DI BAWAH DAN MENGGANTINYA DENGAN LINK MILIK ANDA
+            const scriptURL = 'https://script.google.com/macros/s/AKfycbxdzXY210MWgmzjqnIIk8kPnEJuQdTCNiu-ws64x7dCcEu92GavlpCg1-797vUH57k88Q/exec'; 
+            
+            // Peringatan jika URL lupa diganti
+            if(scriptURL === 'URL_APLIKASI_WEB_ANDA_DI_SINI') {
+                console.warn("Gagal: Anda lupa memasukkan URL Google Apps Script Anda!");
+                return;
+            }
+
+            fetch(scriptURL, {
+                method: 'POST',
+                headers: {
+                    // Mencegah error CORS di browser
+                    'Content-Type': 'text/plain;charset=utf-8' 
+                },
+                body: JSON.stringify({
+                    nama: santriAktif.nama,
+                    terakhirHafalan: formatHafalan,
+                    terakhirHijaiyah: formatHijaiyah,
+                    terakhirTajwid: formatTajwid
+                })
+            })
+            .then(response => console.log('Sukses sinkron data (dengan nama rapi) ke Spreadsheet!'))
+            .catch(error => console.error('Gagal fetch ke Spreadsheet:', error));
+            
+        } catch(e) {
+            // Menangkap error jika sewaktu-waktu ada kamus data yang tidak terbaca
+            console.error("Terjadi kendala saat merapikan format data:", e);
+        }
+        
+    })
     .catch((error) => console.error("Gagal menyimpan progres:", error));
 }
 
