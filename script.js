@@ -1262,3 +1262,39 @@ document.addEventListener("DOMContentLoaded", function() {
         }
     }
 });
+
+// ==========================================
+// PENGATURAN HAK AKSES TOMBOL (ROLE BASED)
+// ==========================================
+document.addEventListener("DOMContentLoaded", function() {
+    const btnFiturMassal = document.getElementById("btnFiturMassal");
+    const btnDaftarSantri = document.getElementById("btnDaftarSantri");
+    const btnDaftarAkun = document.getElementById("btnDaftarAkun"); 
+    const btnMuridBimbingan = document.getElementById("btnMuridBimbingan"); // Tambahan Variabel Baru
+    
+    const currentRole = localStorage.getItem("role"); 
+    
+    // 1. Fitur Massal (Admin)
+    if (btnFiturMassal) {
+        btnFiturMassal.style.display = (currentRole === "admin") ? "inline-flex" : "none"; 
+    }
+
+    // 2. Daftar Santri & Progres (Admin)
+    if (btnDaftarSantri) {
+        btnDaftarSantri.style.display = (currentRole === "admin") ? "inline-flex" : "none";
+    }
+
+    // 3. Manajemen Semua Akun (Admin)
+    if (btnDaftarAkun) {
+        btnDaftarAkun.style.display = (currentRole === "admin") ? "inline-flex" : "none";
+    }
+
+    // 4. Murid Bimbingan Saya (KHUSUS GURU)
+    if (btnMuridBimbingan) {
+        if (currentRole === "guru" || currentRole === "admin") {
+            btnMuridBimbingan.style.display = "inline-flex"; // Munculkan untuk Guru
+        } else {
+            btnMuridBimbingan.style.display = "none"; // Sembunyikan untuk Admin dan Murid
+        }
+    }
+});

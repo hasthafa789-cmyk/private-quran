@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Murid Bimbingan Saya</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen p-4 md:p-8">
+
+    <script>
+        const roleAkses = localStorage.getItem("role");
+        if (roleAkses !== "admin" && roleAkses !== "guru") {
+            window.location.replace("index.html");
+        }
+    </script>
+
+    <div class="max-w-6xl mx-auto">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <div class="flex items-center gap-3">
+                <span class="material-symbols-outlined text-teal-600 text-4xl">local_library</span>
+                <div>
+                    <h1 class="text-2xl font-bold text-slate-800">Murid Bimbingan Saya</h1>
+                    <p class="text-sm text-slate-500">Daftar santri dan progres yang berada di bawah bimbingan Anda</p>
+                </div>
+            </div>
+            <a href="index.html" class="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium rounded-xl transition-all shadow-sm">
+                <span class="material-symbols-outlined text-sm">arrow_back</span> Kembali
+            </a>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse min-w-max">
+                    <thead>
+                        <tr class="bg-slate-50 border-b border-slate-100 text-slate-600 text-sm">
+                            <th class="py-4 px-4 font-semibold w-12 text-center">No</th>
+                            <th class="py-4 px-4 font-semibold">Nama Santri</th>
+                            <th class="py-4 px-4 font-semibold">Email</th>
+                            <th class="py-4 px-4 font-semibold">Terakhir Hafalan</th>
+                            <th class="py-4 px-4 font-semibold">Terakhir Hijaiyah</th>
+                            <th class="py-4 px-4 font-semibold">Terakhir Tajwid</th>
+                            <th class="py-4 px-4 font-semibold">Metode Ummi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelBodyBimbingan" class="text-sm">
+                        <tr>
+                            <td colspan="7" class="py-8 text-center text-slate-500">
+                                <span class="material-symbols-outlined animate-spin text-2xl mb-2">autorenew</span>
+                                <p>Mencari murid bimbingan Anda...</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+    <script>
+        // Konfigurasi Firebase Anda
+        const firebaseConfig = {
+            apiKey: "AIzaSyCIBGqJVfrRZikYeQDtQynWDxybsFFtY-0",
+            authDomain: "hasnanprivate.firebaseapp.com",
+            projectId: "hasnanprivate",
+            storageBucket: "hasnanprivate.firebasestorage.app",
+            messagingSenderId: "737022132780",
+            appId: "1:737022132780:web:8ab47b587f13ee53900789"
+        };
+
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        let prosesMuat = false;
+
+        async function muatMuridBimbingan() {
+            if (prosesMuat) return;
+            prosesMuat = true;
+
+            const tabelBody = document.getElementById("tabelBodyBimbingan");
+            // Mengambil nama guru yang sedang login
+            const namaGuruLogin = localStorage.getItem("nama"); 
+
+            if (!namaGuruLogin) {
+                tabelBody.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-red-500">Gagal memuat. Nama Anda tidak ditemukan di sistem. Silakan login ulang.</td></tr>`;
+                return;
+            }
+
+            try {
+                // FUNGSI UTAMA: Hanya menarik dokumen yang 'guruPembimbing'-nya adalah nama guru yang login
+                const snapshot = await db.collection("users")
+                                         .where("guruPembimbing", "==", namaGuruLogin)
+                                         .get();
+
+                if (snapshot.empty) {
+                    tabelBody.innerHTML = `
+                        <tr>
+                            <td colspan="7" class="py-12 text-center text-slate-500">
+                                <span class="material-symbols-outlined text-4xl mb-3 text-slate-300">search_off</span><br>
+                                Anda belum memiliki murid bimbingan saat ini.
+                            </td>
+                        </tr>`;
+                    return;
+                }
+
+                let dataArray = [];
+                snapshot.forEach((doc) => {
+                    dataArray.push(doc.data());
+                });
+
+                // Urutkan nama murid secara Abjad A-Z
+                dataArray.sort((a, b) => {
+                    let namaA = (a.nama || "").toUpperCase();
+                    let namaB = (b.nama || "").toUpperCase();
+                    if (namaA < namaB) return -1;
+                    if (namaA > namaB) return 1;
+                    return 0;
+                });
+
+                let htmlContent = "";
+                let nomor = 1;
+
+                dataArray.forEach((data) => {
+                    const namaSantri = data.nama || "Tanpa Nama";
+                    const emailUser = data.email || "-";
+                    
+                    const hafalan = data.terakhirHafalan || "-";
+                    const hijaiyah = data.terakhirHijaiyah || "-";
+                    const tajwid = data.terakhirTajwid || "-";
+                    const ummi = data.terakhirUmmi || "-";
+
+                    htmlContent += `
+                        <tr class="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                            <td class="py-3 px-4 text-center text-slate-500 font-medium">${nomor++}</td>
+                            <td class="py-3 px-4 font-bold text-teal-700">${namaSantri}</td>
+                            <td class="py-3 px-4 text-slate-500 font-mono text-xs">${emailUser}</td>
+                            <td class="py-3 px-4 text-slate-600">${hafalan}</td>
+                            <td class="py-3 px-4 text-slate-600">${hijaiyah}</td>
+                            <td class="py-3 px-4 text-slate-600">${tajwid}</td>
+                            <td class="py-3 px-4 text-slate-600">${ummi}</td>
+                        </tr>
+                    `;
+                });
+
+                tabelBody.innerHTML = htmlContent;
+
+            } catch (error) {
+                console.error("Gagal memuat murid bimbingan:", error);
+                tabelBody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="py-8 text-center text-red-500">
+                            Terjadi kesalahan saat memuat data.<br>
+                            <span class="text-xs text-red-400">${error.message}</span>
+                        </td>
+                    </tr>`;
+            } finally {
+                prosesMuat = false;
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            auth.onAuthStateChanged((user) => {
+                if (user) {
+                    muatMuridBimbingan();
+                } else {
+                    document.getElementById("tabelBodyBimbingan").innerHTML = `
+                        <tr><td colspan="7" class="py-8 text-center text-red-500">Akses ditolak. Anda tidak login.</td></tr>`;
+                }
+            });
+        });
+
+        window.addEventListener('pageshow', (event) => {
+            if (event.persisted && auth.currentUser) muatMuridBimbingan();
+        });
+    </script>
+</body>
+</html>
