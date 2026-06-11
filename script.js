@@ -132,23 +132,22 @@ function save() {
         
         try {
             // ==========================================================
-            // 1. TERJEMAHKAN FORMAT NAMA (DENGAN PELINDUNG ANTI-ERROR)
+            // 1. TERJEMAHKAN FORMAT NAMA (HAFALAN, HIJAIYAH, TAJWID)
             // ==========================================================
             let formatHafalan = "-";
             if (santriAktif.terakhirHafalan) {
                 let textHafalan = String(santriAktif.terakhirHafalan);
                 let match = textHafalan.match(/juz(\d+)_surat(\d+)/);
-
-
+                
                 let keteranganAyat = "";
                 if (santriAktif.progress && santriAktif.progress[textHafalan]) {
                     let dataAyat = santriAktif.progress[textHafalan];
                     if (Array.isArray(dataAyat)) {
-                        keteranganAyat = " Ayat " + Math.max(...dataAyat);
+                        keteranganAyat = " Ayat " + Math.max(...dataAyat); 
                     } else {
-                        keteranganAyat = " Ayat " + dataAyat; // Jika berupa angka/teks biasa
-                        }
+                        keteranganAyat = " Ayat " + dataAyat; 
                     }
+                }
 
                 if (match && typeof databaseJuz !== 'undefined') {
                     let j = parseInt(match[1]);
@@ -158,6 +157,8 @@ function save() {
                     } else {
                         formatHafalan = textHafalan + keteranganAyat;
                     }
+                } else {
+                    formatHafalan = textHafalan + keteranganAyat;
                 }
             }
 
@@ -185,39 +186,71 @@ function save() {
             }
 
             // ==========================================================
-            // 2. KIRIM KE SPREADSHEET (MENCEGAH CORS & ERROR WEB)
+            // LOGIK BARU: MENGAMBIL DATA METODE UMMI TERTINGGI SECARA OTOMATIS
             // ==========================================================
+            let formatUmmi = "-";
+            if (santriAktif.ummi && typeof daftarJilidUmmi !== 'undefined') {
+                // Saring jilid yang memiliki nilai (ada yang dikerjakan)
+                let validKeys = Object.keys(santriAktif.ummi).filter(key => {
+                    const arr = santriAktif.ummi[key];
+                    return Array.isArray(arr) && arr.some(v => v !== null && v !== undefined && v.nilai > 0);
+                });
+
+                if (validKeys.length > 0) {
+                    // Urutkan untuk mencari jilid tertinggi
+                    validKeys.sort((a, b) => {
+                        let idxA = daftarJilidUmmi.findIndex(j => j.id === a);
+                        let idxB = daftarJilidUmmi.findIndex(j => j.id === b);
+                        return idxA - idxB;
+                    });
+                    
+                    let lastKey = validKeys[validKeys.length - 1]; // Jilid paling tinggi
+                    let found = daftarJilidUmmi.find(j => j.id === lastKey);
+                    
+                    if (found) {
+                        let arr = santriAktif.ummi[lastKey];
+                        let halTerakhir = 0;
+                        // Cari halaman terakhir yang ada nilainya
+                        for (let i = arr.length - 1; i >= 0; i--) {
+                            if (arr[i] !== null && arr[i] !== undefined && arr[i].nilai > 0) {
+                                halTerakhir = i + 1;
+                                break;
+                            }
+                        }
+                        formatUmmi = found.nama + " Halaman " + halTerakhir;
+                    }
+                }
+            }
+
+            // ==========================================================
+            // 2. KIRIM KE SPREADSHEET
+            // ==========================================================
+            const scriptURL = 'https://script.google.com/macros/s/AKfycbzMWyxk3LGgIURE2wIqaYnvUQIHiDSiN86HVZG1GtcHxAWy1150kKCJcadrFaJyZ3EI1w/exec'; // <--- MASUKKAN URL WEB APP SCRIPT ANDA DI SINI
             
-            // PASTIKAN ANDA MENGHAPUS TULISAN DI BAWAH DAN MENGGANTINYA DENGAN LINK MILIK ANDA
-            const scriptURL = 'https://script.google.com/macros/s/AKfycbxdzXY210MWgmzjqnIIk8kPnEJuQdTCNiu-ws64x7dCcEu92GavlpCg1-797vUH57k88Q/exec'; 
-            
-            // Peringatan jika URL lupa diganti
             if(scriptURL === 'URL_APLIKASI_WEB_ANDA_DI_SINI') {
-                console.warn("Gagal: Anda lupa memasukkan URL Google Apps Script Anda!");
+                console.warn("Gagal: Anda belum memasukkan URL Google Apps Script Anda!");
                 return;
             }
 
             fetch(scriptURL, {
                 method: 'POST',
                 headers: {
-                    // Mencegah error CORS di browser
                     'Content-Type': 'text/plain;charset=utf-8' 
                 },
                 body: JSON.stringify({
                     nama: santriAktif.nama,
                     terakhirHafalan: formatHafalan,
                     terakhirHijaiyah: formatHijaiyah,
-                    terakhirTajwid: formatTajwid
+                    terakhirTajwid: formatTajwid,
+                    terakhirUmmi: formatUmmi // <--- Data Ummi sekarang sudah terbaca!
                 })
             })
-            .then(response => console.log('Sukses sinkron data (dengan nama rapi) ke Spreadsheet!'))
+            .then(response => console.log('Sukses sinkron seluruh data termasuk metode Ummi!'))
             .catch(error => console.error('Gagal fetch ke Spreadsheet:', error));
             
         } catch(e) {
-            // Menangkap error jika sewaktu-waktu ada kamus data yang tidak terbaca
             console.error("Terjadi kendala saat merapikan format data:", e);
         }
-        
     })
     .catch((error) => console.error("Gagal menyimpan progres:", error));
 }
