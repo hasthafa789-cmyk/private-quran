@@ -144,7 +144,8 @@
                     
                     // 2. Siapkan data untuk struktur Firestore Anda
                     let dataUser = { 
-                        nama: user.nama, 
+                        nama: user.nama,
+                        email: user.email, 
                         role: user.role 
                     };
                     if (user.role === "murid" && user.pembimbing !== "") {

@@ -1145,7 +1145,7 @@ async function daftarkanUserBaru(email, password, namaLengkap, rolePilihan, nama
         const userCredential = await auth.createUserWithEmailAndPassword(email, password);
         const user = userCredential.user;
         
-        let dataUser = { nama: namaLengkap, role: rolePilihan };
+        let dataUser = { nama: namaLengkap, email: email, role: rolePilihan };
         if (rolePilihan === "murid") {
             dataUser.guruPembimbing = namaGuruPembimbing;
         }
@@ -1220,6 +1220,45 @@ document.addEventListener("DOMContentLoaded", function() {
             btnDaftarSantri.style.display = "inline-flex";
         } else {
             btnDaftarSantri.style.display = "none";
+        }
+    }
+});
+
+// ==========================================
+// PENGATURAN HAK AKSES TOMBOL (ROLE BASED)
+// ==========================================
+document.addEventListener("DOMContentLoaded", function() {
+    const btnFiturMassal = document.getElementById("btnFiturMassal");
+    const btnDaftarSantri = document.getElementById("btnDaftarSantri");
+    const btnDaftarAkun = document.getElementById("btnDaftarAkun"); // Tambahan variabel baru
+    
+    // Ambil data role yang sedang login
+    const currentRole = localStorage.getItem("role"); 
+    
+    // 1. Tombol Registrasi Massal (KHUSUS ADMIN)
+    if (btnFiturMassal) {
+        if (currentRole === "admin") {
+            btnFiturMassal.style.display = "inline-flex"; 
+        } else {
+            btnFiturMassal.style.display = "none"; 
+        }
+    }
+
+    // 2. Tombol Daftar Santri (KHUSUS ADMIN)
+    if (btnDaftarSantri) {
+        if (currentRole === "admin") {
+            btnDaftarSantri.style.display = "inline-flex";
+        } else {
+            btnDaftarSantri.style.display = "none";
+        }
+    }
+
+    // 3. Tombol Manajemen Semua Akun (KHUSUS ADMIN)
+    if (btnDaftarAkun) {
+        if (currentRole === "admin") {
+            btnDaftarAkun.style.display = "inline-flex"; // Tampilkan jika admin
+        } else {
+            btnDaftarAkun.style.display = "none"; // Sembunyikan untuk guru/murid
         }
     }
 });

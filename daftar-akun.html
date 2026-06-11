@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daftar Semua Akun - Admin Panel</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen p-4 md:p-8">
+
+    <script>
+        const roleAkses = localStorage.getItem("role");
+        if (roleAkses !== "admin") {
+            window.location.replace("index.html");
+        }
+    </script>
+
+    <div class="max-w-5xl mx-auto">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <div class="flex items-center gap-3">
+                <span class="material-symbols-outlined text-purple-600 text-4xl">manage_accounts</span>
+                <div>
+                    <h1 class="text-2xl font-bold text-slate-800">Manajemen Semua Akun</h1>
+                    <p class="text-sm text-slate-500">Daftar seluruh Admin, Guru, dan Murid yang terdaftar di sistem</p>
+                </div>
+            </div>
+            <a href="index.html" class="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium rounded-xl transition-all shadow-sm">
+                <span class="material-symbols-outlined text-sm">arrow_back</span> Kembali
+            </a>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-50 border-b border-slate-100 text-slate-600 text-sm">
+                            <th class="py-4 px-6 font-semibold w-16 text-center">No</th>
+                            <th class="py-4 px-6 font-semibold">Nama Lengkap</th>
+                            <th class="py-4 px-6 font-semibold">Email</th>
+                            <th class="py-4 px-6 font-semibold text-center">Role / Hak Akses</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelBodyAkun" class="text-sm">
+                        <tr>
+                            <td colspan="4" class="py-8 text-center text-slate-500">
+                                <span class="material-symbols-outlined animate-spin text-2xl mb-2">autorenew</span>
+                                <p>Memuat semua data akun...</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+    <script>
+        // Konfigurasi Firebase Anda
+        const firebaseConfig = {
+            apiKey: "AIzaSyCIBGqJVfrRZikYeQDtQynWDxybsFFtY-0",
+            authDomain: "hasnanprivate.firebaseapp.com",
+            projectId: "hasnanprivate",
+            storageBucket: "hasnanprivate.firebasestorage.app",
+            messagingSenderId: "737022132780",
+            appId: "1:737022132780:web:8ab47b587f13ee53900789"
+        };
+
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        let prosesMuat = false;
+
+        async function muatSemuaAkun() {
+            if (prosesMuat) return;
+            prosesMuat = true;
+
+            const tabelBody = document.getElementById("tabelBodyAkun");
+
+            try {
+                // Ambil SEMUA pengguna tanpa filter role
+                const snapshot = await db.collection("users").get();
+
+                if (snapshot.empty) {
+                    tabelBody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-slate-500">Tidak ada akun ditemukan.</td></tr>`;
+                    return;
+                }
+
+                let dataArray = [];
+                snapshot.forEach((doc) => {
+                    dataArray.push(doc.data());
+                });
+
+                // Urutkan Akun berdasarkan: Admin -> Guru -> Murid
+                const bobotRole = { "admin": 1, "guru": 2, "murid": 3 };
+                dataArray.sort((a, b) => {
+                    let roleA = bobotRole[a.role] || 4;
+                    let roleB = bobotRole[b.role] || 4;
+                    
+                    if (roleA !== roleB) return roleA - roleB;
+                    
+                    // Jika rolenya sama, urutkan berdasarkan nama A-Z
+                    return (a.nama || "").localeCompare(b.nama || "");
+                });
+
+                let htmlContent = "";
+                let nomor = 1;
+
+                dataArray.forEach((data) => {
+                    const namaUser = data.nama || "Tanpa Nama";
+                    const emailUser = data.email || "-"; // Mengambil field email jika ada
+                    const roleUser = data.role || "murid";
+
+                    // Atur warna badge label berdasarkan role
+                    let badgeColor = "bg-slate-100 text-slate-700";
+                    if (roleUser === "admin") badgeColor = "bg-purple-100 text-purple-700 font-bold";
+                    if (roleUser === "guru") badgeColor = "bg-amber-100 text-amber-700 font-medium";
+                    if (roleUser === "murid") badgeColor = "bg-blue-100 text-blue-700";
+
+                    htmlContent += `
+                        <tr class="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                            <td class="py-4 px-6 text-center text-slate-500 font-medium">${nomor++}</td>
+                            <td class="py-4 px-6 font-semibold text-slate-800">${namaUser}</td>
+                            <td class="py-4 px-6 text-slate-600 font-mono text-xs">${emailUser}</td>
+                            <td class="py-4 px-6 text-center">
+                                <span class="px-3 py-1 rounded-full text-xs uppercase tracking-wider ${badgeColor}">
+                                    ${roleUser}
+                                </span>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                tabelBody.innerHTML = htmlContent;
+
+            } catch (error) {
+                console.error("Gagal memuat semua akun:", error);
+                tabelBody.innerHTML = `
+                    <tr>
+                        <td colspan="4" class="py-8 text-center text-red-500">
+                            Gagal memuat data akun: <span class="text-xs font-mono">${error.message}</span>
+                        </td>
+                    </tr>`;
+            } finally {
+                prosesMuat = false;
+            }
+        }
+
+        // Jalankan saat kondisi login terverifikasi
+        document.addEventListener("DOMContentLoaded", () => {
+            auth.onAuthStateChanged((user) => {
+                if (user) {
+                    muatSemuaAkun();
+                } else {
+                    tabelBody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-red-500">Sesi berakhir.</td></tr>`;
+                }
+            });
+        });
+
+        window.addEventListener('pageshow', (event) => {
+            if (event.persisted && auth.currentUser) muatSemuaAkun();
+        });
+    </script>
+</body>
+</html>
