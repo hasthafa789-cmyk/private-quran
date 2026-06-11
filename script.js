@@ -114,6 +114,9 @@ function mulaiSinkronisasiOtomatis() {
     });
 }
 
+// TAMBAHKAN VARIABEL INI DI LUAR FUNGSI SAVE (DI ATASNYA)
+let timerSinkronisasiSpreadsheet = null;
+
 function save() {
     if (!santriAktif || !santriAktif.nama) return;
 
@@ -131,9 +134,7 @@ function save() {
         console.log(`Progres hafalan ${santriAktif.nama} berhasil diamankan ke Cloud!`);
         
         try {
-            // ==========================================================
-            // 1. TERJEMAHKAN FORMAT NAMA (HAFALAN, HIJAIYAH, TAJWID)
-            // ==========================================================
+            // [LOGIK TERJEMAHAN NAMA TETAP SAMA]
             let formatHafalan = "-";
             if (santriAktif.terakhirHafalan) {
                 let textHafalan = String(santriAktif.terakhirHafalan);
@@ -144,12 +145,10 @@ function save() {
                     let dataAyat = santriAktif.progress[textHafalan];
                     let ayatTerakhir = 0;
                     
-                    // PERBAIKAN: Menelusuri deretan array dari belakang
-                    // untuk mencari ayat terakhir yang di-klik (bernilai true)
                     if (Array.isArray(dataAyat)) {
                         for (let i = dataAyat.length - 1; i >= 0; i--) {
                             if (dataAyat[i] === true) { 
-                                ayatTerakhir = i + 1; // +1 karena array dimulai dari 0
+                                ayatTerakhir = i + 1; 
                                 break; 
                             }
                         }
@@ -230,33 +229,39 @@ function save() {
             }
 
             // ==========================================================
-            // 2. KIRIM KE SPREADSHEET
+            // LOGIK BARU: SISTEM ANTI-SPAM (DEBOUNCE / PENUNDA)
             // ==========================================================
-            const scriptURL = 'https://script.google.com/macros/s/AKfycbzMWyxk3LGgIURE2wIqaYnvUQIHiDSiN86HVZG1GtcHxAWy1150kKCJcadrFaJyZ3EI1w/exec'; // <--- MASUKKAN URL WEB APP SCRIPT ANDA DI SINI
             
-            if(scriptURL === 'URL_APLIKASI_WEB_ANDA_DI_SINI') {
-                console.warn("Gagal: Anda belum memasukkan URL Google Apps Script Anda!");
-                return;
+            // Jika ada timer yang berjalan karena klik sebelumnya, matikan!
+            if (timerSinkronisasiSpreadsheet) {
+                clearTimeout(timerSinkronisasiSpreadsheet);
             }
 
-            fetch(scriptURL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'text/plain;charset=utf-8' 
-                },
-                body: JSON.stringify({
-                    nama: santriAktif.nama,
-                    terakhirHafalan: formatHafalan,
-                    terakhirHijaiyah: formatHijaiyah,
-                    terakhirTajwid: formatTajwid,
-                    terakhirUmmi: formatUmmi 
+            // Buat timer baru yang akan jalan 2 detik setelah Anda SELESAI ngeklik
+            timerSinkronisasiSpreadsheet = setTimeout(() => {
+                const scriptURL = 'https://script.google.com/macros/s/AKfycbzfG3lx60LBCCOHGXs4T8gEQmBTjhZO89qY3HpLF_9Z9P-o8w7XLmJBSI-5VX-5IITfGQ/exec'; // <--- MASUKKAN URL ANDA
+                
+                if(scriptURL === 'URL_APLIKASI_WEB_ANDA_DI_SINI') return;
+
+                fetch(scriptURL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({
+                        nama: santriAktif.nama,
+                        terakhirHafalan: formatHafalan,
+                        terakhirHijaiyah: formatHijaiyah,
+                        terakhirTajwid: formatTajwid,
+                        terakhirUmmi: formatUmmi 
+                    })
                 })
-            })
-            .then(response => console.log('Sukses sinkron seluruh data ke Spreadsheet!'))
-            .catch(error => console.error('Gagal fetch ke Spreadsheet:', error));
+                .then(() => console.log('Final data terkirim ke Spreadsheet!'))
+                .catch(error => console.error('Gagal fetch:', error));
+                
+            }, 2000); // Tunda 2 detik
             
         } catch(e) {
-            console.error("Terjadi kendala saat merapikan format data:", e);
+            console.error("Kendala format:", e);
         }
     })
     .catch((error) => console.error("Gagal menyimpan progres:", error));
