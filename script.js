@@ -118,6 +118,12 @@ function mulaiSinkronisasiOtomatis() {
 let timerSinkronisasiSpreadsheet = null;
 
 function save() {
+    const user = firebase.auth().currentUser;
+    if (!user) {
+        console.error("Upaya penyimpanan ditolak: Pengguna tidak terautentikasi.");
+        tampilkanPeringatan("Sesi Anda telah habis. Silakan login kembali untuk menyimpan data.");
+        return; // Hentikan proses simpan
+    }
     if (!santriAktif || !santriAktif.nama) return;
 
     db.collection("database_hafalan").doc(santriAktif.nama).set({
@@ -350,7 +356,8 @@ function updateDatalistSantri() {
     });
 }
 
-function setSantriAktif() {
+// UBAH FUNGSI INI MENJADI ASYNC
+async function setSantriAktif() {
     if (role === "murid") return;
     
     const namaInput = document.getElementById("namaInput");
@@ -365,18 +372,47 @@ function setSantriAktif() {
         return;
     }
 
+    // 1. Cek apakah lembar progress santri sudah ada di local data
     let found = dataSantri.find(s => s.nama && s.nama.toLowerCase() === nama.toLowerCase());
     
     if (!found) {
-        const konfirmasi = confirm(`Santri bernama "${nama}" belum memiliki data. Buat lembar progress baru?`);
-        if (konfirmasi) {
-            found = { id: String(Date.now()), nama: nama, progress: {}, huruf: {}, tajwid: {}, ummi: {} };
-            santriAktif = found;
-            save(); 
-        } else {
+        // --- LOGIKA BARU: Cek ke database Firebase 'users' ---
+        try {
+            // Ambil data users dengan role murid dari Firebase
+            const usersSnapshot = await db.collection("users").where("role", "==", "murid").get();
+            let isRegistered = false;
+            
+            // Periksa satu per satu apakah namanya cocok (mengabaikan huruf besar/kecil)
+            usersSnapshot.forEach((doc) => {
+                const userData = doc.data();
+                if (userData.nama && userData.nama.toLowerCase() === nama.toLowerCase()) {
+                    isRegistered = true;
+                }
+            });
+
+            // 2. Jika nama TIDAK DITEMUKAN di daftar akun (belum punya username/password)
+            if (!isRegistered) {
+                tampilkanPeringatan(`Santri bernama "${nama}" belum memiliki akun. Silakan daftarkan username dan password santri terlebih dahulu!`);
+                return; // Hentikan proses pembuatan
+            } 
+            // 3. Jika nama DITEMUKAN di daftar akun (sudah punya username/password)
+            else {
+                const konfirmasi = confirm(`Santri bernama "${nama}" sudah terdaftar di sistem. Buat lembar progress baru sekarang?`);
+                if (konfirmasi) {
+                    found = { id: String(Date.now()), nama: nama, progress: {}, huruf: {}, tajwid: {}, ummi: {} };
+                    santriAktif = found;
+                    save(); 
+                } else {
+                    return; // Hentikan jika guru membatalkan
+                }
+            }
+        } catch (error) {
+            console.error("Gagal mengecek data user di Firebase:", error);
+            tampilkanPeringatan("Terjadi kendala saat mengecek akun santri. Pastikan koneksi internet stabil.");
             return;
         }
     } else {
+        // Jika lembar progress sudah ada, langsung jadikan aktif
         santriAktif = found;
     }
 
@@ -1131,9 +1167,19 @@ function circularProgress(persen, color) {
     </svg>`;
 }
 
-function logout() { 
-    localStorage.removeItem("login"); 
-    window.location.href = "login.html"; 
+function logout() {
+    firebase.auth().signOut().then(() => {
+        // Bersihkan Local Storage sebagai tambahan
+        localStorage.removeItem("login");
+        localStorage.removeItem("role");
+        localStorage.removeItem("nama");
+        localStorage.removeItem("dataSantri");
+        
+        // Arahkan kembali ke halaman login
+        window.location.replace("login.html");
+    }).catch((error) => {
+        console.error("Gagal logout:", error);
+    });
 }
 
 window.addEventListener("load", () => {
@@ -1146,13 +1192,17 @@ window.addEventListener("load", () => {
     }
 });
 
-window.addEventListener('pageshow', function(event) {
-   if (event.persisted || localStorage.getItem("login") !== "true") {
-      if (localStorage.getItem("login") !== "true") {
-//             window.location.replace("login.html");
-       }
+// Memastikan user benar-benar login menggunakan Firebase Auth, bukan localStorage
+firebase.auth().onAuthStateChanged((user) => {
+    if (user) {
+        console.log("Akses diizinkan untuk:", user.email);
+        // Anda bisa memuat data awal di sini jika diperlukan
+    } else {
+        console.warn("Akses ditolak! Mengalihkan ke halaman login...");
+        // Pastikan baris di bawah ini aktif (tidak ada tanda // di depannya)
+        window.location.replace("login.html"); 
     }
- });
+});
 
 async function daftarkanUserBaru(email, password, namaLengkap, role) {
     try {
