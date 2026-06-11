@@ -556,6 +556,24 @@
             menuPage.classList.remove('hidden');
             menuPage.style.animation = 'none'; menuPage.offsetHeight; menuPage.style.animation = null;
         }
+
+        // ==========================================================
+        // FITUR ENTER UNTUK MENYIMPAN NILAI UMMI
+        // ==========================================================
+        document.addEventListener('keydown', function(event) {
+            // Mengecek apakah yang sedang diketik adalah kolom "inputNilaiUmmi"
+            const isInputNilaiFokus = event.target.id === 'inputNilaiUmmi'; 
+
+            // Jika tombol yang ditekan adalah "Enter" dan sedang berada di kolom nilai
+            if (event.key === 'Enter' && isInputNilaiFokus) {
+                event.preventDefault(); // Mencegah halaman refresh
+                
+                // Langsung memanggil fungsi simpan yang sama dengan tombol
+                if(typeof simpanNilaiUmmi === "function") {
+                    simpanNilaiUmmi();
+                }
+            }
+        });
     </script>
     
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
