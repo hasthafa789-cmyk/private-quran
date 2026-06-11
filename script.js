@@ -142,10 +142,23 @@ function save() {
                 let keteranganAyat = "";
                 if (santriAktif.progress && santriAktif.progress[textHafalan]) {
                     let dataAyat = santriAktif.progress[textHafalan];
+                    let ayatTerakhir = 0;
+                    
+                    // PERBAIKAN: Menelusuri deretan array dari belakang
+                    // untuk mencari ayat terakhir yang di-klik (bernilai true)
                     if (Array.isArray(dataAyat)) {
-                        keteranganAyat = " Ayat " + Math.max(...dataAyat); 
+                        for (let i = dataAyat.length - 1; i >= 0; i--) {
+                            if (dataAyat[i] === true) { 
+                                ayatTerakhir = i + 1; // +1 karena array dimulai dari 0
+                                break; 
+                            }
+                        }
                     } else {
-                        keteranganAyat = " Ayat " + dataAyat; 
+                        ayatTerakhir = parseInt(dataAyat) || 0; 
+                    }
+                    
+                    if (ayatTerakhir > 0) {
+                        keteranganAyat = " Ayat " + ayatTerakhir; 
                     }
                 }
 
@@ -185,32 +198,26 @@ function save() {
                 }
             }
 
-            // ==========================================================
-            // LOGIK BARU: MENGAMBIL DATA METODE UMMI TERTINGGI SECARA OTOMATIS
-            // ==========================================================
             let formatUmmi = "-";
             if (santriAktif.ummi && typeof daftarJilidUmmi !== 'undefined') {
-                // Saring jilid yang memiliki nilai (ada yang dikerjakan)
                 let validKeys = Object.keys(santriAktif.ummi).filter(key => {
                     const arr = santriAktif.ummi[key];
                     return Array.isArray(arr) && arr.some(v => v !== null && v !== undefined && v.nilai > 0);
                 });
 
                 if (validKeys.length > 0) {
-                    // Urutkan untuk mencari jilid tertinggi
                     validKeys.sort((a, b) => {
                         let idxA = daftarJilidUmmi.findIndex(j => j.id === a);
                         let idxB = daftarJilidUmmi.findIndex(j => j.id === b);
                         return idxA - idxB;
                     });
                     
-                    let lastKey = validKeys[validKeys.length - 1]; // Jilid paling tinggi
+                    let lastKey = validKeys[validKeys.length - 1]; 
                     let found = daftarJilidUmmi.find(j => j.id === lastKey);
                     
                     if (found) {
                         let arr = santriAktif.ummi[lastKey];
                         let halTerakhir = 0;
-                        // Cari halaman terakhir yang ada nilainya
                         for (let i = arr.length - 1; i >= 0; i--) {
                             if (arr[i] !== null && arr[i] !== undefined && arr[i].nilai > 0) {
                                 halTerakhir = i + 1;
@@ -242,10 +249,10 @@ function save() {
                     terakhirHafalan: formatHafalan,
                     terakhirHijaiyah: formatHijaiyah,
                     terakhirTajwid: formatTajwid,
-                    terakhirUmmi: formatUmmi // <--- Data Ummi sekarang sudah terbaca!
+                    terakhirUmmi: formatUmmi 
                 })
             })
-            .then(response => console.log('Sukses sinkron seluruh data termasuk metode Ummi!'))
+            .then(response => console.log('Sukses sinkron seluruh data ke Spreadsheet!'))
             .catch(error => console.error('Gagal fetch ke Spreadsheet:', error));
             
         } catch(e) {
