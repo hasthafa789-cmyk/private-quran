@@ -53,12 +53,12 @@ const klasifikasiTajwid = [
 const databaseJuz = {
     30: [{ nama: "An-Naba", ayat: 40 }, { nama: "An-Nazi'at", ayat: 46 }, { nama: "Abasa", ayat: 42 }, { nama: "At-Takwir", ayat: 29 }, { nama: "Al-Infitar", ayat: 19 }, { nama: "Al-Mutaffifin", ayat: 36 }, { nama: "Al-Inshiqaq", ayat: 25 }, { nama: "Al-Buruj", ayat: 22 }, { nama: "At-Tariq", ayat: 17 }, { nama: "Al-A'la", ayat: 19 }, { nama: "Al-Ghashiyah", ayat: 26 }, { nama: "Al-Fajr", ayat: 30 }, { nama: "Al-Balad", ayat: 20 }, { nama: "Ash-Shams", ayat: 15 }, { nama: "Al-Lail", ayat: 21 }, { nama: "Ad-Duha", ayat: 11 }, { nama: "Al-Inshirah", ayat: 8 }, { nama: "At-Tin", ayat: 8 }, { nama: "Al-Alaq", ayat: 19 }, { nama: "Al-Qadr", ayat: 5 }, { nama: "Al-Bayyinah", ayat: 8 }, { nama: "Az-Zalzalah", ayat: 8 }, { nama: "Al-Adiyat", ayat: 11 }, { nama: "Al-Qari'ah", ayat: 11 }, { nama: "At-Takathur", ayat: 8 }, { nama: "Al-Asr", ayat: 3 }, { nama: "Al-Humazah", ayat: 9 }, { nama: "Al-Fil", ayat: 5 }, { nama: "Quraysh", ayat: 4 }, { nama: "Al-Ma'un", ayat: 7 }, { nama: "Al-Kawthar", ayat: 3 }, { nama: "Al-Kafirun", ayat: 6 }, { nama: "An-Nasr", ayat: 3 }, { nama: "Al-Lahab", ayat: 5 }, { nama: "Al-Ikhlas", ayat: 4 }, { nama: "Al-Falaq", ayat: 5 }, { nama: "An-Nas", ayat: 6 }],
     29: [{ nama: "Al-Mulk", ayat: 30 }, { nama: "Al-Qalam", ayat: 52 }, { nama: "Al-Haqqah", ayat: 52 }, { nama: "Al-Ma'arij", ayat: 44 }, { nama: "Nuh", ayat: 28 }, { nama: "Al-Jinn", ayat: 28 }, { nama: "Al-Muzzammil", ayat: 20 }, { nama: "Al-Muddaththir", ayat: 56 }, { nama: "Al-Qiyamah", ayat: 40 }, { nama: "Al-Insan", ayat: 31 }, { nama: "Al-Mursalat", ayat: 50 }],
-    28: [{ nama: "Al-Mujadilah", ayat: 22 }, { nama: "Al-Hashr", ayat: 24 }, { nama: "Al-Mumtahanah", ayat: 13 }, { nama: "As-Saff", ayat: 14 }, { nama: "Al-Jumu'ah", ayat: 11 }, { nama: "Al-Munafiqun", ayat: 11 }, { fontName: "At-Taghabun", nama: "At-Taghabun", ayat: 18 }, { nama: "At-Talaq", ayat: 12 }, { nama: "At-Tahrim", ayat: 12 }],
+    28: [{ nama: "Al-Mujadilah", ayat: 22 }, { nama: "Al-Hashr", ayat: 24 }, { nama: "Al-Mumtahanah", ayat: 13 }, { nama: "As-Saff", ayat: 14 }, { nama: "Al-Jumu'ah", ayat: 11 }, { nama: "Al-Munafiqun", ayat: 11 }, { nama: "At-Taghabun", ayat: 18 }, { nama: "At-Talaq", ayat: 12 }, { nama: "At-Tahrim", ayat: 12 }],
     1: [{ nama: "Al-Fatihah", ayat: 7 }, { nama: "Al-Baqarah (Ayat 1-141)", ayat: 141 }]
 };
 
 const daftarJilidUmmi = [
-    { id: "_1", nama: "Jilid 1", halaman: 40 },
+    { id: "jilid_1", nama: "Jilid 1", halaman: 40 },
     { id: "jilid_2", nama: "Jilid 2", halaman: 40 },
     { id: "jilid_3", nama: "Jilid 3", halaman: 40 },
     { id: "jilid_4", nama: "Jilid 4", halaman: 40 },
@@ -122,7 +122,11 @@ function save() {
         progress: santriAktif.progress || {},
         huruf: santriAktif.huruf || {},
         tajwid: santriAktif.tajwid || {},
-        ummi: santriAktif.ummi || {} 
+        ummi: santriAktif.ummi || {},
+        terakhirHafalan: santriAktif.terakhirHafalan || null,
+        terakhirHijaiyah: santriAktif.terakhirHijaiyah ?? null,
+        // --- TAMBAHAN BARU: Simpan histori tajwid terakhir ke Cloud ---
+        terakhirTajwid: santriAktif.terakhirTajwid || null
     }, { merge: true })
     .then(() => console.log(`Progres hafalan ${santriAktif.nama} berhasil diamankan ke Cloud!`))
     .catch((error) => console.error("Gagal menyimpan progres:", error));
@@ -303,76 +307,221 @@ function navigateTo(viewId) {
 // 8. STATISTIK DASHBOARD
 // ==========================================
 function updateLiveDashboardStats() {
-    let totalSuratSistem = 0; let totalSuratSelesai = 0;
-    let totalUmmiSistem = 0; let totalUmmiSelesai = 0;
+    if (!santriAktif) return;
+
+    // --- 1. HITUNG TOTAL ITEM SELESAI ---
+    let hSelesai = 0;
+    if (typeof databaseJuz !== 'undefined') {
+        Object.keys(databaseJuz).forEach(jNum => {
+            databaseJuz[jNum].forEach((s, idx) => {
+                const key = `juz${jNum}_surat${idx}`;
+                const p = santriAktif.progress?.[key];
+                if (p && p.length === s.ayat && p.every(v => v === true)) hSelesai++;
+            });
+        });
+    }
+    const tHafalan = document.getElementById("totalSelesaiAyat");
+    if (tHafalan) tHafalan.innerText = hSelesai;
+
+    let uLulus = 0;
+    if (typeof daftarJilidUmmi !== 'undefined') {
+        daftarJilidUmmi.forEach(j => {
+            const u = santriAktif.ummi?.[j.id];
+            if (u && Array.isArray(u) && u.length === j.halaman && u.every(v => typeof v === "object" && v !== null && v.nilai >= 70)) {
+                uLulus++;
+            }
+        });
+        const tUmmi = document.getElementById("totalSelesaiUmmi");
+        if (tUmmi) tUmmi.innerText = `${uLulus} / ${daftarJilidUmmi.length}`;
+    }
+
+// --- SEBELUMNYA ---
+    // daftarHijaiyah.forEach(h => {
+    //     if (santriAktif.huruf?.[h] && parseInt(santriAktif.huruf[h]) >= 4) hjLulus++;
+    // });
+
+    // --- PERBAIKAN ---
+    let hjLulus = 0;
+    if (typeof daftarHijaiyah !== 'undefined') {
+        daftarHijaiyah.forEach((h, idx) => {
+            let kunciHuruf = `h_${idx}`; // Sesuaikan dengan format penyimpanan h_0, h_1, dst.
+            if (santriAktif.huruf?.[kunciHuruf] && parseInt(santriAktif.huruf[kunciHuruf]) >= 4) hjLulus++;
+        });
+        const tHijaiyah = document.getElementById("totalLulusHijaiyah");
+        if (tHijaiyah) tHijaiyah.innerText = `${hjLulus} / 28`;
+    }
+
+    let tajLulus = 0;
+    let totalTajwid = 0;
+    if (typeof klasifikasiTajwid !== 'undefined') {
+        klasifikasiTajwid.forEach(k => {
+            k.items.forEach(i => {
+                totalTajwid++;
+                if (santriAktif.tajwid?.[i.id] && parseInt(santriAktif.tajwid[i.id]) >= 4) tajLulus++;
+            });
+        });
+        const tTajwid = document.getElementById("totalFasihTajwid");
+        if (tTajwid) tTajwid.innerText = `${tajLulus} / ${totalTajwid}`;
+    }
+
+
+    // --- 2. FITUR PENCAPAIAN TERAKHIR (DENGAN KETERANGAN DETAIL) ---
     
-    // Perhitungan Hafalan
-    Object.keys(databaseJuz).forEach(juzNum => {
-        databaseJuz[juzNum].forEach((surat, sIdx) => {
-            totalSuratSistem++; 
-            const keyProgres = `juz${juzNum}_surat${sIdx}`;
-            const progressSurat = santriAktif?.progress?.[keyProgres];
-            if (progressSurat && Array.isArray(progressSurat)) {
-                if (progressSurat.filter(Boolean).length === surat.ayat) totalSuratSelesai++;
+    // A. HAFALAN (Berdasarkan Surat yang Terakhir Di-input Secara Akurat)
+    const elHafalan = document.getElementById("statCircleHafalan");
+    if (elHafalan) {
+        let textHafalan = "Belum ada";
+        
+        // 1. Cek apakah ada rekam jejak surat terakhir dari fungsi toggleAyat
+        if (santriAktif.terakhirHafalan && santriAktif.progress && santriAktif.progress[santriAktif.terakhirHafalan]) {
+            let lastKey = santriAktif.terakhirHafalan;
+            let match = lastKey.match(/juz(\d+)_surat(\d+)/);
+            
+            if (match && typeof databaseJuz !== 'undefined') {
+                let j = parseInt(match[1]);
+                let s = parseInt(match[2]);
+                if (databaseJuz[j] && databaseJuz[j][s]) {
+                    let namaSurat = databaseJuz[j][s].nama;
+                    
+                    let arr = santriAktif.progress[lastKey];
+                    let ayatTerakhir = 0;
+                    for (let i = arr.length - 1; i >= 0; i--) {
+                        if (arr[i] === true) { ayatTerakhir = i + 1; break; }
+                    }
+                    if (ayatTerakhir > 0) {
+                        textHafalan = `${namaSurat} ayat ${ayatTerakhir}`;
+                    }
+                }
             }
-        });
-    });
+        } 
+        // 2. Fallback (Data Lama): Jika belum ada histori input terbaru
+        else if (santriAktif.progress) {
+            let validKeys = Object.keys(santriAktif.progress).filter(key => {
+                const arr = santriAktif.progress[key];
+                return Array.isArray(arr) && arr.some(val => val === true);
+            });
 
-    // Perhitungan Ummi (Telah Disesuaikan Untuk Format Object Baru)
-    daftarJilidUmmi.forEach(jilid => {
-        totalUmmiSistem++;
-        const progressUmmi = santriAktif?.ummi?.[jilid.id];
-        if (progressUmmi && Array.isArray(progressUmmi)) {
-            // Hitung halaman yang sudah dinilai
-            let halamanSelesai = 0;
-            for(let i=0; i<jilid.halaman; i++) {
-                let dataP = progressUmmi[i];
-                if(dataP === true) halamanSelesai++; // Kompatibilitas data lama
-                else if(dataP && dataP.nilai !== undefined && dataP.nilai > 0) halamanSelesai++; // Format data baru
+            if (validKeys.length > 0) {
+                let lastKey = validKeys[validKeys.length - 1];
+                let match = lastKey.match(/juz(\d+)_surat(\d+)/);
+                if (match && typeof databaseJuz !== 'undefined') {
+                    let j = parseInt(match[1]);
+                    let s = parseInt(match[2]);
+                    if (databaseJuz[j] && databaseJuz[j][s]) {
+                        let namaSurat = databaseJuz[j][s].nama;
+                        
+                        let arr = santriAktif.progress[lastKey];
+                        let ayatTerakhir = 0;
+                        for (let i = arr.length - 1; i >= 0; i--) {
+                            if (arr[i] === true) { ayatTerakhir = i + 1; break; }
+                        }
+                        textHafalan = `${namaSurat} ayat ${ayatTerakhir}`;
+                    }
+                }
             }
-            if (halamanSelesai === jilid.halaman) totalUmmiSelesai++;
         }
-    });
+        elHafalan.innerText = textHafalan;
+    }
 
-    let totalLulusH = 0;
-    daftarHijaiyah.forEach((_, idx) => {
-        if(parseInt(santriAktif?.huruf?.[`h_${idx}`] || "0") === 5) totalLulusH++;
-    });
+    // B. UMMI (Diurutkan otomatis untuk mencari jilid tertinggi)
+    const elUmmi = document.getElementById("statCircleUmmi");
+    if (elUmmi) {
+        let textUmmi = "Belum ada";
+        if (santriAktif.ummi && typeof daftarJilidUmmi !== 'undefined') {
+            let validKeys = Object.keys(santriAktif.ummi).filter(key => {
+                const arr = santriAktif.ummi[key];
+                return Array.isArray(arr) && arr.some(v => v !== null && v !== undefined && v.nilai > 0);
+            });
 
-    let totalFasihT = 0; let totalItemTajwid = 0;
-    klasifikasiTajwid.forEach(k => {
-        k.items.forEach(item => {
-            totalItemTajwid++;
-            if(parseInt(santriAktif?.tajwid?.[item.id] || "0") === 5) totalFasihT++;
-        });
-    });
+            if (validKeys.length > 0) {
+                validKeys.sort((a, b) => {
+                    let idxA = daftarJilidUmmi.findIndex(j => j.id === a);
+                    let idxB = daftarJilidUmmi.findIndex(j => j.id === b);
+                    return idxA - idxB;
+                });
+                
+                let lastKey = validKeys[validKeys.length - 1];
+                let found = daftarJilidUmmi.find(j => j.id === lastKey);
+                
+                if (found) {
+                    let arr = santriAktif.ummi[lastKey];
+                    let halTerakhir = 0;
+                    for (let i = arr.length - 1; i >= 0; i--) {
+                        if (arr[i] !== null && arr[i] !== undefined && arr[i].nilai > 0) {
+                            halTerakhir = i + 1;
+                            break;
+                        }
+                    }
+                    textUmmi = `${found.nama} hal. ${halTerakhir}`;
+                }
+            }
+        }
+        elUmmi.innerText = textUmmi;
+    }
 
-    const persenHafalan = totalSuratSistem > 0 ? Math.round((totalSuratSelesai / totalSuratSistem) * 100) : 0;
-    const persenUmmi = totalUmmiSistem > 0 ? Math.round((totalUmmiSelesai / totalUmmiSistem) * 100) : 0;
-    const persenHijaiyah = Math.round((totalLulusH / 28) * 100);
-    const persenTajwid = totalItemTajwid > 0 ? Math.round((totalFasihT / totalItemTajwid) * 100) : 0;
+// C. HIJAIYAH (Berdasarkan Huruf Terakhir Di-input Secara Akurat)
+    const elHijaiyah = document.getElementById("statCircleHijaiyah");
+    if (elHijaiyah) {
+        let textHijaiyah = "Belum ada";
+        
+        // 1. Cek apakah ada rekam jejak huruf terakhir dari siklusNilaiHuruf
+        if (santriAktif.terakhirHijaiyah !== undefined && santriAktif.terakhirHijaiyah !== null) {
+            let idx = santriAktif.terakhirHijaiyah;
+            if (typeof daftarHijaiyah !== 'undefined' && daftarHijaiyah[idx]) {
+                let namaHuruf = daftarHijaiyah[idx].split(" ")[0]; 
+                textHijaiyah = `Huruf ${namaHuruf}`;
+            }
+        } 
+        // 2. Fallback (Data Lama): Jika belum ada histori input terbaru, cari yang terjauh
+        else if (santriAktif.huruf && typeof daftarHijaiyah !== 'undefined') {
+            for (let i = daftarHijaiyah.length - 1; i >= 0; i--) {
+                let kunciHuruf = `h_${i}`;
+                if (santriAktif.huruf[kunciHuruf] && parseInt(santriAktif.huruf[kunciHuruf]) > 0) {
+                    let namaHuruf = daftarHijaiyah[i].split(" ")[0];
+                    textHijaiyah = `Huruf ${namaHuruf}`;
+                    break;
+                }
+            }
+        }
+        elHijaiyah.innerText = textHijaiyah;
+    }
 
-    const elHafalan = document.getElementById("totalSelesaiAyat");
-    const elUmmi = document.getElementById("totalSelesaiUmmi");
-    const elHuruf = document.getElementById("totalLulusHijaiyah");
-    const elTajwid = document.getElementById("totalFasihTajwid");
-
-    if (elHafalan) elHafalan.innerText = totalSuratSelesai; 
-    if (elUmmi) elUmmi.innerText = `${totalUmmiSelesai} / ${totalUmmiSistem}`; 
-    if (elHuruf) elHuruf.innerText = `${totalLulusH} / 28`;
-    if (elTajwid) elTajwid.innerText = `${totalFasihT} / ${totalItemTajwid}`;
-
-    const cHafalan = document.getElementById("statCircleHafalan");
-    const cUmmi = document.getElementById("statCircleUmmi"); 
-    const cHuruf = document.getElementById("statCircleHijaiyah");
-    const cTajwid = document.getElementById("statCircleTajwid");
-
-    if (cHafalan) cHafalan.innerHTML = circularProgress(persenHafalan, "#3b82f6");
-    if (cUmmi) cUmmi.innerHTML = circularProgress(persenUmmi, "#8b5cf6"); 
-    if (cHuruf) cHuruf.innerHTML = circularProgress(persenHijaiyah, "#10b981");
-    if (cTajwid) cTajwid.innerHTML = circularProgress(persenTajwid, "#6366f1");
+// D. TAJWID (Berdasarkan Tajwid Terakhir Di-input Secara Akurat)
+    const elTajwid = document.getElementById("statCircleTajwid");
+    if (elTajwid) {
+        let textTajwid = "Belum ada";
+        
+        // 1. Cek apakah ada rekam jejak tajwid terakhir dari siklusNilaiTajwid
+        if (santriAktif.terakhirTajwid && typeof klasifikasiTajwid !== 'undefined') {
+            let lastId = santriAktif.terakhirTajwid;
+            let foundItem = null;
+            
+            // Cari nama tajwid berdasarkan ID-nya di klasifikasiTajwid
+            for (let k of klasifikasiTajwid) {
+                foundItem = k.items.find(item => item.id === lastId);
+                if (foundItem) break;
+            }
+            
+            if (foundItem) {
+                textTajwid = foundItem.nama;
+            }
+        }
+        // 2. Fallback (Data Lama): Jika belum ada histori input terbaru, cari yang terjauh
+        else if (santriAktif.tajwid && typeof klasifikasiTajwid !== 'undefined') {
+            let flatTajwid = [];
+            klasifikasiTajwid.forEach(k => k.items.forEach(item => flatTajwid.push(item)));
+            
+            for (let i = flatTajwid.length - 1; i >= 0; i--) {
+                let tId = flatTajwid[i].id;
+                if (santriAktif.tajwid[tId] && parseInt(santriAktif.tajwid[tId]) > 0) {
+                    textTajwid = flatTajwid[i].nama;
+                    break;
+                }
+            }
+        }
+        elTajwid.innerText = textTajwid;
+    }
 }
-
 // ==========================================
 // 9. MODUL HAFALAN BACAAN (AL-QURAN)
 // ==========================================
@@ -447,6 +596,10 @@ function toggleAyat(juzNum, suratIndex, ayatIndex) {
     if (!santriAktif || role === "murid") return; 
     const keyProgres = `juz${juzNum}_surat${suratIndex}`;
     santriAktif.progress[keyProgres][ayatIndex] = !santriAktif.progress[keyProgres][ayatIndex];
+    
+    // --- TAMBAHAN BARU: Catat surat terakhir yang baru saja di-input ---
+    santriAktif.terakhirHafalan = keyProgres; 
+
     save(); 
     renderAyat(juzNum, suratIndex);
     if (currentJuzAkses) renderSuratBerdasarkanJuz(currentJuzAkses); 
@@ -554,6 +707,10 @@ function siklusNilaiHuruf(idx, currentVal) {
     if (!santriAktif || role === "murid") return;
     if (!santriAktif.huruf) santriAktif.huruf = {};
     santriAktif.huruf[`h_${idx}`] = String((parseInt(currentVal) + 1) % 6);
+    
+    // --- TAMBAHAN BARU: Catat huruf terakhir yang baru saja di-input ---
+    santriAktif.terakhirHijaiyah = idx;
+
     save(); renderPenilaianModul();
 }
 
@@ -561,6 +718,10 @@ function siklusNilaiTajwid(id, currentVal) {
     if (!santriAktif || role === "murid") return;
     if (!santriAktif.tajwid) santriAktif.tajwid = {};
     santriAktif.tajwid[id] = String((parseInt(currentVal) + 1) % 6);
+    
+    // --- TAMBAHAN BARU: Catat tajwid terakhir yang baru saja di-input ---
+    santriAktif.terakhirTajwid = id;
+
     save(); renderPenilaianModul();
 }
 
