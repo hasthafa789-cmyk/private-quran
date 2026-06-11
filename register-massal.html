@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registrasi Massal - Panel Admin</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen flex flex-col items-center justify-center p-4">
+
+    <script>
+        const roleAkses = localStorage.getItem("role");
+        // Jika status login bukan admin, langsung lempar kembali ke halaman utama/dashboard
+        if (roleAkses !== "admin") {
+            window.location.replace("index.html");
+        }
+    </script>
+
+    <div class="w-full max-w-3xl bg-white p-8 rounded-2xl shadow-xl border border-slate-100">
+        
+        <div class="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
+            <div class="flex items-center gap-3">
+                <span class="material-symbols-outlined text-blue-600 text-3xl">group_add</span>
+                <div>
+                    <h1 class="text-xl font-bold text-slate-800">Registrasi Massal Akun</h1>
+                    <p class="text-sm text-slate-500">Khusus internal Developer / Admin</p>
+                </div>
+            </div>
+            <a href="index.html" class="flex items-center gap-1 text-sm text-slate-600 hover:text-blue-600 transition-all font-medium bg-slate-100 hover:bg-blue-50 px-3 py-1.5 rounded-xl">
+                <span class="material-symbols-outlined text-sm">arrow_back</span> Kembali ke Aplikasi
+            </a>
+        </div>
+
+        <div class="bg-blue-50 border border-blue-100 p-4 rounded-xl mb-6 text-sm text-blue-800 leading-relaxed">
+            <p class="font-bold mb-1 flex items-center gap-1">
+                <span class="material-symbols-outlined text-sm">info</span> Aturan Struktur Tabel Excel:
+            </p>
+            <ol class="list-decimal list-inside space-y-1 text-blue-700 ml-1">
+                <li>Buat 5 kolom di Excel secara berurutan: <b class="text-blue-900">Email | Password | Nama Lengkap | Role | Pembimbing</b></li>
+                <li>Pada kolom <b>Role</b>, wajib diisi huruf kecil semua: <code class="bg-blue-100 px-1.5 py-0.5 rounded font-mono text-xs text-blue-900">murid</code> atau <code class="bg-blue-100 px-1.5 py-0.5 rounded font-mono text-xs text-blue-900">guru</code></li>
+                <li>Blok seluruh baris data di Excel yang ingin didaftarkan, lalu tekan **CTRL + C** (Copy)</li>
+                <li>Klik kotak di bawah ini, lalu lakukan paste dengan **CTRL + V**</li>
+            </ol>
+        </div>
+
+        <div class="space-y-4">
+            <label class="block text-sm font-semibold text-slate-700">Tempelkan Data Excel ke Sini:</label>
+            <textarea id="inputExcel" rows="10" class="w-full p-4 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-mono whitespace-pre" placeholder="contoh1@mail.com	rahasia123	Ahmad Dani	murid	Ust. Budi&#10;contoh2@mail.com	password45	Siti Aminah	murid	Ust. Budi"></textarea>
+            
+            <button onclick="prosesRegistrasiMassal()" id="btnSubmit" class="w-full py-3.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 active:scale-[0.99] transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-100">
+                <span class="material-symbols-outlined">how_to_reg</span>
+                Mulai Proses Pendaftaran Massal
+            </button>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+    <script>
+        // Konfigurasi Firebase bawaan aplikasi Anda
+        const firebaseConfig = {
+            apiKey: "AIzaSyCIBGqJVfrRZikYeQDtQynWDxybsFFtY-0",
+            authDomain: "hasnanprivate.firebaseapp.com",
+            projectId: "hasnanprivate",
+            storageBucket: "hasnanprivate.firebasestorage.app",
+            messagingSenderId: "737022132780",
+            appId: "1:737022132780:web:8ab47b587f13ee53900789"
+        };
+
+        // Inisialisasi Aplikasi Utama
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // Inisialisasi Secondary App agar Admin tidak ikut ter-logout saat proses berjalan
+        const secondaryApp = firebase.initializeApp(firebaseConfig, "Secondary");
+        const secondaryAuth = secondaryApp.auth();
+
+        // Fungsi Membaca dan Memisahkan Struktur Teks Excel
+        function prosesRegistrasiMassal() {
+            const inputText = document.getElementById("inputExcel").value;
+            if (!inputText.trim()) {
+                alert("Kolom input masih kosong! Silakan lakukan paste data dari Excel.");
+                return;
+            }
+
+            const barisData = inputText.split("\n");
+            let daftarUser = [];
+
+            for (let i = 0; i < barisData.length; i++) {
+                let baris = barisData[i].trim();
+                if (baris === "") continue;
+
+                // Memisahkan kolom berdasarkan karakter tab (\t) bawaan salinan Excel
+                const kolom = baris.split("\t"); 
+                
+                if (kolom.length >= 4) {
+                    daftarUser.push({
+                        email: kolom[0].trim(),
+                        password: kolom[1].trim(),
+                        nama: kolom[2].trim(),
+                        role: kolom[3].trim().toLowerCase(),
+                        pembimbing: kolom[4] ? kolom[4].trim() : ""
+                    });
+                }
+            }
+
+            if (daftarUser.length > 0) {
+                let konfirmasi = confirm(`Terdeteksi ada ${daftarUser.length} data akun siap diproses. Lanjutkan pembuatan akun massal?`);
+                if (konfirmasi) {
+                    daftarkanBanyakUser(daftarUser);
+                }
+            } else {
+                alert("Format data tidak sesuai. Pastikan Anda menyalin minimal 4 kolom utama dari Excel.");
+            }
+        }
+
+        // Fungsi Looping Eksekusi Registrasi ke Firebase Auth & Firestore
+        async function daftarkanBanyakUser(dataUsers) {
+            let sukses = 0;
+            let gagal = 0;
+            const btn = document.getElementById("btnSubmit");
+            const teksAsli = btn.innerHTML;
+            
+            btn.innerHTML = `<span class="material-symbols-outlined animate-spin">autorenew</span> Sedang Mendaftarkan Akun ke Firebase...`;
+            btn.disabled = true;
+
+            for (let i = 0; i < dataUsers.length; i++) {
+                let user = dataUsers[i];
+                try {
+                    // 1. Buat Authentication User lewat Secondary Auth
+                    const userCredential = await secondaryAuth.createUserWithEmailAndPassword(user.email, user.password);
+                    const newUser = userCredential.user;
+                    
+                    // 2. Siapkan data untuk struktur Firestore Anda
+                    let dataUser = { 
+                        nama: user.nama, 
+                        role: user.role 
+                    };
+                    if (user.role === "murid" && user.pembimbing !== "") {
+                        dataUser.guruPembimbing = user.pembimbing;
+                    }
+
+                    // 3. Simpan data dokumen ke Firestore
+                    await db.collection("users").doc(newUser.uid).set(dataUser);
+                    
+                    // 4. Logout dari Secondary App agar siap memproses baris berikutnya
+                    await secondaryAuth.signOut();
+                    sukses++;
+                } catch (error) {
+                    console.error(`Gagal memproses baris data ke-${i+1} (${user.nama}):`, error.message);
+                    gagal++;
+                }
+            }
+
+            // Reset Tampilan Tombol
+            btn.innerHTML = teksAsli;
+            btn.disabled = false;
+            
+            if (sukses > 0) document.getElementById("inputExcel").value = "";
+            alert(`Proses Pendaftaran Massal Selesai!\n\n✅ Berhasil dibuat: ${sukses} akun\n❌ Gagal dibuat: ${gagal} akun`);
+        }
+    </script>
+</body>
+</html>
