@@ -56,7 +56,7 @@
                         <tr>
                             <td colspan="7" class="py-8 text-center text-slate-500">
                                 <span class="material-symbols-outlined animate-spin text-2xl mb-2">autorenew</span>
-                                <p>Mencari murid bimbingan Anda...</p>
+                                <p>Sedang memuat data murid dan progres...</p>
                             </td>
                         </tr>
                     </tbody>
@@ -70,7 +70,6 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
     <script>
-        // Konfigurasi Firebase Anda
         const firebaseConfig = {
             apiKey: "AIzaSyCIBGqJVfrRZikYeQDtQynWDxybsFFtY-0",
             authDomain: "hasnanprivate.firebaseapp.com",
@@ -80,112 +79,244 @@
             appId: "1:737022132780:web:8ab47b587f13ee53900789"
         };
 
-        if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
-        }
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         
         const auth = firebase.auth();
         const db = firebase.firestore();
-        let prosesMuat = false;
 
+        // ==================== DATA MASTER & MAPPING ====================
+        const daftarSurah = ["", "Al-Fatihah", "Al-Baqarah", "Ali 'Imran", "An-Nisa'", "Al-Ma'idah", "Al-An'am", "Al-A'raf", "Al-Anfal", "At-Tawbah", "Yunus", "Hud", "Yusuf", "Ar-Ra'd", "Ibrahim", "Al-Hijr", "An-Nahl", "Al-Isra'", "Al-Kahf", "Maryam", "Ta-Ha", "Al-Anbiya'", "Al-Hajj", "Al-Mu'minun", "An-Nur", "Al-Furqan", "Ash-Shu'ara'", "An-Naml", "Al-Qasas", "Al-'Ankabut", "Ar-Rum", "Luqman", "As-Sajdah", "Al-Ahzab", "Saba'", "Fatir", "Ya-Sin", "As-Saffat", "Sad", "Az-Zumar", "Ghafir", "Fussilat", "Ash-Shura", "Az-Zukhruf", "Ad-Dukhan", "Al-Jathiyah", "Al-Ahqaf", "Muhammad", "Al-Fath", "Al-Hujurat", "Qaf", "Adh-Dhariyat", "At-Tur", "An-Najm", "Al-Qamar", "Ar-Rahman", "Al-Waqi'ah", "Al-Hadid", "Al-Mujadila", "Al-Hashr", "Al-Mumtahanah", "As-Saff", "Al-Jumu'ah", "Al-Munafiqun", "At-Taghabun", "At-Talaq", "At-Tahrim", "Al-Mulk", "Al-Qalam", "Al-Haqqah", "Al-Ma'arij", "Nuh", "Al-Jinn", "Al-Muzzammil", "Al-Muddaththir", "Al-Qiyamah", "Al-Insan", "Al-Mursalat", "An-Naba'", "An-Nazi'at", "'Abasa", "At-Takwir", "Al-Infitar", "Al-Mutaffifin", "Al-Inshiqaq", "Al-Buruj", "At-Tariq", "Al-A'la", "Al-Ghashiyah", "Al-Fajr", "Al-Balad", "Ash-Shams", "Al-Layl", "Ad-Duha", "Ash-Sharh", "At-Tin", "Al-'Alaq", "Al-Qadr", "Al-Bayyinah", "Az-Zalzalah", "Al-'Adiyat", "Al-Qari'ah", "At-Takathur", "Al-'Asr", "Al-Humazah", "Al-Fil", "Quraish", "Al-Ma'un", "Al-Kawthar", "Al-Kafirun", "An-Nasr", "Al-Masad", "Al-Ikhlas", "Al-Falaq", "An-Nas"];
+
+        const daftarHijaiyah = ["Alif (ا)", "Ba (ب)", "Ta (ت)", "Tsa (ث)", "Jim (ج)", "Ha (ح)", "Kho (خ)", "Dal (د)", "Dzal (ذ)", "Ro (ر)", "Zai (ز)", "Sin (س)", "Syin (ش)", "Shod (ص)", "Dhod (ض)", "Tho (ط)", "Zho (ظ)", "Ain (ع)", "Gho (غ)", "Fa (ف)", "Qof (ق)", "Kaf (ك)", "Lam (ل)", "Mim (م)", "Nun (ن)", "Wawu (و)", "Ha' (هـ)", "Ya (ي)"];
+
+        const klasifikasiTajwid = [
+            { kategori: "1. Hukum Nun Sukun & Tanwin", items: [{ id: "ns_izhar", nama: "Idzhar Halqi" }, { id: "ns_idg_bi", nama: "Idgham Bighunnah" }, { id: "ns_idg_bila", nama: "Idgham Bilaghunnah" }, { id: "ns_iqlab", nama: "Iqlab" }, { id: "ns_ikhfa", nama: "Ikhfa Haqiqi" }] },
+            { kategori: "2. Hukum Mim Sukun", items: [{ id: "ms_ikhfa", nama: "Ikhfa Syafawi" }, { id: "ms_idgham", nama: "Idgham Mimi" }, { id: "ms_izhar", nama: "Idzhar Syafawi" }] },
+            { kategori: "3. Hukum Mad (Panjang Bacaan)", items: [{ id: "mad_thabii", nama: "Mad Thabi'i" }, { id: "mad_wajib", nama: "Mad Wajib Muttasil" }, { id: "mad_jaiz", nama: "Mad Jaiz Munfasil" }, { id: "mad_arid", nama: "Mad 'Arid Lissukun" }, { id: "mad_iwadl", nama: "Mad Iwadl" }, { id: "mad_shilah_qashirah", nama: "Mad Shilah Qashirah" }, { id: "mad_shilah_thawilah", nama: "Mad Shilah Thawilah" }, { id: "mad_badal", nama: "Mad Badal" }, { id: "mad_tamkin", nama: "Mad Tamkin" }, { id: "mad_lin", nama: "Mad Lin" }, { id: "mad_lazim_mutsaqal_kalimi", nama: "Mad Lazim Mutsaqal Kalimi" }, { id: "mad_lazim_mukhoffaf_kalimi", nama: "Mad Lazim Mukhoffaf Kalimi" }, { id: "mad_lazim_mutsaqol_harfi", nama: "Mad Lazim Mukhoffaf Harfi" }, { id: "mad_farq", nama: "Mad Farq" }] },
+            { kategori: "4. Sifat & Hukum Huruf Utama", items: [{ id: "sif_qalqalah", nama: "Qalqalah (Sughra/Kubra)" }, { id: "sif_ghunnah", nama: "Ghunnah Musyaddadah" }, { id: "sif_tafkhim", nama: "Tafkhim & Tarqiq" }] },
+            { kategori: "5. Hukum Alif Lam", items: [{ id: "al_qomariyah", nama: "Alif Lam Qomariyah" }, { id: "al_syamsiah", nama: "Alif Lam Syamsiah" }] },
+            { kategori: "6. Hukum Idgham", items: [{ id: "idg_mutamasilain", nama: "Idgham Mutamasilain" }, { id: "idg_mutajanisain", nama: "Idgham Mutajanisain" }, { id: "idg_mutaqaribain", nama: "Idgham Mutaqaribain" }] },
+            { kategori: "7. Bacaan Gharib", items: [{ id: "gh_saktah", nama: "Saktah" }, { id: "gh_isymam", nama: "Isymam" }, { id: "gh_imalah", nama: "Imalah" }, { id: "gh_tashil", nama: "Tashil" }, { id: "gh_naql", nama: "Naql" }, { id: "gh_shad_sin", nama: "Shad dibaca Sin" }] },
+            { kategori: "8. Tanda Waqaf", items: [{ id: "wq_lazim", nama: "Waqaf Lazim (م)" }, { id: "wq_mutlaq", nama: "Waqaf Mutlaq (ط)" }, { id: "wq_jaiz", nama: "Waqaf Jaiz (ج)" }, { id: "wq_washlu_aula", nama: "Waqaf Al-Washlu Aula (صلى)" }, { id: "wq_waqfu_aula", nama: "Waqaf Al-Waqfu Aula (قلى)" }, { id: "wq_la_washal", nama: "Waqaf La Washal (لا)" }, { id: "wq_muanaqah", nama: "Waqaf Mu'anaqah (∴)" }, { id: "wq_saktah", nama: "Saktah (س)" }] }
+        ];
+
+        const databaseJuz = {
+            30: [{ nama: "An-Naba", ayat: 40 }, { nama: "An-Nazi'at", ayat: 46 }, { nama: "Abasa", ayat: 42 }, { nama: "At-Takwir", ayat: 29 }, { nama: "Al-Infitar", ayat: 19 }, { nama: "Al-Mutaffifin", ayat: 36 }, { nama: "Al-Inshiqaq", ayat: 25 }, { nama: "Al-Buruj", ayat: 22 }, { nama: "At-Tariq", ayat: 17 }, { nama: "Al-A'la", ayat: 19 }, { nama: "Al-Ghashiyah", ayat: 26 }, { nama: "Al-Fajr", ayat: 30 }, { nama: "Al-Balad", ayat: 20 }, { nama: "Ash-Shams", ayat: 15 }, { nama: "Al-Lail", ayat: 21 }, { nama: "Ad-Duha", ayat: 11 }, { nama: "Al-Inshirah", ayat: 8 }, { nama: "At-Tin", ayat: 8 }, { nama: "Al-Alaq", ayat: 19 }, { nama: "Al-Qadr", ayat: 5 }, { nama: "Al-Bayyinah", ayat: 8 }, { nama: "Az-Zalzalah", ayat: 8 }, { nama: "Al-Adiyat", ayat: 11 }, { nama: "Al-Qari'ah", ayat: 11 }, { nama: "At-Takathur", ayat: 8 }, { nama: "Al-Asr", ayat: 3 }, { nama: "Al-Humazah", ayat: 9 }, { nama: "Al-Fil", ayat: 5 }, { nama: "Quraysh", ayat: 4 }, { nama: "Al-Ma'un", ayat: 7 }, { nama: "Al-Kawthar", ayat: 3 }, { nama: "Al-Kafirun", ayat: 6 }, { nama: "An-Nasr", ayat: 3 }, { nama: "Al-Lahab", ayat: 5 }, { nama: "Al-Ikhlas", ayat: 4 }, { nama: "Al-Falaq", ayat: 5 }, { nama: "An-Nas", ayat: 6 }],
+            29: [{ nama: "Al-Mulk", ayat: 30 }, { nama: "Al-Qalam", ayat: 52 }, { nama: "Al-Haqqah", ayat: 52 }, { nama: "Al-Ma'arij", ayat: 44 }, { nama: "Nuh", ayat: 28 }, { nama: "Al-Jinn", ayat: 28 }, { nama: "Al-Muzzammil", ayat: 20 }, { nama: "Al-Muddaththir", ayat: 56 }, { nama: "Al-Qiyamah", ayat: 40 }, { nama: "Al-Insan", ayat: 31 }, { nama: "Al-Mursalat", ayat: 50 }],
+            28: [{ nama: "Al-Mujadilah", ayat: 22 }, { nama: "Al-Hashr", ayat: 24 }, { nama: "Al-Mumtahanah", ayat: 13 }, { nama: "As-Saff", ayat: 14 }, { nama: "Al-Jumu'ah", ayat: 11 }, { nama: "Al-Munafiqun", ayat: 11 }, { nama: "At-Taghabun", ayat: 18 }, { nama: "At-Talaq", ayat: 12 }, { nama: "At-Tahrim", ayat: 12 }],
+            1: [{ nama: "Al-Fatihah", ayat: 7 }, { nama: "Al-Baqarah (Ayat 1-141)", ayat: 141 }]
+        };
+
+        const daftarJilidUmmi = [
+            { id: "jilid_1", nama: "Jilid 1", halaman: 40 },
+            { id: "jilid_2", nama: "Jilid 2", halaman: 40 },
+            { id: "jilid_3", nama: "Jilid 3", halaman: 40 },
+            { id: "jilid_4", nama: "Jilid 4", halaman: 40 },
+            { id: "jilid_5", nama: "Jilid 5", halaman: 40 },
+            { id: "jilid_6", nama: "Jilid 6", halaman: 40 },
+            { id: "tadarus", nama: "Jilid Tadarus", halaman: 50 },
+            { id: "gharib", nama: "Jilid Gharib", halaman: 28 },
+            { id: "tajwid", nama: "Jilid Tajwid", halaman: 20 },
+            { id: "turjuman_1", nama: "Jilid Turjuman 1", halaman: 20 },
+            { id: "turjuman_2", nama: "Jilid Turjuman 2", halaman: 20 },
+            { id: "turjuman_3", nama: "Jilid Turjuman 3", halaman: 20 }
+        ];
+
+// ==================== PARSER HAFALAN (SUPER OPTIMIZED - ARRAY FIREBASE) ====================
+function toTitleCase(str) {
+    if (!str) return "";
+    return str.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
+}
+
+function parseHafalan(textHafalan, dataSantri) {
+    if (!textHafalan || textHafalan === "-") return "-";
+
+    // 1. Ambil data progress (asumsi dataSantri adalah objek murid yang berisi progress)
+    // Jika dataSantri ternyata adalah langsung objek 'progress', maka gunakan itu.
+    let progress = dataSantri.progress || dataSantri; 
+
+    let match = textHafalan.match(/juz(\d+)_surat(\d+)/);
+    let keteranganAyat = "";
+
+    // 2. Logika pencarian ayat (mengikuti kode Anda yang sudah berhasil)
+    if (progress && progress[textHafalan]) {
+        let dataAyat = progress[textHafalan];
+        let ayatTerakhir = 0;
+        if (Array.isArray(dataAyat)) {
+            for (let i = dataAyat.length - 1; i >= 0; i--) {
+                if (dataAyat[i] === true) { 
+                    ayatTerakhir = i + 1; 
+                    break; 
+                }
+            }
+        } else {
+            ayatTerakhir = parseInt(dataAyat) || 0;
+        }
+        if (ayatTerakhir > 0) keteranganAyat = " Ayat " + ayatTerakhir; 
+    }
+
+    // 3. Logika nama surat
+    if (match && typeof databaseJuz !== 'undefined') {
+        let j = parseInt(match[1]); 
+        let s = parseInt(match[2]);
+        if (databaseJuz[j] && databaseJuz[j][s]) {
+            return "Surat " + databaseJuz[j][s].nama + keteranganAyat;
+        }
+    }
+
+    return textHafalan + keteranganAyat;
+}
+
+// 2. Parser Hijaiyah: Otomatis mendeteksi nomor urut huruf (cth: "2" -> Ba (ب))
+function parseHijaiyah(text) {
+    if (!text || text === "-") return "-";
+    
+    let txt = text;
+    if (typeof text === 'object' && text !== null) {
+        txt = text.nama || text.id || Object.values(text)[0] || "-";
+    }
+    
+    let cleanText = String(txt).toLowerCase().trim().replace(/_/g, ' ');
+    
+    // Fitur Baru: Deteksi jika input berupa angka urutan murni (contoh: 2 atau hijaiyah_2)
+    let angkaUrutan = cleanText.replace(/[^0-9]/g, '');
+    if (angkaUrutan !== "") {
+        let indexHuruf = parseInt(angkaUrutan);
+        if (indexHuruf >= 1 && indexHuruf <= daftarHijaiyah.length) {
+            return daftarHijaiyah[indexHuruf - 1]; // Konversi ke 0-indexed array
+        }
+    }
+    
+    // Jika input berupa teks nama huruf (contoh: "alif" atau "ba")
+    let found = daftarHijaiyah.find(h => h.toLowerCase().startsWith(cleanText) || h.toLowerCase().includes(cleanText));
+    return found ? found : toTitleCase(txt);
+}
+
+// 3. Parser Tajwid
+function parseTajwid(text) {
+    if (!text || text === "-") return "-";
+    let txt = text;
+    if (typeof text === 'object' && text !== null) {
+        txt = text.id || text.nama || Object.values(text)[0] || "-";
+    }
+    txt = String(txt);
+    for (const kat of klasifikasiTajwid) {
+        let found = kat.items.find(item => item.id === txt);
+        if (found) return found.nama;
+    }
+    return toTitleCase(txt);
+}
+        // 4. Parser Ummi mencocokkan ID Jilid & menghitung Halaman aktif secara dinamis
+        function ringkasDataUmmi(dataUmmi) {
+            if (!dataUmmi || dataUmmi === "-") return "-";
+            
+            let obj;
+            try {
+                obj = typeof dataUmmi === 'string' ? JSON.parse(dataUmmi) : dataUmmi;
+            } catch (e) {
+                let found = daftarJilidUmmi.find(j => j.id === dataUmmi);
+                return found ? found.nama : toTitleCase(dataUmmi);
+            }
+            
+            if (typeof obj !== 'object' || obj === null) {
+                let found = daftarJilidUmmi.find(j => j.id === dataUmmi);
+                return found ? found.nama : toTitleCase(dataUmmi);
+            }
+
+            let jilidAktifObj = null;
+            let maxIndex = -1;
+            let halamanText = "";
+
+            Object.keys(obj).forEach(key => {
+                let index = daftarJilidUmmi.findIndex(j => j.id === key);
+                if (index > -1) {
+                    let adaData = false;
+                    let nomorHal = "";
+                    
+                    if (Array.isArray(obj[key])) {
+                        // Jika struktur data Ummi berupa Array halaman [true, true, null...]
+                        adaData = obj[key].some(item => item !== null && item !== "" && item !== false);
+                        if (adaData) {
+                            let lastIndex = obj[key].map(x => x !== null && x !== "" && x !== false).lastIndexOf(true);
+                            nomorHal = lastIndex + 1;
+                        }
+                    } else if (obj[key] !== null && obj[key] !== "" && obj[key] !== false) {
+                        // Jika langsung menyimpan nomor halaman angka/string
+                        adaData = true;
+                        nomorHal = obj[key];
+                    }
+
+                    if (adaData && index > maxIndex) {
+                        maxIndex = index;
+                        jilidAktifObj = daftarJilidUmmi[index];
+                        halamanText = (nomorHal && typeof nomorHal !== 'boolean') ? ` Hal ${nomorHal}` : "";
+                    }
+                }
+            });
+
+            return jilidAktifObj ? `${jilidAktifObj.nama}${halamanText}` : "Aktif";
+        }
+
+        // ==================== CORE FIREBASE SYSTEM ====================
         async function muatMuridBimbingan() {
-            if (prosesMuat) return;
-            prosesMuat = true;
-
             const tabelBody = document.getElementById("tabelBodyBimbingan");
-            // Mengambil nama guru yang sedang login
             const namaGuruLogin = localStorage.getItem("nama"); 
 
             if (!namaGuruLogin) {
-                tabelBody.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-red-500">Gagal memuat. Nama Anda tidak ditemukan di sistem. Silakan login ulang.</td></tr>`;
+                tabelBody.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-red-500">Gagal memuat. Silakan login ulang.</td></tr>`;
                 return;
             }
 
             try {
-                // FUNGSI UTAMA: Hanya menarik dokumen yang 'guruPembimbing'-nya adalah nama guru yang login
-                const snapshot = await db.collection("users")
-                                         .where("guruPembimbing", "==", namaGuruLogin)
-                                         .get();
+                const userSnapshot = await db.collection("users")
+                                             .where("guruPembimbing", "==", namaGuruLogin)
+                                             .get();
 
-                if (snapshot.empty) {
-                    tabelBody.innerHTML = `
-                        <tr>
-                            <td colspan="7" class="py-12 text-center text-slate-500">
-                                <span class="material-symbols-outlined text-4xl mb-3 text-slate-300">search_off</span><br>
-                                Anda belum memiliki murid bimbingan saat ini.
-                            </td>
-                        </tr>`;
+                if (userSnapshot.empty) {
+                    tabelBody.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-slate-500">Anda belum memiliki murid bimbingan.</td></tr>`;
                     return;
                 }
 
-                let dataArray = [];
-                snapshot.forEach((doc) => {
-                    dataArray.push(doc.data());
+                const dataPromises = userSnapshot.docs.map(async (userDoc) => {
+                    const userData = userDoc.data();
+                    const nama = userData.nama;
+
+                    const progressDoc = await db.collection("database_hafalan").doc(nama).get();
+                    const progressData = progressDoc.exists ? progressDoc.data() : {};
+
+                    return {
+                        ...userData,
+                        terakhirHafalan: parseHafalan(progressData.terakhirHafalan || "-", progressData),
+                        terakhirHijaiyah: parseHijaiyah(progressData.terakhirHijaiyah || "-"),
+                        terakhirTajwid: parseTajwid(progressData.terakhirTajwid || "-"),
+                        ummi: ringkasDataUmmi(progressData.ummi) 
+                    };
                 });
 
-                // Urutkan nama murid secara Abjad A-Z
-                dataArray.sort((a, b) => {
-                    let namaA = (a.nama || "").toUpperCase();
-                    let namaB = (b.nama || "").toUpperCase();
-                    if (namaA < namaB) return -1;
-                    if (namaA > namaB) return 1;
-                    return 0;
-                });
+                const dataArray = await Promise.all(dataPromises);
 
-                let htmlContent = "";
-                let nomor = 1;
+                dataArray.sort((a, b) => (a.nama || "").localeCompare(b.nama || ""));
 
-                dataArray.forEach((data) => {
-                    const namaSantri = data.nama || "Tanpa Nama";
-                    const emailUser = data.email || "-";
-                    
-                    const hafalan = data.terakhirHafalan || "-";
-                    const hijaiyah = data.terakhirHijaiyah || "-";
-                    const tajwid = data.terakhirTajwid || "-";
-                    const ummi = data.terakhirUmmi || "-";
-
-                    htmlContent += `
-                        <tr class="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                            <td class="py-3 px-4 text-center text-slate-500 font-medium">${nomor++}</td>
-                            <td class="py-3 px-4 font-bold text-teal-700">${namaSantri}</td>
-                            <td class="py-3 px-4 text-slate-500 font-mono text-xs">${emailUser}</td>
-                            <td class="py-3 px-4 text-slate-600">${hafalan}</td>
-                            <td class="py-3 px-4 text-slate-600">${hijaiyah}</td>
-                            <td class="py-3 px-4 text-slate-600">${tajwid}</td>
-                            <td class="py-3 px-4 text-slate-600">${ummi}</td>
-                        </tr>
-                    `;
-                });
-
-                tabelBody.innerHTML = htmlContent;
+                tabelBody.innerHTML = dataArray.map((data, index) => `
+                    <tr class="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
+                        <td class="py-3 px-4 text-center text-slate-500 font-medium">${index + 1}</td>
+                        <td class="py-3 px-4 font-bold text-teal-700">${data.nama || "-"}</td>
+                        <td class="py-3 px-4 text-slate-500 font-mono text-xs">${data.email || "-"}</td>
+                        <td class="py-3 px-4 text-slate-700 font-medium">${data.terakhirHafalan}</td>
+                        <td class="py-3 px-4 text-slate-600">${data.terakhirHijaiyah}</td>
+                        <td class="py-3 px-4 text-slate-600 font-medium text-emerald-700">${data.terakhirTajwid}</td>
+                        <td class="py-3 px-4 text-slate-700 font-semibold">${data.ummi}</td>
+                    </tr>
+                `).join('');
 
             } catch (error) {
-                console.error("Gagal memuat murid bimbingan:", error);
-                tabelBody.innerHTML = `
-                    <tr>
-                        <td colspan="7" class="py-8 text-center text-red-500">
-                            Terjadi kesalahan saat memuat data.<br>
-                            <span class="text-xs text-red-400">${error.message}</span>
-                        </td>
-                    </tr>`;
-            } finally {
-                prosesMuat = false;
+                console.error("Gagal memuat:", error);
+                tabelBody.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-red-500">Gagal mengambil data. ${error.message}</td></tr>`;
             }
         }
 
-        document.addEventListener("DOMContentLoaded", () => {
-            auth.onAuthStateChanged((user) => {
-                if (user) {
-                    muatMuridBimbingan();
-                } else {
-                    document.getElementById("tabelBodyBimbingan").innerHTML = `
-                        <tr><td colspan="7" class="py-8 text-center text-red-500">Akses ditolak. Anda tidak login.</td></tr>`;
-                }
-            });
-        });
-
-        window.addEventListener('pageshow', (event) => {
-            if (event.persisted && auth.currentUser) muatMuridBimbingan();
+        auth.onAuthStateChanged((user) => {
+            if (user) muatMuridBimbingan();
         });
     </script>
 </body>
