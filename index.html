@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hasnan Private App - App</title>
     
+    <!-- Library Scanner Absensi ditambahkan di sini -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
+
     <script src="https://cdn.tailwindcss.com"></script>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -207,9 +210,27 @@
             </section>
 
             <section class="animate-entry delay-3 space-y-3">
-                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Akses Program Kelas</h3>
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Akses Program</h3>
+                <!-- Grid diubah menjadi grid-cols-4 untuk 4 tombol -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                     
+                    <!-- TOMBOL ABSENSI DITAMBAHKAN DI SINI -->
+                    <button onclick="bukaMenuAbsensi()" class="relative overflow-hidden p-6 rounded-3xl text-left bg-gradient-to-br from-rose-500 via-pink-600 to-rose-700 text-white shadow-xl shadow-rose-200 group active:scale-[0.98] transition-all duration-300 flex flex-col justify-between min-h-[180px] w-full hover:scale-105 hover:-translate-y-2 hover:shadow-2xl hover:z-10">
+                        <div class="absolute right-0 bottom-0 transform translate-x-4 translate-y-4 scale-150 text-white/5 font-extrabold text-9xl pointer-events-none select-none">QR</div>
+                        <div class="flex items-center justify-between w-full z-10">
+                            <div class="p-3 bg-white/10 border border-white/10 rounded-2xl transition group-hover:scale-110 duration-300 flex items-center justify-center">
+                                <span class="material-symbols-outlined text-3xl">qr_code_scanner</span>
+                            </div>
+                            <span class="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center group-hover:translate-x-1 transition-transform">
+                                <span class="material-symbols-outlined text-base">arrow_forward</span>
+                            </span>
+                        </div>
+                        <div class="mt-4 z-10">
+                            <h3 class="font-extrabold text-lg sm:text-xl tracking-tight">Absensi</h3>
+                            <p class="text-xs text-rose-100/80 mt-1 font-medium leading-relaxed">Scan QR Code untuk mencatat kehadiran.</p>
+                        </div>
+                    </button>
+
                     <button onclick="navigateTo('viewHafalan')" class="relative overflow-hidden p-6 rounded-3xl text-left bg-gradient-to-br from-blue-600 via-indigo-600 to-indigo-700 text-white shadow-xl shadow-indigo-200 group active:scale-[0.98] transition-all duration-300 flex flex-col justify-between min-h-[180px] w-full hover:scale-105 hover:-translate-y-2 hover:shadow-2xl hover:z-10">
                         <div class="absolute right-0 bottom-0 transform translate-x-4 translate-y-4 scale-150 text-white/5 font-extrabold text-9xl pointer-events-none select-none">QS</div>
                         <div class="flex items-center justify-between w-full z-10">
@@ -437,6 +458,53 @@
             </div>
         </div>
 
+        <!-- ABSENSI QR CODE VIEW (DITAMBAHKAN DI SINI) -->
+        <!-- ABSENSI QR CODE VIEW -->
+<div id="viewAbsensi" class="page-view hidden space-y-6">
+    <div class="flex items-center gap-3">
+        <button onclick="tutupMenuAbsensi()" class="px-4 py-2.5 text-xs font-bold bg-white text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-100 transition active:scale-95 flex items-center gap-1.5 shadow-sm">
+            <span class="material-symbols-outlined text-sm">arrow_back</span> Dashboard
+        </button>
+        <div class="h-5 w-[1px] bg-slate-300"></div>
+        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Scanner Kehadiran</h3>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 animate-entry">
+        <!-- Kolom Kiri: Scanner -->
+        <div class="bg-white rounded-3xl border border-slate-100 shadow-sm p-5 sm:p-6 card-container-fix flex flex-col items-center text-center">
+            <div class="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center mb-4">
+                <span class="material-symbols-outlined text-2xl">qr_code_scanner</span>
+            </div>
+            <h2 class="text-xl font-bold text-slate-800 tracking-tight mb-1">Arahkan QR Code</h2>
+            <p class="text-xs text-slate-400 font-semibold mb-6">Posisikan QR Code kelas di tengah kotak</p>
+            
+            <div id="reader" class="w-full max-w-sm rounded-2xl overflow-hidden shadow-md border-2 border-slate-100 mb-6 bg-slate-50"></div>
+            
+            <div id="hasil" class="text-sm font-bold text-slate-500 bg-slate-50 px-6 py-3.5 rounded-xl w-full max-w-sm border border-slate-200 transition-all">
+                Menunggu scan...
+            </div>
+        </div>
+
+        <!-- Kolom Kanan: Riwayat Firebase -->
+        <div class="bg-white rounded-3xl border border-slate-100 shadow-sm p-5 sm:p-6 flex flex-col">
+            <div class="flex items-center gap-3 mb-5 pb-4 border-b border-slate-100">
+                <div class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                    <span class="material-symbols-outlined text-xl">history</span>
+                </div>
+                <div class="text-left">
+                    <h2 class="text-lg font-bold text-slate-800 tracking-tight">Riwayat Absensi</h2>
+                    <p class="text-xs text-slate-400 font-semibold">Tercatat di sistem Cloud</p>
+                </div>
+            </div>
+            
+            <!-- Tempat list absensi akan dirender -->
+            <div id="listRiwayatAbsensi" class="space-y-3 flex-grow max-h-[350px] overflow-y-auto pr-2">
+                <p class="text-xs font-semibold text-slate-400 text-center mt-10">Belum ada data kehadiran.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
     </main>
 
     <!-- MODAL / POPUP -->
@@ -594,19 +662,213 @@
         // FITUR ENTER UNTUK MENYIMPAN NILAI UMMI
         // ==========================================================
         document.addEventListener('keydown', function(event) {
-            // Mengecek apakah yang sedang diketik adalah kolom "inputNilaiUmmi"
             const isInputNilaiFokus = event.target.id === 'inputNilaiUmmi'; 
-
-            // Jika tombol yang ditekan adalah "Enter" dan sedang berada di kolom nilai
             if (event.key === 'Enter' && isInputNilaiFokus) {
-                event.preventDefault(); // Mencegah halaman refresh
-                
-                // Langsung memanggil fungsi simpan yang sama dengan tombol
+                event.preventDefault(); 
                 if(typeof simpanNilaiUmmi === "function") {
                     simpanNilaiUmmi();
                 }
             }
         });
+
+// ==========================================================
+// FITUR SCANNER & FIREBASE ABSENSI
+// ==========================================================
+let html5QrcodeScanner;
+// Salin URL Google Script milikmu di sini
+const scriptURLAbsen = 'https://script.google.com/macros/s/AKfycbzRY0tcV6SnDy_ESEyBeE4PwoY9GVmyAg4Omu5M43WtK0_XvmCuQqS-zQqlQ7NIMeGWow/exec';
+
+function bukaMenuAbsensi() {
+    // 1. Paksa sembunyikan SEMUA halaman yang ada di website
+    document.querySelectorAll('.page-view').forEach(function(halaman) {
+        halaman.classList.add('hidden');
+    });
+    
+    // 2. Munculkan HANYA halaman Absensi secara manual
+    document.getElementById('viewAbsensi').classList.remove('hidden');
+    
+    renderRiwayatAbsensi();
+
+    setTimeout(() => {
+        if (!html5QrcodeScanner) {
+            html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: {width: 250, height: 250} }, false);
+            html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+        }
+    }, 300);
+}
+
+function tutupMenuAbsensi() {
+    // 1. Wajib paksa sembunyikan halaman Absensi terlebih dahulu!
+    document.getElementById('viewAbsensi').classList.add('hidden');
+    
+    // 2. Baru panggil fungsi navigasi bawaan untuk memunculkan Dashboard
+    if(typeof navigateTo === 'function') {
+        navigateTo('viewDashboard');
+    } else {
+        document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden'));
+        document.getElementById('viewDashboard').classList.remove('hidden');
+    }
+    
+    // Matikan kamera
+    if (html5QrcodeScanner) {
+        html5QrcodeScanner.clear().then(() => html5QrcodeScanner = null);
+    }
+    
+    // Reset pesan
+    document.getElementById('hasil').innerHTML = "Menunggu scan...";
+    document.getElementById('hasil').className = "text-sm font-bold text-slate-500 bg-slate-50 px-6 py-3.5 rounded-xl border border-slate-200";
+}
+
+function renderRiwayatAbsensi() {
+    let container = document.getElementById('listRiwayatAbsensi');
+    
+    // Jika belum ada data absensi
+    if (!santriAktif || !santriAktif.absensi || santriAktif.absensi.length === 0) {
+        container.innerHTML = '<p class="text-xs font-semibold text-slate-400 text-center mt-10">Belum ada data kehadiran.</p>';
+        return;
+    }
+
+    // 1. Ambil data role yang sedang login dari memori lokal
+    const currentRole = localStorage.getItem("role"); 
+
+    let html = '';
+    
+    // Looping mundur (data terbaru di atas)
+    for (let i = santriAktif.absensi.length - 1; i >= 0; i--) {
+        let item = santriAktif.absensi[i];
+        
+        // 2. Logika Hak Akses Tombol Hapus
+        let tombolHapus = '';
+        if (currentRole === "admin" || currentRole === "guru") {
+            // Jika yang login admin/guru, tombol hapus disertakan
+            tombolHapus = `
+            <button onclick="hapusDataAbsen(${i})" class="w-8 h-8 rounded-xl bg-rose-50 border border-rose-100 text-rose-600 hover:bg-rose-100 flex items-center justify-center transition active:scale-95 flex-shrink-0" title="Hapus Data">
+                <span class="material-symbols-outlined text-sm">delete</span>
+            </button>`;
+        }
+        
+        // 3. Render HTML
+        html += `
+        <div class="flex items-center justify-between p-3.5 bg-slate-50 border border-slate-100 rounded-2xl mb-2 hover:border-slate-200 transition">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center flex-shrink-0">
+                    <span class="material-symbols-outlined text-base">check_circle</span>
+                </div>
+                <div>
+                    <p class="text-xs font-extrabold text-slate-700">${item.waktu}</p>
+                    <p class="text-[10px] text-slate-400 font-medium">Data Scan: ${item.qrData}</p>
+                </div>
+            </div>
+            
+            ${tombolHapus}
+        </div>`;
+    }
+    
+    container.innerHTML = html;
+}
+
+// Menambahkan fungsi hapus yang sebelumnya hilang
+window.hapusDataAbsen = function(indexAkanDihapus) {
+    let konfirmasi = confirm("Yakin ingin menghapus riwayat absen ini?");
+    
+    if (konfirmasi) {
+        santriAktif.absensi.splice(indexAkanDihapus, 1);
+        
+        db.collection("database_hafalan").doc(santriAktif.nama).set({
+            absensi: santriAktif.absensi
+        }, { merge: true })
+        .then(() => {
+            renderRiwayatAbsensi();
+            console.log("Data absensi berhasil dihapus dari Firebase");
+        })
+        .catch((error) => {
+            console.error("Gagal menghapus di Firebase:", error);
+            alert("Terjadi kesalahan saat menghapus data.");
+        });
+    }
+};
+
+function onScanSuccess(decodedText) {
+    if (html5QrcodeScanner) html5QrcodeScanner.pause(true);
+    
+    let divHasil = document.getElementById('hasil');
+
+    // ==========================================================
+    // 1. FILTER KEAMANAN: CEK APAKAH QR CODE VALID/TERDAFTAR
+    // ==========================================================
+    let siswaDitemukan = null;
+    
+    // Mengecek apakah teks QR Code cocok dengan nama santri di database Firebase
+    if (typeof dataSantri !== 'undefined') {
+        siswaDitemukan = dataSantri.find(s => 
+            (s.nama && s.nama.toLowerCase() === decodedText.toLowerCase()) || 
+            (s.id && s.id.toLowerCase() === decodedText.toLowerCase())
+        );
+    }
+
+    // JIKA QR CODE ACAK (SEPERTI WIKIPEDIA) DI-SCAN -> TOLAK!
+    if (!siswaDitemukan) {
+        divHasil.innerHTML = "❌ Ditolak: QR Code tidak terdaftar!";
+        divHasil.className = "text-sm font-bold text-rose-700 bg-rose-50 px-6 py-3.5 rounded-xl border border-rose-200 shadow-sm";
+        
+        // Nyalakan kamera lagi setelah ditolak
+        setTimeout(() => {
+            if (html5QrcodeScanner) html5QrcodeScanner.resume();
+            divHasil.innerHTML = "Menunggu scan berikutnya...";
+            divHasil.className = "text-sm font-bold text-slate-500 bg-slate-50 px-6 py-3.5 rounded-xl border border-slate-200 transition-all";
+        }, 2000);
+        
+        return; // Hentikan fungsi di sini, jangan simpan apapun!
+    }
+
+    // ==========================================================
+    // 2. JIKA TERDAFTAR, LANJUTKAN PROSES SIMPAN
+    // ==========================================================
+    // Ubah santri yang aktif menjadi siswa yang baru saja di-scan
+    santriAktif = siswaDitemukan;
+
+    let waktu = new Date().toLocaleString("id-ID");
+    
+    divHasil.innerHTML = "⏳ Sinkronisasi ke Cloud...";
+    divHasil.className = "text-sm font-bold text-blue-700 bg-blue-50 px-6 py-3.5 rounded-xl border border-blue-200 shadow-sm";
+
+    // Siapkan data untuk Firebase
+    if (!santriAktif.absensi) santriAktif.absensi = [];
+    santriAktif.absensi.push({ waktu: waktu, qrData: decodedText });
+
+    // Simpan ke Firebase
+    db.collection("database_hafalan").doc(santriAktif.nama).set({
+        absensi: santriAktif.absensi
+    }, { merge: true })
+    .then(() => {
+        // Render riwayat di layar web
+        renderRiwayatAbsensi();
+        
+        // Backup ke Google Spreadsheet
+        let urlTarget = `${scriptURLAbsen}?nama=${encodeURIComponent(santriAktif.nama)}&waktu=${encodeURIComponent(waktu)}&qr_data=${encodeURIComponent(decodedText)}`;
+        
+        fetch(urlTarget, { method: 'GET', mode: 'no-cors' })
+            .catch(e => console.error("Gagal backup Excel:", e));
+
+        divHasil.innerHTML = "✅ Berhasil Disimpan: " + santriAktif.nama;
+        divHasil.className = "text-sm font-bold text-emerald-700 bg-emerald-50 px-6 py-3.5 rounded-xl border border-emerald-200 shadow-sm";
+        
+        setTimeout(() => {
+            if (html5QrcodeScanner) html5QrcodeScanner.resume();
+            divHasil.innerHTML = "Menunggu scan berikutnya...";
+            divHasil.className = "text-sm font-bold text-slate-500 bg-slate-50 px-6 py-3.5 rounded-xl border border-slate-200 transition-all";
+        }, 2000);
+    })
+    .catch((error) => {
+        console.error("Gagal Firebase:", error);
+        divHasil.innerHTML = "❌ Gagal Terhubung ke Cloud";
+        divHasil.className = "text-sm font-bold text-rose-700 bg-rose-50 px-6 py-3.5 rounded-xl border border-rose-200";
+        setTimeout(() => { if(html5QrcodeScanner) html5QrcodeScanner.resume(); }, 2000);
+    });
+}
+
+function onScanFailure(error) { /* Abaikan */ }
+
     </script>
     
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>

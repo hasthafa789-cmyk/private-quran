@@ -11,4 +11,3 @@ function circularProgress(persen, color) {
         <text x="50%" y="50%" text-anchor="middle" dy=".3em" font-size="10" font-weight="800" fill="#334155" transform="rotate(90 ${size/2} ${size/2})">${persen}%</text>
     </svg>`;
 }
-
