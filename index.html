@@ -798,7 +798,6 @@ function onScanSuccess(decodedText) {
     // ==========================================================
     let siswaDitemukan = null;
     
-    // Mengecek apakah teks QR Code cocok dengan nama santri di database Firebase
     if (typeof dataSantri !== 'undefined') {
         siswaDitemukan = dataSantri.find(s => 
             (s.nama && s.nama.toLowerCase() === decodedText.toLowerCase()) || 
@@ -806,46 +805,61 @@ function onScanSuccess(decodedText) {
         );
     }
 
-    // JIKA QR CODE ACAK (SEPERTI WIKIPEDIA) DI-SCAN -> TOLAK!
     if (!siswaDitemukan) {
         divHasil.innerHTML = "❌ Ditolak: QR Code tidak terdaftar!";
         divHasil.className = "text-sm font-bold text-rose-700 bg-rose-50 px-6 py-3.5 rounded-xl border border-rose-200 shadow-sm";
         
-        // Nyalakan kamera lagi setelah ditolak
         setTimeout(() => {
             if (html5QrcodeScanner) html5QrcodeScanner.resume();
             divHasil.innerHTML = "Menunggu scan berikutnya...";
             divHasil.className = "text-sm font-bold text-slate-500 bg-slate-50 px-6 py-3.5 rounded-xl border border-slate-200 transition-all";
         }, 2000);
-        
-        return; // Hentikan fungsi di sini, jangan simpan apapun!
+        return; 
     }
 
     // ==========================================================
-    // 2. JIKA TERDAFTAR, LANJUTKAN PROSES SIMPAN
+    // 2. FILTER ANTI-SPAM: CEK APAKAH SUDAH ABSEN HARI INI
     // ==========================================================
-    // Ubah santri yang aktif menjadi siswa yang baru saja di-scan
-    santriAktif = siswaDitemukan;
+    let dateObj = new Date();
+    let waktuLengkap = dateObj.toLocaleString("id-ID"); // Contoh: 22/8/2026, 07:15:30
+    let tanggalHariIni = dateObj.toLocaleDateString("id-ID"); // Contoh: 22/8/2026
 
-    let waktu = new Date().toLocaleString("id-ID");
+    let riwayatAbsen = siswaDitemukan.absensi || [];
+    
+    // Mengecek apakah di dalam riwayat ada waktu yang mengandung "tanggal hari ini"
+    let sudahAbsen = riwayatAbsen.some(absen => absen.waktu && absen.waktu.includes(tanggalHariIni));
+
+    if (sudahAbsen) {
+        // Jika sudah absen, munculkan peringatan warna kuning/orange
+        divHasil.innerHTML = `⚠️ ${siswaDitemukan.nama} sudah absen hari ini!`;
+        divHasil.className = "text-sm font-bold text-amber-700 bg-amber-50 px-6 py-3.5 rounded-xl border border-amber-200 shadow-sm";
+        
+        setTimeout(() => {
+            if (html5QrcodeScanner) html5QrcodeScanner.resume();
+            divHasil.innerHTML = "Menunggu scan berikutnya...";
+            divHasil.className = "text-sm font-bold text-slate-500 bg-slate-50 px-6 py-3.5 rounded-xl border border-slate-200 transition-all";
+        }, 2500);
+        return; // Hentikan proses, JANGAN simpan ganda!
+    }
+
+    // ==========================================================
+    // 3. JIKA TERDAFTAR & BELUM ABSEN, LANJUTKAN PROSES SIMPAN
+    // ==========================================================
+    santriAktif = siswaDitemukan;
     
     divHasil.innerHTML = "⏳ Sinkronisasi ke Cloud...";
     divHasil.className = "text-sm font-bold text-blue-700 bg-blue-50 px-6 py-3.5 rounded-xl border border-blue-200 shadow-sm";
 
-    // Siapkan data untuk Firebase
     if (!santriAktif.absensi) santriAktif.absensi = [];
-    santriAktif.absensi.push({ waktu: waktu, qrData: decodedText });
+    santriAktif.absensi.push({ waktu: waktuLengkap, qrData: decodedText });
 
-    // Simpan ke Firebase
     db.collection("database_hafalan").doc(santriAktif.nama).set({
         absensi: santriAktif.absensi
     }, { merge: true })
     .then(() => {
-        // Render riwayat di layar web
         renderRiwayatAbsensi();
         
-        // Backup ke Google Spreadsheet
-        let urlTarget = `${scriptURLAbsen}?nama=${encodeURIComponent(santriAktif.nama)}&waktu=${encodeURIComponent(waktu)}&qr_data=${encodeURIComponent(decodedText)}`;
+        let urlTarget = `${scriptURLAbsen}?nama=${encodeURIComponent(santriAktif.nama)}&waktu=${encodeURIComponent(waktuLengkap)}&qr_data=${encodeURIComponent(decodedText)}`;
         
         fetch(urlTarget, { method: 'GET', mode: 'no-cors' })
             .catch(e => console.error("Gagal backup Excel:", e));
