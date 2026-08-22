@@ -3,13 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hasnan Private App - App</title>
+    <title>Hasnan Private App - Dashboard</title>
     
-    <!-- Library Scanner Absensi ditambahkan di sini -->
-    <script src="https://unpkg.com/html5-qrcode"></script>
+    <!-- Konfigurasi PWA -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2563eb">
 
+    <!-- Library Scanner Absensi -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-   
     <!-- CDN Chart.js untuk Grafik Interaktif -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
@@ -17,8 +20,6 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#2563eb">
 
     <style>
         body { font-family: 'Plus Jakarta Sans', sans-serif; }
@@ -56,8 +57,8 @@
 
     <div id="splashScreen" class="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-white transition-opacity duration-1000 ease-in-out">
         <div class="animate-fade-in flex flex-col items-center">
-            <div class="w-20 h-20 bg-blue-600 rounded-3xl flex items-center justify-center text-white shadow-lg mb-4">
-                <span class="material-symbols-outlined text-5xl">menu_book</span>
+            <div class="relative flex items-center justify-center w-20 h-20 rounded-3xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/40 overflow-hidden mb-4">
+                <span class="material-symbols-outlined text-5xl z-10 relative">menu_book</span>
             </div>
             <h1 class="text-2xl font-extrabold text-slate-800 tracking-tight">Hasnan Private App</h1>
         </div>
@@ -67,9 +68,10 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
                 <h1 class="text-xl sm:text-2xl font-extrabold text-slate-900 flex items-center gap-2 tracking-tight">
-                    <span class="p-1.5 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
-                        <span class="material-symbols-outlined text-xl">menu_book</span>
-                    </span> 
+                    <div class="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/40 overflow-hidden group">
+                        <div class="absolute inset-0 bg-white/30 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-in-out"></div>
+                        <span class="material-symbols-outlined text-xl z-10 relative">menu_book</span>
+                    </div>
                     Hasnan Private App
                 </h1>
                 <p class="text-xs text-slate-400 font-semibold mt-0.5 tracking-wide uppercase">Sistem Monitoring</p>
@@ -104,129 +106,107 @@
                 </div>
             </section>
 
-<!-- Akses Admin - Compact View -->
-<section class="animate-entry delay-2 flex flex-wrap gap-3">
-    
-    <!-- Registrasi Massal -->
-    <a id="btnFiturMassal" href="register-massal.html" style="display: none;" 
-       class="flex items-center gap-2.5 px-5 py-3 bg-white border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 rounded-xl transition-all shadow-sm text-xs sm:text-sm font-bold active:scale-95">
-        <span class="material-symbols-outlined text-lg">group_add</span>
-        Buka Fitur Registrasi Massal
-    </a>
+            <!-- Akses Admin - Compact View -->
+            <section class="animate-entry delay-2 flex flex-wrap gap-3">
+                <a id="btnFiturMassal" href="register-massal.html" style="display: none;" class="flex items-center gap-2.5 px-5 py-3 bg-white border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 rounded-xl transition-all shadow-sm text-xs sm:text-sm font-bold active:scale-95">
+                    <span class="material-symbols-outlined text-lg">group_add</span> Registrasi Massal
+                </a>
+                <a id="btnDaftarSantri" href="daftar-santri.html" style="display: none;" class="flex items-center gap-2.5 px-5 py-3 bg-white border border-slate-200 hover:border-blue-300 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded-xl transition-all shadow-sm text-xs sm:text-sm font-bold active:scale-95">
+                    <span class="material-symbols-outlined text-lg">list_alt</span> Daftar Santri
+                </a>
+                <a id="btnDaftarAkun" href="daftar-akun.html" style="display: none;" class="flex items-center gap-2.5 px-5 py-3 bg-white border border-slate-200 hover:border-purple-300 hover:bg-purple-50 text-slate-700 hover:text-purple-700 rounded-xl transition-all shadow-sm text-xs sm:text-sm font-bold active:scale-95">
+                    <span class="material-symbols-outlined text-lg">manage_accounts</span> Semua Akun
+                </a>
+                <a id="btnMuridBimbingan" href="murid-bimbingan.html" style="display: none;" class="flex items-center gap-2.5 px-5 py-3 bg-white border border-slate-200 hover:border-teal-300 hover:bg-teal-50 text-slate-700 hover:text-teal-700 rounded-xl transition-all shadow-sm text-xs sm:text-sm font-bold active:scale-95">
+                    <span class="material-symbols-outlined text-lg">local_library</span> Murid Bimbingan
+                </a>
+            </section>
 
-    <!-- Daftar Santri -->
-    <a id="btnDaftarSantri" href="daftar-santri.html" style="display: none;" 
-       class="flex items-center gap-2.5 px-5 py-3 bg-white border border-slate-200 hover:border-blue-300 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded-xl transition-all shadow-sm text-xs sm:text-sm font-bold active:scale-95">
-        <span class="material-symbols-outlined text-lg">list_alt</span>
-        Lihat Daftar Santri
-    </a>
+            <!-- SEKSI 4 GRAFIK PERKEMBANGAN (HAFALAN, UMMI, HIJAIYAH, TAJWID) -->
+            <section class="animate-entry delay-3 space-y-5 pt-4">
+                <div class="flex items-center justify-between mb-2 px-1">
+                    <div class="flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 shadow-sm">
+                            <span class="material-symbols-outlined text-lg">monitoring</span>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-extrabold text-slate-800 tracking-tight">Analisis Perkembangan</h3>
+                            <p class="text-[10px] text-slate-400 font-semibold uppercase tracking-widest mt-0.5">Statistik Live Santri</p>
+                        </div>
+                    </div>
+                    <span class="flex items-center gap-2 text-[10px] font-bold text-indigo-600 bg-white px-3 py-1.5 rounded-full border border-indigo-100 shadow-sm">
+                        <span class="relative flex h-2.5 w-2.5">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-indigo-500"></span>
+                        </span>
+                        LIVE CHARTS
+                    </span>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
+                    <!-- Grafik Hafalan -->
+                    <div class="bg-white p-5 sm:p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-purple-500/10 hover:border-purple-200 transition-all duration-300 flex flex-col group">
+                        <div class="flex items-start justify-between mb-5">
+                            <div>
+                                <h4 class="text-sm font-extrabold text-slate-800 tracking-tight group-hover:text-purple-600 transition-colors">Hafalan Al-Qur'an</h4>
+                                <p class="text-[11px] text-slate-400 font-medium mt-1">Total ayat yang dikuasai</p>
+                            </div>
+                            <div class="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center group-hover:scale-110 group-hover:bg-purple-100 transition-all">
+                                <span class="material-symbols-outlined text-2xl">menu_book</span>
+                            </div>
+                        </div>
+                        <div class="relative w-full h-44 sm:h-52 flex-grow"><canvas id="progressChart"></canvas></div>
+                    </div>
+                    
+                    <!-- Grafik Ummi -->
+                    <div class="bg-white p-5 sm:p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-blue-500/10 hover:border-blue-200 transition-all duration-300 flex flex-col group">
+                        <div class="flex items-start justify-between mb-5">
+                            <div>
+                                <h4 class="text-sm font-extrabold text-slate-800 tracking-tight group-hover:text-blue-600 transition-colors">Metode Ummi</h4>
+                                <p class="text-[11px] text-slate-400 font-medium mt-1">Total halaman diselesaikan</p>
+                            </div>
+                            <div class="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 group-hover:bg-blue-100 transition-all">
+                                <span class="material-symbols-outlined text-2xl">library_books</span>
+                            </div>
+                        </div>
+                        <div class="relative w-full h-44 sm:h-52 flex-grow"><canvas id="ummiChart"></canvas></div>
+                    </div>
+                    
+                    <!-- Grafik Hijaiyah -->
+                    <div class="bg-white p-5 sm:p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-emerald-500/10 hover:border-emerald-200 transition-all duration-300 flex flex-col group">
+                        <div class="flex items-start justify-between mb-5">
+                            <div>
+                                <h4 class="text-sm font-extrabold text-slate-800 tracking-tight group-hover:text-emerald-600 transition-colors">Makharijul Huruf</h4>
+                                <p class="text-[11px] text-slate-400 font-medium mt-1">Kefasihan 28 Hijaiyah</p>
+                            </div>
+                            <div class="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 group-hover:bg-emerald-100 transition-all">
+                                <span class="material-symbols-outlined text-2xl">record_voice_over</span>
+                            </div>
+                        </div>
+                        <div class="relative w-full h-44 sm:h-52 flex-grow"><canvas id="hijaiyahChart"></canvas></div>
+                    </div>
+                    
+                    <!-- Grafik Tajwid -->
+                    <div class="bg-white p-5 sm:p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-amber-500/10 hover:border-amber-200 transition-all duration-300 flex flex-col group">
+                        <div class="flex items-start justify-between mb-5">
+                            <div>
+                                <h4 class="text-sm font-extrabold text-slate-800 tracking-tight group-hover:text-amber-600 transition-colors">Hukum Tajwid</h4>
+                                <p class="text-[11px] text-slate-400 font-medium mt-1">Pemahaman hukum bacaan</p>
+                            </div>
+                            <div class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:scale-110 group-hover:bg-amber-100 transition-all">
+                                <span class="material-symbols-outlined text-2xl">lightbulb</span>
+                            </div>
+                        </div>
+                        <div class="relative w-full h-44 sm:h-52 flex-grow"><canvas id="tajwidChart"></canvas></div>
+                    </div>
+                </div>
+            </section>
 
-    <!-- Semua Akun -->
-    <a id="btnDaftarAkun" href="daftar-akun.html" style="display: none;" 
-       class="flex items-center gap-2.5 px-5 py-3 bg-white border border-slate-200 hover:border-purple-300 hover:bg-purple-50 text-slate-700 hover:text-purple-700 rounded-xl transition-all shadow-sm text-xs sm:text-sm font-bold active:scale-95">
-        <span class="material-symbols-outlined text-lg">manage_accounts</span>
-        Lihat Semua Akun
-    </a>
-    
-    <!-- Murid Bimbingan -->
-    <a id="btnMuridBimbingan" href="murid-bimbingan.html" style="display: none;" 
-       class="flex items-center gap-2.5 px-5 py-3 bg-white border border-slate-200 hover:border-teal-300 hover:bg-teal-50 text-slate-700 hover:text-teal-700 rounded-xl transition-all shadow-sm text-xs sm:text-sm font-bold active:scale-95">
-        <span class="material-symbols-outlined text-lg">local_library</span>
-        Murid Bimbingan Saya
-    </a>
-
-</section>
-
-<!-- SEKSI 4 GRAFIK PERKEMBANGAN (HAFALAN, UMMI, HIJAIYAH, TAJWID) -->
-<section class="animate-entry delay-3 space-y-5 pt-4">
-    <!-- Header Seksi yang Lebih Elegan -->
-    <div class="flex items-center justify-between mb-2 px-1">
-        <div class="flex items-center gap-3">
-            <div class="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 shadow-sm">
-                <span class="material-symbols-outlined text-lg">monitoring</span>
-            </div>
-            <div>
-                <h3 class="text-sm font-extrabold text-slate-800 tracking-tight">Analisis Perkembangan</h3>
-                <p class="text-[10px] text-slate-400 font-semibold uppercase tracking-widest mt-0.5">Statistik Live Santri</p>
-            </div>
-        </div>
-        
-        <!-- Badge "Live" dengan Efek Berkedip (Ping) -->
-        <span class="flex items-center gap-2 text-[10px] font-bold text-indigo-600 bg-white px-3 py-1.5 rounded-full border border-indigo-100 shadow-sm">
-            <span class="relative flex h-2.5 w-2.5">
-                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-                <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-indigo-500"></span>
-            </span>
-            LIVE CHARTS
-        </span>
-    </div>
-    
-    <!-- Grid 2x2 untuk Grafik dengan Kartu Interaktif -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
-        
-        <!-- 1. Grafik Hafalan (Tema Ungu) -->
-        <div class="bg-white p-5 sm:p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-purple-500/10 hover:border-purple-200 transition-all duration-300 flex flex-col group">
-            <div class="flex items-start justify-between mb-5">
-                <div>
-                    <h4 class="text-sm font-extrabold text-slate-800 tracking-tight group-hover:text-purple-600 transition-colors">Hafalan Al-Qur'an</h4>
-                    <p class="text-[11px] text-slate-400 font-medium mt-1">Total ayat yang dikuasai</p>
-                </div>
-                <div class="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center group-hover:scale-110 group-hover:bg-purple-100 transition-all">
-                    <span class="material-symbols-outlined text-2xl">menu_book</span>
-                </div>
-            </div>
-            <!-- Canvas dipertinggi sedikit agar grafik lebih leluasa -->
-            <div class="relative w-full h-44 sm:h-52 flex-grow"><canvas id="progressChart"></canvas></div>
-        </div>
-        
-        <!-- 2. Grafik Ummi (Tema Biru) -->
-        <div class="bg-white p-5 sm:p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-blue-500/10 hover:border-blue-200 transition-all duration-300 flex flex-col group">
-            <div class="flex items-start justify-between mb-5">
-                <div>
-                    <h4 class="text-sm font-extrabold text-slate-800 tracking-tight group-hover:text-blue-600 transition-colors">Metode Ummi</h4>
-                    <p class="text-[11px] text-slate-400 font-medium mt-1">Total halaman diselesaikan</p>
-                </div>
-                <div class="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 group-hover:bg-blue-100 transition-all">
-                    <span class="material-symbols-outlined text-2xl">library_books</span>
-                </div>
-            </div>
-            <div class="relative w-full h-44 sm:h-52 flex-grow"><canvas id="ummiChart"></canvas></div>
-        </div>
-        
-        <!-- 3. Grafik Makharijul Huruf (Tema Hijau) -->
-        <div class="bg-white p-5 sm:p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-emerald-500/10 hover:border-emerald-200 transition-all duration-300 flex flex-col group">
-            <div class="flex items-start justify-between mb-5">
-                <div>
-                    <h4 class="text-sm font-extrabold text-slate-800 tracking-tight group-hover:text-emerald-600 transition-colors">Makharijul Huruf</h4>
-                    <p class="text-[11px] text-slate-400 font-medium mt-1">Kefasihan 28 Hijaiyah</p>
-                </div>
-                <div class="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 group-hover:bg-emerald-100 transition-all">
-                    <span class="material-symbols-outlined text-2xl">record_voice_over</span>
-                </div>
-            </div>
-            <div class="relative w-full h-44 sm:h-52 flex-grow"><canvas id="hijaiyahChart"></canvas></div>
-        </div>
-        
-        <!-- 4. Grafik Tajwid (Tema Orange) -->
-        <div class="bg-white p-5 sm:p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-amber-500/10 hover:border-amber-200 transition-all duration-300 flex flex-col group">
-            <div class="flex items-start justify-between mb-5">
-                <div>
-                    <h4 class="text-sm font-extrabold text-slate-800 tracking-tight group-hover:text-amber-600 transition-colors">Hukum Tajwid</h4>
-                    <p class="text-[11px] text-slate-400 font-medium mt-1">Pemahaman hukum bacaan</p>
-                </div>
-                <div class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:scale-110 group-hover:bg-amber-100 transition-all">
-                    <span class="material-symbols-outlined text-2xl">lightbulb</span>
-                </div>
-            </div>
-            <div class="relative w-full h-44 sm:h-52 flex-grow"><canvas id="tajwidChart"></canvas></div>
-        </div>
-
-    </div>
-</section>
+            <!-- Statistik Live Overview -->
             <section class="animate-entry delay-2 space-y-3">
                 <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Dashboard Live Overview</h3>
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                    
+                    <!-- Kartu Hafalan -->
                     <div class="relative overflow-hidden p-6 rounded-3xl bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-700 text-white shadow-lg shadow-blue-500/10 group transition-all duration-300 min-h-[140px] flex flex-col justify-between hover:scale-105 hover:-translate-y-2 hover:shadow-2xl hover:z-10">
                         <div class="absolute right-0 bottom-0 transform translate-x-3 translate-y-3 scale-125 text-white/5 font-extrabold text-8xl pointer-events-none select-none">HF</div>
                         <div class="flex items-start justify-between w-full z-10">
@@ -246,6 +226,7 @@
                         </div>
                     </div>
 
+                    <!-- Kartu Ummi -->
                     <div class="relative overflow-hidden p-6 rounded-3xl bg-gradient-to-br from-purple-600 via-fuchsia-600 to-purple-700 text-white shadow-lg shadow-purple-500/10 group transition-all duration-300 min-h-[140px] flex flex-col justify-between hover:scale-105 hover:-translate-y-2 hover:shadow-2xl hover:z-10">
                         <div class="absolute right-0 bottom-0 transform translate-x-3 translate-y-3 scale-125 text-white/5 font-extrabold text-8xl pointer-events-none select-none">UM</div>
                         <div class="flex items-start justify-between w-full z-10">
@@ -265,6 +246,7 @@
                         </div>
                     </div>
 
+                    <!-- Kartu Hijaiyah -->
                     <div class="relative overflow-hidden p-6 rounded-3xl bg-gradient-to-br from-emerald-600 via-teal-600 to-emerald-700 text-white shadow-lg shadow-emerald-500/10 group transition-all duration-300 min-h-[140px] flex flex-col justify-between hover:scale-105 hover:-translate-y-2 hover:shadow-2xl hover:z-10">
                         <div class="absolute right-0 bottom-0 transform translate-x-3 translate-y-3 scale-125 text-white/5 font-extrabold text-8xl pointer-events-none select-none">HJ</div>
                         <div class="flex items-start justify-between w-full z-10">
@@ -284,6 +266,7 @@
                         </div>
                     </div>
 
+                    <!-- Kartu Tajwid -->
                     <div class="relative overflow-hidden p-6 rounded-3xl bg-gradient-to-br from-amber-500 via-orange-500 to-amber-600 text-white shadow-lg shadow-amber-500/10 group transition-all duration-300 min-h-[140px] flex flex-col justify-between hover:scale-105 hover:-translate-y-2 hover:shadow-2xl hover:z-10">
                         <div class="absolute right-0 bottom-0 transform translate-x-3 translate-y-3 scale-125 text-white/5 font-extrabold text-8xl pointer-events-none select-none">TJ</div>
                         <div class="flex items-start justify-between w-full z-10">
@@ -302,16 +285,14 @@
                             <div id="statCircleTajwid" class="text-[11px] sm:text-xs font-bold text-white truncate text-right max-w-[120px]">Belum ada</div>
                         </div>
                     </div>
-
                 </div>
             </section>
 
+            <!-- Akses Program -->
             <section class="animate-entry delay-3 space-y-3">
                 <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Akses Program</h3>
-                <!-- Grid diubah menjadi grid-cols-4 untuk 4 tombol -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                     
-                    <!-- TOMBOL ABSENSI DITAMBAHKAN DI SINI -->
                     <button onclick="bukaMenuAbsensi()" class="relative overflow-hidden p-6 rounded-3xl text-left bg-gradient-to-br from-rose-500 via-pink-600 to-rose-700 text-white shadow-xl shadow-rose-200 group active:scale-[0.98] transition-all duration-300 flex flex-col justify-between min-h-[180px] w-full hover:scale-105 hover:-translate-y-2 hover:shadow-2xl hover:z-10">
                         <div class="absolute right-0 bottom-0 transform translate-x-4 translate-y-4 scale-150 text-white/5 font-extrabold text-9xl pointer-events-none select-none">QR</div>
                         <div class="flex items-center justify-between w-full z-10">
@@ -555,80 +536,67 @@
             </div>
         </div>
 
-       <!-- ABSENSI QR CODE VIEW (UI PREMIUM) -->
-<div id="viewAbsensi" class="page-view hidden space-y-6">
-    <!-- Header Sistem Absensi -->
-    <div class="flex items-center justify-between px-1">
-        <div class="flex items-center gap-3">
-            <button onclick="tutupMenuAbsensi()" class="px-4 py-2.5 text-xs font-bold bg-white text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all active:scale-95 flex items-center gap-1.5 shadow-sm group">
-                <span class="material-symbols-outlined text-sm group-hover:-translate-x-1 transition-transform">arrow_back</span> Kembali
-            </button>
-            <div class="h-5 w-[1px] bg-slate-200"></div>
-            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest hidden sm:block">Sistem Absensi</h3>
-        </div>
-        
-        <!-- Badge "Scanner Aktif" Berkedip -->
-        <span class="flex items-center gap-2 text-[10px] font-bold text-rose-600 bg-white px-3 py-1.5 rounded-full border border-rose-100 shadow-sm">
-            <span class="relative flex h-2.5 w-2.5">
-                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
-            </span>
-            SCANNER AKTIF
-        </span>
-    </div>
-
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-entry">
-        
-        <!-- Kolom Kiri: Scanner Area (Porsi Lebih Lebar) -->
-        <div class="lg:col-span-7 bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-rose-500/10 hover:border-rose-200 transition-all duration-300 p-6 sm:p-8 flex flex-col items-center text-center group">
-            <div class="w-16 h-16 rounded-3xl bg-rose-50 text-rose-600 flex items-center justify-center mb-5 group-hover:scale-110 group-hover:bg-rose-100 transition-all shadow-inner">
-                <span class="material-symbols-outlined text-3xl">qr_code_scanner</span>
-            </div>
-            <h2 class="text-xl sm:text-2xl font-extrabold text-slate-800 tracking-tight mb-2">Verifikasi Kehadiran</h2>
-            <p class="text-xs sm:text-sm text-slate-400 font-medium mb-8 max-w-sm leading-relaxed">Posisikan QR Code kelas tepat di tengah area pemindaian untuk mencatat kehadiran secara otomatis.</p>
-            
-            <!-- Area Kamera dengan Efek Glow Belakang -->
-            <div class="relative w-full max-w-sm">
-                <!-- Ornamen Cahaya Pemindai -->
-                <div class="absolute -inset-1 bg-gradient-to-r from-rose-500 to-pink-500 rounded-3xl blur opacity-20 group-hover:opacity-40 transition duration-700"></div>
+        <!-- ABSENSI QR CODE VIEW (UI PREMIUM) -->
+        <div id="viewAbsensi" class="page-view hidden space-y-6">
+            <div class="flex items-center justify-between px-1">
+                <div class="flex items-center gap-3">
+                    <button onclick="tutupMenuAbsensi()" class="px-4 py-2.5 text-xs font-bold bg-white text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all active:scale-95 flex items-center gap-1.5 shadow-sm group">
+                        <span class="material-symbols-outlined text-sm group-hover:-translate-x-1 transition-transform">arrow_back</span> Kembali
+                    </button>
+                    <div class="h-5 w-[1px] bg-slate-200"></div>
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest hidden sm:block">Sistem Absensi</h3>
+                </div>
                 
-                <div id="reader" class="relative w-full rounded-2xl overflow-hidden shadow-sm border-2 border-slate-100 bg-slate-50 z-10"></div>
+                <span class="flex items-center gap-2 text-[10px] font-bold text-rose-600 bg-white px-3 py-1.5 rounded-full border border-rose-100 shadow-sm">
+                    <span class="relative flex h-2.5 w-2.5">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
+                    </span>
+                    SCANNER AKTIF
+                </span>
             </div>
-            
-            <!-- Status Bar Hasil Scan -->
-            <div class="mt-8 w-full max-w-sm">
-                <div id="hasil" class="flex items-center justify-center gap-2 text-sm font-bold text-slate-500 bg-slate-50 px-6 py-4 rounded-2xl border border-slate-200 transition-all shadow-sm">
-                    <span class="material-symbols-outlined text-base animate-pulse">flip_camera_ios</span>
-                    Menunggu scan...
-                </div>
-            </div>
-        </div>
 
-        <!-- Kolom Kanan: Riwayat Cloud -->
-        <div class="lg:col-span-5 bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-blue-500/10 hover:border-blue-200 transition-all duration-300 p-6 sm:p-7 flex flex-col group">
-            <div class="flex items-center justify-between mb-6 pb-5 border-b border-slate-100">
-                <div class="flex items-center gap-4">
-                    <div class="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 group-hover:bg-blue-100 transition-all shadow-inner">
-                        <span class="material-symbols-outlined text-2xl">history</span>
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-entry">
+                <div class="lg:col-span-7 bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-rose-500/10 hover:border-rose-200 transition-all duration-300 p-6 sm:p-8 flex flex-col items-center text-center group">
+                    <div class="w-16 h-16 rounded-3xl bg-rose-50 text-rose-600 flex items-center justify-center mb-5 group-hover:scale-110 group-hover:bg-rose-100 transition-all shadow-inner">
+                        <span class="material-symbols-outlined text-3xl">qr_code_scanner</span>
                     </div>
-                    <div class="text-left">
-                        <h2 class="text-base sm:text-lg font-extrabold text-slate-800 tracking-tight">Log Aktivitas</h2>
-                        <p class="text-[11px] text-slate-400 font-medium mt-0.5">Disinkronkan ke Firebase</p>
+                    <h2 class="text-xl sm:text-2xl font-extrabold text-slate-800 tracking-tight mb-2">Verifikasi Kehadiran</h2>
+                    <p class="text-xs sm:text-sm text-slate-400 font-medium mb-8 max-w-sm leading-relaxed">Posisikan QR Code kelas tepat di tengah area pemindaian untuk mencatat kehadiran secara otomatis.</p>
+                    
+                    <div class="relative w-full max-w-sm">
+                        <div class="absolute -inset-1 bg-gradient-to-r from-rose-500 to-pink-500 rounded-3xl blur opacity-20 group-hover:opacity-40 transition duration-700"></div>
+                        <div id="reader" class="relative w-full rounded-2xl overflow-hidden shadow-sm border-2 border-slate-100 bg-slate-50 z-10"></div>
+                    </div>
+                    
+                    <div class="mt-8 w-full max-w-sm">
+                        <div id="hasil" class="flex items-center justify-center gap-2 text-sm font-bold text-slate-500 bg-slate-50 px-6 py-4 rounded-2xl border border-slate-200 transition-all shadow-sm">
+                            <span class="material-symbols-outlined text-base animate-pulse">flip_camera_ios</span>
+                            Menunggu scan...
+                        </div>
                     </div>
                 </div>
-                <!-- Ikon Cloud Sync -->
-                <div class="p-2 bg-slate-50 rounded-xl text-slate-400 border border-slate-100 group-hover:text-blue-500 transition-colors">
-                    <span class="material-symbols-outlined text-sm">cloud_sync</span>
+
+                <div class="lg:col-span-5 bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-blue-500/10 hover:border-blue-200 transition-all duration-300 p-6 sm:p-7 flex flex-col group">
+                    <div class="flex items-center justify-between mb-6 pb-5 border-b border-slate-100">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 group-hover:bg-blue-100 transition-all shadow-inner">
+                                <span class="material-symbols-outlined text-2xl">history</span>
+                            </div>
+                            <div class="text-left">
+                                <h2 class="text-base sm:text-lg font-extrabold text-slate-800 tracking-tight">Log Aktivitas</h2>
+                                <p class="text-[11px] text-slate-400 font-medium mt-0.5">Disinkronkan ke Firebase</p>
+                            </div>
+                        </div>
+                        <div class="p-2 bg-slate-50 rounded-xl text-slate-400 border border-slate-100 group-hover:text-blue-500 transition-colors">
+                            <span class="material-symbols-outlined text-sm">cloud_sync</span>
+                        </div>
+                    </div>
+                    
+                    <div id="listRiwayatAbsensi" class="space-y-3 flex-grow max-h-[450px] overflow-y-auto pr-2 custom-scrollbar"></div>
                 </div>
-            </div>
-            
-            <!-- Tempat list absensi akan dirender -->
-            <div id="listRiwayatAbsensi" class="space-y-3 flex-grow max-h-[450px] overflow-y-auto pr-2 custom-scrollbar">
-                <!-- Tampilan akan diisi oleh JavaScript -->
             </div>
         </div>
-    </div>
-</div>
 
     </main>
 
@@ -684,7 +652,7 @@
         </div>
     </section>
 
-    <!-- FORM INPUT NILAI UMMI (MODAL BARU) -->
+    <!-- FORM INPUT NILAI UMMI -->
     <div id="modalPenilaianUmmi" class="hidden fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm transition-all duration-300">
         <div class="w-full max-w-sm bg-white rounded-3xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden animate-modal">
             <div class="bg-gradient-to-r from-fuchsia-600 to-purple-600 p-4 text-white flex items-center justify-between">
@@ -710,21 +678,21 @@
         </div>
     </div>
     
+    <!-- MODAL PERINGATAN -->
     <div id="modalPeringatan" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center hidden p-4 transition-all duration-300">
         <div class="bg-white w-full max-w-sm rounded-3xl p-6 flex flex-col items-center text-center shadow-2xl anim-fade-up">
             <div class="w-16 h-16 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mb-4 shadow-inner">
                 <span class="material-symbols-outlined text-4xl">info</span>
             </div>
-        
             <h4 class="text-lg font-extrabold text-slate-800 mb-2">Informasi</h4>
             <p id="teksPeringatan" class="text-sm text-slate-500 font-medium mb-6">Pesan peringatan akan muncul di sini.</p>
-        
             <button onclick="tutupPeringatan()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl transition-all active:scale-95">
-            Mengerti
-        </button>
+                Mengerti
+            </button>
+        </div>
     </div>
-</div>
 
+    <!-- SCRIPT LOGIKA HALAMAN -->
     <script>
         document.addEventListener("DOMContentLoaded", function() {
             const containerJuz = document.getElementById('gridContainerJuz');
@@ -796,270 +764,207 @@
             }
         });
 
-// ==========================================================
-// FITUR SCANNER & FIREBASE ABSENSI
-// ==========================================================
-let html5QrcodeScanner;
-// Salin URL Google Script milikmu di sini
-const scriptURLAbsen = 'https://script.google.com/macros/s/AKfycbzRY0tcV6SnDy_ESEyBeE4PwoY9GVmyAg4Omu5M43WtK0_XvmCuQqS-zQqlQ7NIMeGWow/exec';
+        // ==========================================================
+        // FITUR SCANNER & FIREBASE ABSENSI
+        // ==========================================================
+        let html5QrcodeScanner;
+        const scriptURLAbsen = 'https://script.google.com/macros/s/AKfycbzRY0tcV6SnDy_ESEyBeE4PwoY9GVmyAg4Omu5M43WtK0_XvmCuQqS-zQqlQ7NIMeGWow/exec';
 
-function bukaMenuAbsensi() {
-    // 1. Paksa sembunyikan SEMUA halaman yang ada di website
-    document.querySelectorAll('.page-view').forEach(function(halaman) {
-        halaman.classList.add('hidden');
-    });
-    
-    // 2. Munculkan HANYA halaman Absensi secara manual
-    document.getElementById('viewAbsensi').classList.remove('hidden');
-    
-    renderRiwayatAbsensi();
-
-    setTimeout(() => {
-        if (!html5QrcodeScanner) {
-            html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: {width: 250, height: 250} }, false);
-            html5QrcodeScanner.render(onScanSuccess, onScanFailure);
-        }
-    }, 300);
-}
-
-function tutupMenuAbsensi() {
-    // 1. Wajib paksa sembunyikan halaman Absensi terlebih dahulu!
-    document.getElementById('viewAbsensi').classList.add('hidden');
-    
-    // 2. Baru panggil fungsi navigasi bawaan untuk memunculkan Dashboard
-    if(typeof navigateTo === 'function') {
-        navigateTo('viewDashboard');
-    } else {
-        document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden'));
-        document.getElementById('viewDashboard').classList.remove('hidden');
-    }
-    
-    // Matikan kamera
-    if (html5QrcodeScanner) {
-        html5QrcodeScanner.clear().then(() => html5QrcodeScanner = null);
-    }
-    
-    // Reset pesan
-    document.getElementById('hasil').innerHTML = "Menunggu scan...";
-    document.getElementById('hasil').className = "text-sm font-bold text-slate-500 bg-slate-50 px-6 py-3.5 rounded-xl border border-slate-200";
-}
-
-function renderRiwayatAbsensi() {
-    let container = document.getElementById('listRiwayatAbsensi');
-    
-    // Jika belum ada data absensi
-    if (!santriAktif || !santriAktif.absensi || santriAktif.absensi.length === 0) {
-        container.innerHTML = `
-        <div class="flex flex-col items-center justify-center h-full opacity-60 mt-12 mb-8">
-            <div class="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-3 border border-slate-100">
-                <span class="material-symbols-outlined text-4xl text-slate-300">inbox</span>
-            </div>
-            <p class="text-xs font-semibold text-slate-400 text-center leading-relaxed">Belum ada rekaman kehadiran.<br>Silakan arahkan QR Code ke kamera.</p>
-        </div>`;
-        return;
-    }
-    // ... sisa kode di bawahnya biarkan saja
-
-    // 1. Ambil data role yang sedang login dari memori lokal
-    const currentRole = localStorage.getItem("role"); 
-
-    let html = '';
-    
-    // Looping mundur (data terbaru di atas)
-    for (let i = santriAktif.absensi.length - 1; i >= 0; i--) {
-        let item = santriAktif.absensi[i];
-        
-        // 2. Logika Hak Akses Tombol Hapus
-        let tombolHapus = '';
-        if (currentRole === "admin" || currentRole === "guru") {
-            // Jika yang login admin/guru, tombol hapus disertakan
-            tombolHapus = `
-            <button onclick="hapusDataAbsen(${i})" class="w-8 h-8 rounded-xl bg-rose-50 border border-rose-100 text-rose-600 hover:bg-rose-100 flex items-center justify-center transition active:scale-95 flex-shrink-0" title="Hapus Data">
-                <span class="material-symbols-outlined text-sm">delete</span>
-            </button>`;
-        }
-        
-        // 3. Render HTML
-        html += `
-        <div class="flex items-center justify-between p-3.5 bg-slate-50 border border-slate-100 rounded-2xl mb-2 hover:border-slate-200 transition">
-            <div class="flex items-center gap-3">
-                <div class="w-9 h-9 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center flex-shrink-0">
-                    <span class="material-symbols-outlined text-base">check_circle</span>
-                </div>
-                <div>
-                    <p class="text-xs font-extrabold text-slate-700">${item.waktu}</p>
-                    <p class="text-[10px] text-slate-400 font-medium">Data Scan: ${item.qrData}</p>
-                </div>
-            </div>
+        function bukaMenuAbsensi() {
+            document.querySelectorAll('.page-view').forEach(function(halaman) {
+                halaman.classList.add('hidden');
+            });
+            document.getElementById('viewAbsensi').classList.remove('hidden');
             
-            ${tombolHapus}
-        </div>`;
-    }
-    
-    container.innerHTML = html;
-}
-
-// Menambahkan fungsi hapus yang sebelumnya hilang
-window.hapusDataAbsen = function(indexAkanDihapus) {
-    let konfirmasi = confirm("Yakin ingin menghapus riwayat absen ini?");
-    
-    if (konfirmasi) {
-        santriAktif.absensi.splice(indexAkanDihapus, 1);
-        
-        db.collection("database_hafalan").doc(santriAktif.nama).set({
-            absensi: santriAktif.absensi
-        }, { merge: true })
-        .then(() => {
             renderRiwayatAbsensi();
-            console.log("Data absensi berhasil dihapus dari Firebase");
-        })
-        .catch((error) => {
-            console.error("Gagal menghapus di Firebase:", error);
-            alert("Terjadi kesalahan saat menghapus data.");
-        });
-    }
-};
 
-function onScanSuccess(decodedText) {
-    if (html5QrcodeScanner) html5QrcodeScanner.pause(true);
-    
-    // ==========================================
-    // EFEK SUARA & GETARAN (HAPTIC FEEDBACK)
-    // ==========================================
-    if (navigator.vibrate) navigator.vibrate(200); // HP akan bergetar 0.2 detik
-    
-    try {
-        let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        let oscillator = audioCtx.createOscillator();
-        let gainNode = audioCtx.createGain();
-        
-        oscillator.type = 'sine'; 
-        oscillator.frequency.setValueAtTime(800, audioCtx.currentTime); // Nada 800Hz (Bip kasir)
-        gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime); // Volume 10% agar tidak bising
-        
-        oscillator.connect(gainNode);
-        gainNode.connect(audioCtx.destination);
-        oscillator.start();
-        setTimeout(() => { oscillator.stop(); audioCtx.close(); }, 150); // Bunyi selama 150ms
-    } catch(e) { console.log("Audio API tidak didukung"); }
-    // ==========================================
-
-    let divHasil = document.getElementById('hasil');
-    // ... (sisa kodemu di bawahnya biarkan saja)
-
-    // ==========================================================
-    // 1. FILTER KEAMANAN & ADAPTASI QR CODE MULTI-FUNGSI
-    // ==========================================================
-    let namaYangDiScan = decodedText;
-    let qrDataAman = decodedText; // Data yang akan disimpan ke Excel
-    
-    // Jika santri menggunakan QR Code Login (multi-fungsi) untuk absen
-    if (decodedText.startsWith("LOGIN|")) {
-        let pecahan = decodedText.split('|');
-        
-        // Cek apakah formatnya memuat 5 bagian: LOGIN|email|password|role|NamaSantri
-        if (pecahan.length >= 5) {
-            namaYangDiScan = pecahan[4]; // Ambil nama santri dari urutan ke-5
-            
-            // SANGAT PENTING: Ganti teks yang akan disimpan agar PASSWORD tidak bocor ke Excel!
-            qrDataAman = "QR Terpadu (Aman)"; 
-        } else {
-            divHasil.innerHTML = "❌ Ditolak: QR Login belum dilengkapi Nama!";
-            divHasil.className = "text-sm font-bold text-rose-700 bg-rose-50 px-6 py-3.5 rounded-xl border border-rose-200 shadow-sm";
-            setTimeout(() => { if (html5QrcodeScanner) html5QrcodeScanner.resume(); divHasil.innerHTML = "Menunggu scan..."; divHasil.className = "text-sm font-bold text-slate-500 bg-slate-50 px-6 py-3.5 rounded-xl border border-slate-200 transition-all"; }, 2500);
-            return;
+            setTimeout(() => {
+                if (!html5QrcodeScanner) {
+                    html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: {width: 250, height: 250} }, false);
+                    html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+                }
+            }, 300);
         }
-    }
 
-    // Mencocokkan nama dengan database Firebase
-    let siswaDitemukan = null;
-    if (typeof dataSantri !== 'undefined') {
-        siswaDitemukan = dataSantri.find(s => 
-            (s.nama && s.nama.toLowerCase() === namaYangDiScan.toLowerCase()) || 
-            (s.id && s.id.toLowerCase() === namaYangDiScan.toLowerCase())
-        );
-    }
+        function tutupMenuAbsensi() {
+            document.getElementById('viewAbsensi').classList.add('hidden');
+            
+            if(typeof navigateTo === 'function') {
+                navigateTo('viewDashboard');
+            } else {
+                document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden'));
+                document.getElementById('viewDashboard').classList.remove('hidden');
+            }
+            
+            if (html5QrcodeScanner) {
+                html5QrcodeScanner.clear().then(() => html5QrcodeScanner = null);
+            }
+            
+            document.getElementById('hasil').innerHTML = "Menunggu scan...";
+            document.getElementById('hasil').className = "text-sm font-bold text-slate-500 bg-slate-50 px-6 py-3.5 rounded-xl border border-slate-200";
+        }
 
-    if (!siswaDitemukan) {
-        divHasil.innerHTML = "❌ Ditolak: Santri tidak terdaftar!";
-        divHasil.className = "text-sm font-bold text-rose-700 bg-rose-50 px-6 py-3.5 rounded-xl border border-rose-200 shadow-sm";
-        
-        setTimeout(() => {
-            if (html5QrcodeScanner) html5QrcodeScanner.resume();
-            divHasil.innerHTML = "Menunggu scan berikutnya...";
-            divHasil.className = "text-sm font-bold text-slate-500 bg-slate-50 px-6 py-3.5 rounded-xl border border-slate-200 transition-all";
-        }, 2000);
-        return; 
-    }
+        function renderRiwayatAbsensi() {
+            let container = document.getElementById('listRiwayatAbsensi');
+            
+            if (!santriAktif || !santriAktif.absensi || santriAktif.absensi.length === 0) {
+                container.innerHTML = `
+                <div class="flex flex-col items-center justify-center h-full opacity-60 mt-12 mb-8">
+                    <div class="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-3 border border-slate-100">
+                        <span class="material-symbols-outlined text-4xl text-slate-300">inbox</span>
+                    </div>
+                    <p class="text-xs font-semibold text-slate-400 text-center leading-relaxed">Belum ada rekaman kehadiran.<br>Silakan arahkan QR Code ke kamera.</p>
+                </div>`;
+                return;
+            }
 
-    // ==========================================================
-    // 2. FILTER ANTI-SPAM: CEK APAKAH SUDAH ABSEN HARI INI
-    // ==========================================================
-    let dateObj = new Date();
-    let waktuLengkap = dateObj.toLocaleString("id-ID"); 
-    let tanggalHariIni = dateObj.toLocaleDateString("id-ID"); 
+            const currentRole = localStorage.getItem("role"); 
+            let html = '';
+            
+            for (let i = santriAktif.absensi.length - 1; i >= 0; i--) {
+                let item = santriAktif.absensi[i];
+                let tombolHapus = '';
+                
+                if (currentRole === "admin" || currentRole === "guru") {
+                    tombolHapus = `
+                    <button onclick="hapusDataAbsen(${i})" class="w-8 h-8 rounded-xl bg-rose-50 border border-rose-100 text-rose-600 hover:bg-rose-100 flex items-center justify-center transition active:scale-95 flex-shrink-0" title="Hapus Data">
+                        <span class="material-symbols-outlined text-sm">delete</span>
+                    </button>`;
+                }
+                
+                html += `
+                <div class="flex items-center justify-between p-3.5 bg-slate-50 border border-slate-100 rounded-2xl mb-2 hover:border-slate-200 transition">
+                    <div class="flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center flex-shrink-0">
+                            <span class="material-symbols-outlined text-base">check_circle</span>
+                        </div>
+                        <div>
+                            <p class="text-xs font-extrabold text-slate-700">${item.waktu}</p>
+                            <p class="text-[10px] text-slate-400 font-medium">Data Scan: ${item.qrData}</p>
+                        </div>
+                    </div>
+                    ${tombolHapus}
+                </div>`;
+            }
+            container.innerHTML = html;
+        }
 
-    let riwayatAbsen = siswaDitemukan.absensi || [];
-    let sudahAbsen = riwayatAbsen.some(absen => absen.waktu && absen.waktu.includes(tanggalHariIni));
+        window.hapusDataAbsen = function(indexAkanDihapus) {
+            let konfirmasi = confirm("Yakin ingin menghapus riwayat absen ini?");
+            if (konfirmasi) {
+                santriAktif.absensi.splice(indexAkanDihapus, 1);
+                
+                db.collection("database_hafalan").doc(santriAktif.nama).set({
+                    absensi: santriAktif.absensi
+                }, { merge: true })
+                .then(() => {
+                    renderRiwayatAbsensi();
+                    console.log("Data absensi berhasil dihapus dari Firebase");
+                })
+                .catch((error) => {
+                    console.error("Gagal menghapus di Firebase:", error);
+                    alert("Terjadi kesalahan saat menghapus data.");
+                });
+            }
+        };
 
-    if (sudahAbsen) {
-        divHasil.innerHTML = `⚠️ ${siswaDitemukan.nama} sudah absen hari ini!`;
-        divHasil.className = "text-sm font-bold text-amber-700 bg-amber-50 px-6 py-3.5 rounded-xl border border-amber-200 shadow-sm";
-        
-        setTimeout(() => {
-            if (html5QrcodeScanner) html5QrcodeScanner.resume();
-            divHasil.innerHTML = "Menunggu scan berikutnya...";
-            divHasil.className = "text-sm font-bold text-slate-500 bg-slate-50 px-6 py-3.5 rounded-xl border border-slate-200 transition-all";
-        }, 2500);
-        return; 
-    }
+        function onScanSuccess(decodedText) {
+            if (html5QrcodeScanner) html5QrcodeScanner.pause(true);
+            
+            // Haptic Feedback Saja
+            if (navigator.vibrate) { navigator.vibrate(200); }
 
-    // ==========================================================
-    // 3. JIKA TERDAFTAR & BELUM ABSEN, SIMPAN
-    // ==========================================================
-    santriAktif = siswaDitemukan;
-    
-    divHasil.innerHTML = "⏳ Sinkronisasi ke Cloud...";
-    divHasil.className = "text-sm font-bold text-blue-700 bg-blue-50 px-6 py-3.5 rounded-xl border border-blue-200 shadow-sm";
+            let divHasil = document.getElementById('hasil');
+            let namaYangDiScan = decodedText;
+            let qrDataAman = decodedText; 
+            
+            if (decodedText.startsWith("LOGIN|")) {
+                let pecahan = decodedText.split('|');
+                if (pecahan.length >= 5) {
+                    namaYangDiScan = pecahan[4]; 
+                    qrDataAman = "QR Terpadu (Aman)"; 
+                } else {
+                    divHasil.innerHTML = "❌ Ditolak: QR Login belum dilengkapi Nama!";
+                    divHasil.className = "text-sm font-bold text-rose-700 bg-rose-50 px-6 py-3.5 rounded-xl border border-rose-200 shadow-sm";
+                    setTimeout(() => { if (html5QrcodeScanner) html5QrcodeScanner.resume(); divHasil.innerHTML = "Menunggu scan..."; divHasil.className = "text-sm font-bold text-slate-500 bg-slate-50 px-6 py-3.5 rounded-xl border border-slate-200 transition-all"; }, 2500);
+                    return;
+                }
+            }
 
-    if (!santriAktif.absensi) santriAktif.absensi = [];
-    
-    // MENGGUNAKAN qrDataAman (Bukan decodedText) AGAR PASSWORD TIDAK MASUK DATABASE
-    santriAktif.absensi.push({ waktu: waktuLengkap, qrData: qrDataAman });
+            let siswaDitemukan = null;
+            if (typeof dataSantri !== 'undefined') {
+                siswaDitemukan = dataSantri.find(s => 
+                    (s.nama && s.nama.toLowerCase() === namaYangDiScan.toLowerCase()) || 
+                    (s.id && s.id.toLowerCase() === namaYangDiScan.toLowerCase())
+                );
+            }
 
-    db.collection("database_hafalan").doc(santriAktif.nama).set({
-        absensi: santriAktif.absensi
-    }, { merge: true })
-    .then(() => {
-        renderRiwayatAbsensi();
-        
-        // MENGIRIM qrDataAman KE GOOGLE SPREADSHEET
-        let urlTarget = `${scriptURLAbsen}?nama=${encodeURIComponent(santriAktif.nama)}&waktu=${encodeURIComponent(waktuLengkap)}&qr_data=${encodeURIComponent(qrDataAman)}`;
-        
-        fetch(urlTarget, { method: 'GET', mode: 'no-cors' })
-            .catch(e => console.error("Gagal backup Excel:", e));
+            if (!siswaDitemukan) {
+                divHasil.innerHTML = "❌ Ditolak: Santri tidak terdaftar!";
+                divHasil.className = "text-sm font-bold text-rose-700 bg-rose-50 px-6 py-3.5 rounded-xl border border-rose-200 shadow-sm";
+                setTimeout(() => {
+                    if (html5QrcodeScanner) html5QrcodeScanner.resume();
+                    divHasil.innerHTML = "Menunggu scan berikutnya...";
+                    divHasil.className = "text-sm font-bold text-slate-500 bg-slate-50 px-6 py-3.5 rounded-xl border border-slate-200 transition-all";
+                }, 2000);
+                return; 
+            }
 
-        divHasil.innerHTML = "✅ Berhasil Disimpan: " + santriAktif.nama;
-        divHasil.className = "text-sm font-bold text-emerald-700 bg-emerald-50 px-6 py-3.5 rounded-xl border border-emerald-200 shadow-sm";
-        
-        setTimeout(() => {
-            if (html5QrcodeScanner) html5QrcodeScanner.resume();
-            divHasil.innerHTML = "Menunggu scan berikutnya...";
-            divHasil.className = "text-sm font-bold text-slate-500 bg-slate-50 px-6 py-3.5 rounded-xl border border-slate-200 transition-all";
-        }, 2000);
-    })
-    .catch((error) => {
-        console.error("Gagal Firebase:", error);
-        divHasil.innerHTML = "❌ Gagal Terhubung ke Cloud";
-        divHasil.className = "text-sm font-bold text-rose-700 bg-rose-50 px-6 py-3.5 rounded-xl border border-rose-200";
-        setTimeout(() => { if(html5QrcodeScanner) html5QrcodeScanner.resume(); }, 2000);
-    });
-}
+            let dateObj = new Date();
+            let waktuLengkap = dateObj.toLocaleString("id-ID"); 
+            let tanggalHariIni = dateObj.toLocaleDateString("id-ID"); 
 
-function onScanFailure(error) { /* Abaikan */ }
+            let riwayatAbsen = siswaDitemukan.absensi || [];
+            let sudahAbsen = riwayatAbsen.some(absen => absen.waktu && absen.waktu.includes(tanggalHariIni));
 
+            if (sudahAbsen) {
+                divHasil.innerHTML = `⚠️ ${siswaDitemukan.nama} sudah absen hari ini!`;
+                divHasil.className = "text-sm font-bold text-amber-700 bg-amber-50 px-6 py-3.5 rounded-xl border border-amber-200 shadow-sm";
+                setTimeout(() => {
+                    if (html5QrcodeScanner) html5QrcodeScanner.resume();
+                    divHasil.innerHTML = "Menunggu scan berikutnya...";
+                    divHasil.className = "text-sm font-bold text-slate-500 bg-slate-50 px-6 py-3.5 rounded-xl border border-slate-200 transition-all";
+                }, 2500);
+                return; 
+            }
+
+            santriAktif = siswaDitemukan;
+            divHasil.innerHTML = "⏳ Sinkronisasi ke Cloud...";
+            divHasil.className = "text-sm font-bold text-blue-700 bg-blue-50 px-6 py-3.5 rounded-xl border border-blue-200 shadow-sm";
+
+            if (!santriAktif.absensi) santriAktif.absensi = [];
+            santriAktif.absensi.push({ waktu: waktuLengkap, qrData: qrDataAman });
+
+            db.collection("database_hafalan").doc(santriAktif.nama).set({
+                absensi: santriAktif.absensi
+            }, { merge: true })
+            .then(() => {
+                renderRiwayatAbsensi();
+                
+                let urlTarget = `${scriptURLAbsen}?nama=${encodeURIComponent(santriAktif.nama)}&waktu=${encodeURIComponent(waktuLengkap)}&qr_data=${encodeURIComponent(qrDataAman)}`;
+                fetch(urlTarget, { method: 'GET', mode: 'no-cors' }).catch(e => console.error("Gagal backup Excel:", e));
+
+                divHasil.innerHTML = "✅ Berhasil Disimpan: " + santriAktif.nama;
+                divHasil.className = "text-sm font-bold text-emerald-700 bg-emerald-50 px-6 py-3.5 rounded-xl border border-emerald-200 shadow-sm";
+                
+                setTimeout(() => {
+                    if (html5QrcodeScanner) html5QrcodeScanner.resume();
+                    divHasil.innerHTML = "Menunggu scan berikutnya...";
+                    divHasil.className = "text-sm font-bold text-slate-500 bg-slate-50 px-6 py-3.5 rounded-xl border border-slate-200 transition-all";
+                }, 2000);
+            })
+            .catch((error) => {
+                console.error("Gagal Firebase:", error);
+                divHasil.innerHTML = "❌ Gagal Terhubung ke Cloud";
+                divHasil.className = "text-sm font-bold text-rose-700 bg-rose-50 px-6 py-3.5 rounded-xl border border-rose-200";
+                setTimeout(() => { if(html5QrcodeScanner) html5QrcodeScanner.resume(); }, 2000);
+            });
+        }
+
+        function onScanFailure(error) { /* Abaikan */ }
     </script>
     
+    <!-- Link Berkas Eksternal -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
@@ -1078,16 +983,15 @@ function onScanFailure(error) { /* Abaikan */ }
     <script src="js/popup.js"></script>
     <script src="js/role.js"></script>
 
-<script>
-    // Mendaftarkan Service Worker PWA
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('./sw.js').then(reg => {
-                console.log('PWA Siap! Service Worker aktif.');
-            }).catch(err => console.error('PWA Gagal:', err));
-        });
-    }
-</script>
-
+    <!-- Registrasi Service Worker PWA -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').then(reg => {
+                    console.log('PWA Siap! Service Worker aktif.');
+                }).catch(err => console.error('PWA Gagal:', err));
+            });
+        }
+    </script>
 </body>
 </html>

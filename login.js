@@ -23,46 +23,39 @@ async function login() {
     const passwordInput = document.getElementById("password").value.trim();
 
     if (!emailInput || !passwordInput) {
-        tampilkanPeringatan ("Email dan password tidak boleh kosong!");
+        tampilkanPeringatan("Email dan password tidak boleh kosong!");
         return;
     }
 
-    // Indikator loading tombol
     const btn = document.querySelector("button"); 
     const originalText = btn.innerText;
     btn.innerText = "Memproses...";
     btn.disabled = true;
 
     try {
-        // 1. Verifikasi akun ke Firebase Authentication
         const userCredential = await auth.signInWithEmailAndPassword(emailInput, passwordInput);
         const user = userCredential.user;
 
-        // 2. Ambil data profil tambahan (nama & role) dari Firestore
         const userDoc = await db.collection("users").doc(user.uid).get();
 
         if (userDoc.exists) {
             const userData = userDoc.data();
 
-            // Set data ke LocalStorage untuk dipakai index.js
             localStorage.setItem("login", "true");
             localStorage.setItem("nama", userData.nama || "Tanpa Nama");
             localStorage.setItem("role", userData.role || "murid");
             localStorage.setItem("username", emailInput);
 
-            // Arahkan ke halaman utama monitoring
             window.location.href = "index.html";
         } else {
-            // Jika akun terdaftar di auth tapi data role tidak ditemukan di firestore database
-            tampilkanPeringatan ("Data profil akun Anda belum terkonfigurasi di sistem Firestore.");
+            tampilkanPeringatan("Data profil akun Anda belum terkonfigurasi di sistem Firestore.");
             btn.innerText = originalText;
             btn.disabled = false;
         }
 
-} catch (error) {
+    } catch (error) {
         console.error("Error Login:", error);
         
-        // Pemetaan error sederhana agar user mengerti masalahnya
         let pesanError = "Gagal masuk. Periksa kembali jaringan internet Anda.";
         if (error.code === "auth/user-not-found" || error.code === "auth/wrong-password") {
             pesanError = "Email atau Password salah! Periksa kembali ketikan Anda.";
@@ -70,7 +63,6 @@ async function login() {
             pesanError = "Format penulisan email salah (Contoh: nama@gmail.com).";
         }
         
-        // BARIS YANG DIUBAH: Menggunakan popup kustom, bukan alert browser lagi
         tampilkanPeringatan(pesanError);
         
         btn.innerText = originalText;
@@ -102,78 +94,122 @@ function tutupPeringatan() {
 }
 
 // ==========================================================
-// FITUR LOGIN MENGGUNAKAN QR CODE (FIREBASE AUTH)
+// FITUR SCANNER QR CODE LOGIN
 // ==========================================================
-let loginQrcodeScanner;
+let loginScanner = null;
 
 function bukaLoginQR() {
-    document.getElementById('areaLoginQR').classList.remove('hidden');
-    
-    // Beri jeda sedikit agar modal muncul sebelum merender kamera
+    const areaQR = document.getElementById('areaLoginQR');
+    if (areaQR) {
+        areaQR.classList.remove('hidden');
+    }
+
     setTimeout(() => {
-        if (!loginQrcodeScanner) {
-            loginQrcodeScanner = new Html5QrcodeScanner("loginReader", { fps: 10, qrbox: {width: 250, height: 250} }, false);
-            loginQrcodeScanner.render(onScanLoginSuccess, onScanLoginFailure);
+        if (!loginScanner) {
+            loginScanner = new Html5QrcodeScanner(
+                "loginReader", 
+                { fps: 10, qrbox: { width: 250, height: 250 } }, 
+                false
+            );
+            // Fungsi onScanSuccess dipanggil di sini
+            loginScanner.render(onScanSuccess, onScanFailure);
         }
     }, 300);
 }
 
 function tutupLoginQR() {
-    document.getElementById('areaLoginQR').classList.add('hidden');
-    if (loginQrcodeScanner) {
-        loginQrcodeScanner.clear().then(() => loginQrcodeScanner = null);
+    const areaQR = document.getElementById('areaLoginQR');
+    if (areaQR) {
+        areaQR.classList.add('hidden');
     }
-    document.getElementById('statusLoginQR').innerText = "Menunggu scan...";
-    document.getElementById('statusLoginQR').className = "w-full text-sm font-bold text-slate-500 mb-5";
+
+    if (loginScanner) {
+        loginScanner.clear().then(() => {
+            loginScanner = null;
+        }).catch(error => console.error("Gagal mematikan kamera:", error));
+    }
+
+    const statusDiv = document.getElementById('statusLoginQR');
+    if (statusDiv) {
+        statusDiv.innerHTML = '<span class="material-symbols-outlined text-base animate-pulse">flip_camera_ios</span> Menunggu scan...';
+        statusDiv.className = "text-sm font-bold text-slate-500 flex items-center justify-center gap-2 transition-all";
+    }
 }
 
-function onScanLoginSuccess(decodedText) {
-    if (loginQrcodeScanner) loginQrcodeScanner.pause(true);
+// MENGUBAH FUNGSI INI MENJADI ASYNC AGAR BISA MEMBACA DATABASE
+async function onScanSuccess(decodedText) {
+    if (loginScanner) loginScanner.pause(true);
+    if (navigator.vibrate) navigator.vibrate(200);
+
+    const statusDiv = document.getElementById('statusLoginQR');
     
-    let statusDiv = document.getElementById('statusLoginQR');
-
-    // Memecah teks QR Code (Format: LOGIN|email|password)
-    let dataLogin = decodedText.split('|');
-
-    if (dataLogin.length >= 3 && dataLogin[0] === 'LOGIN') {
-        let emailAkun = dataLogin[1];
-        let passwordAkun = dataLogin[2];
+    if (decodedText.startsWith("LOGIN|")) {
+        statusDiv.innerHTML = "⏳ Sedang memverifikasi...";
+        statusDiv.className = "text-sm font-bold text-blue-600 flex items-center justify-center gap-2 transition-all";
         
-        statusDiv.innerHTML = "✅ QR Valid! Sedang memproses...";
-        statusDiv.className = "w-full text-sm font-bold text-emerald-600 mb-5 animate-pulse";
+        let data = decodedText.split("|");
+        
+        if (data.length >= 4) {
+            let userEmail = data[1];
+            let userPass = data[2];
 
-        setTimeout(() => {
-            tutupLoginQR();
-            
-            // =======================================================
-            // ROBOT PENGETIK SESUAI KODE ASLI
-            // =======================================================
-            
-            // 1. Masukkan email ke input dengan id "username"
-            document.getElementById('username').value = emailAkun;
+            try {
+                // 1. Verifikasi ke Firebase Auth
+                const userCredential = await auth.signInWithEmailAndPassword(userEmail, userPass);
+                const user = userCredential.user;
 
-            // 2. Masukkan password ke input dengan id "password"
-            document.getElementById('password').value = passwordAkun;
+                // 2. Ambil data dari Firestore (KODE YANG SEBELUMNYA HILANG)
+                const userDoc = await db.collection("users").doc(user.uid).get();
 
-            // 3. Langsung eksekusi fungsi login() bawaan aplikasimu!
-            // Sistem akan otomatis mengambil data Firestore dan pindah halaman
-            if (typeof login === 'function') {
-                login();
-            } else {
-                console.error("Fungsi login() tidak ditemukan!");
+                if (userDoc.exists) {
+                    const userData = userDoc.data();
+
+                    // 3. Simpan ke LocalStorage agar tidak ditendang oleh index.html
+                    localStorage.setItem("login", "true");
+                    localStorage.setItem("nama", userData.nama || "Tanpa Nama");
+                    localStorage.setItem("role", userData.role || "murid");
+                    localStorage.setItem("username", userEmail);
+
+                    statusDiv.innerHTML = "✅ Login Berhasil!";
+                    statusDiv.className = "text-sm font-bold text-emerald-600 flex items-center justify-center gap-2 transition-all";
+                    
+                    // 4. Arahkan ke dashboard dengan aman
+                    setTimeout(() => {
+                        window.location.href = "index.html";
+                    }, 1000);
+
+                } else {
+                    statusDiv.innerHTML = "❌ Data profil tidak ditemukan di sistem!";
+                    statusDiv.className = "text-sm font-bold text-rose-600 flex items-center justify-center gap-2 transition-all";
+                    resetKameraQR(statusDiv);
+                }
+
+            } catch (error) {
+                statusDiv.innerHTML = "❌ Gagal: " + error.message;
+                statusDiv.className = "text-sm font-bold text-rose-600 flex items-center justify-center gap-2 transition-all";
+                resetKameraQR(statusDiv);
             }
-
-        }, 500);
-        
+        } else {
+            statusDiv.innerHTML = "❌ Format QR Code tidak valid!";
+            statusDiv.className = "text-sm font-bold text-rose-600 flex items-center justify-center gap-2 transition-all";
+            resetKameraQR(statusDiv);
+        }
     } else {
-        statusDiv.innerHTML = "❌ Format QR Code tidak valid!";
-        statusDiv.className = "w-full text-sm font-bold text-rose-600 mb-5";
-        
-        setTimeout(() => {
-            if(loginQrcodeScanner) loginQrcodeScanner.resume();
-            statusDiv.innerHTML = "Silakan scan QR Code Login Anda";
-            statusDiv.className = "w-full text-sm font-bold text-slate-500 mb-5";
-        }, 2000);
+        statusDiv.innerHTML = "❌ Ini bukan QR Code Login!";
+        statusDiv.className = "text-sm font-bold text-amber-600 flex items-center justify-center gap-2 transition-all";
+        resetKameraQR(statusDiv);
     }
 }
-function onScanLoginFailure(error) { /* Abaikan */ }
+
+function onScanFailure(error) {
+    // Abaikan error saat sedang mencari QR
+}
+
+// Fungsi pembantu agar kode tidak berulang
+function resetKameraQR(statusDiv) {
+    setTimeout(() => {
+        if (loginScanner) loginScanner.resume();
+        statusDiv.innerHTML = '<span class="material-symbols-outlined text-base animate-pulse">flip_camera_ios</span> Menunggu scan...';
+        statusDiv.className = "text-sm font-bold text-slate-500 flex items-center justify-center gap-2 transition-all";
+    }, 2500);
+}
