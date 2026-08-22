@@ -84,22 +84,54 @@
     </button>
 </div>
 
-<!-- AREA KAMERA SCANNER LOGIN (Disembunyikan di awal) -->
-<div id="areaLoginQR" class="hidden fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-slate-900/90 backdrop-blur-sm p-4 transition-all">
-    <div class="bg-white p-6 rounded-3xl w-full max-w-sm flex flex-col items-center text-center shadow-2xl animate-modal">
-        <div class="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mb-4">
-            <span class="material-symbols-outlined text-2xl">qr_code_scanner</span>
+<!-- AREA KAMERA SCANNER LOGIN (UI Premium & Mendukung Scroll Landscape) -->
+<div id="areaLoginQR" class="hidden fixed inset-0 z-[9999] bg-slate-900/90 backdrop-blur-sm transition-all overflow-y-auto">
+    
+    <!-- Kontainer Pembungkus: Memastikan modal bisa di-scroll jika layar pendek (Landscape) -->
+    <div class="min-h-full flex items-center justify-center p-4 py-10">
+        
+        <div class="bg-white p-6 sm:p-8 rounded-3xl w-full max-w-sm flex flex-col items-center text-center shadow-2xl animate-modal relative">
+            
+            <!-- Badge Scanner Aktif Berkedip -->
+            <div class="absolute -top-3">
+                <span class="flex items-center gap-2 text-[10px] font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100 shadow-sm">
+                    <span class="relative flex h-2.5 w-2.5">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500"></span>
+                    </span>
+                    SCANNER AKTIF
+                </span>
+            </div>
+
+            <!-- Ikon Tengah -->
+            <div class="w-16 h-16 rounded-3xl bg-blue-50 text-blue-600 flex items-center justify-center mt-3 mb-4 shadow-inner">
+                <span class="material-symbols-outlined text-3xl">qr_code_scanner</span>
+            </div>
+            
+            <h3 class="text-xl font-extrabold text-slate-800 tracking-tight mb-2">Login Instan</h3>
+            <p class="text-xs text-slate-400 font-medium mb-6 leading-relaxed">Posisikan QR Code Anda di tengah layar untuk masuk secara otomatis.</p>
+            
+            <!-- Area Kamera dengan Efek Glow Belakang -->
+            <div class="relative w-full mb-6 group">
+                <!-- Ornamen Cahaya Pemindai -->
+                <div class="absolute -inset-1 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-3xl blur opacity-25 group-hover:opacity-40 transition duration-700"></div>
+                
+                <div id="loginReader" class="relative w-full rounded-2xl overflow-hidden shadow-sm border-2 border-slate-100 bg-slate-50 z-10"></div>
+            </div>
+            
+            <!-- Status Bar Hasil Scan -->
+            <div class="w-full bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 mb-6 shadow-sm flex items-center justify-center min-h-[50px]">
+                <div id="statusLoginQR" class="text-sm font-bold text-slate-500 flex items-center justify-center gap-2 transition-all">
+                    <span class="material-symbols-outlined text-base animate-pulse">flip_camera_ios</span>
+                    Menunggu scan...
+                </div>
+            </div>
+            
+            <button onclick="tutupLoginQR()" class="w-full flex items-center justify-center gap-2 px-4 py-3.5 bg-rose-50 text-rose-600 font-bold rounded-xl hover:bg-rose-100 transition active:scale-95 border border-rose-100">
+                <span class="material-symbols-outlined text-lg">close</span> Batalkan
+            </button>
         </div>
-        <h3 class="text-lg font-extrabold text-slate-800 mb-1">Login Instan</h3>
-        <p class="text-xs text-slate-500 font-medium mb-5">Arahkan QR Code akun Anda ke kamera</p>
         
-        <div id="loginReader" class="w-full rounded-2xl overflow-hidden border-2 border-slate-100 mb-4 bg-slate-50"></div>
-        
-        <div id="statusLoginQR" class="w-full text-sm font-bold text-slate-500 mb-5">Menunggu scan...</div>
-        
-        <button onclick="tutupLoginQR()" class="w-full px-4 py-3 bg-rose-50 text-rose-600 font-bold rounded-xl hover:bg-rose-100 transition active:scale-95">
-            Batal
-        </button>
     </div>
 </div>
 
