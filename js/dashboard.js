@@ -187,16 +187,17 @@ function renderProgressChart() {
         let riwayatHarian = [];
         let tanggalTerakhir = "";
 
-        // 1. Ambil nilai final per hari
+// 1. Ambil nilai final per hari (Dengan perbaikan pemisah tanggal Universal)
         riwayatAsli.forEach((item) => {
-            let tglOnly = item.waktu ? item.waktu.split(',')[0].trim() : "";
+            // Memastikan aman mau pakai koma ataupun spasi di device manapun
+            let tglOnly = item.waktu ? item.waktu.split(',')[0].split(' ')[0].trim() : "";
             if (tglOnly === tanggalTerakhir) riwayatHarian[riwayatHarian.length - 1] = item;
             else { riwayatHarian.push(item); tanggalTerakhir = tglOnly; }
         });
 
         // 2. Pecah datanya ke masing-masing array
         riwayatHarian.forEach((item) => {
-            let tglOnly = item.waktu ? item.waktu.split(',')[0].trim() : "";
+            let tglOnly = item.waktu ? item.waktu.split(',')[0].split(' ')[0].trim() : "";
             labelsTanggal.push(tglOnly);
             
             dHafalan.push(item.skor || 0);        cHafalan.push(item.capaian || '-');
