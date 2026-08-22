@@ -41,6 +41,12 @@
             word-wrap: break-word !important; overflow-wrap: break-word !important; word-break: break-word !important; white-space: normal !important; max-width: 100%;
         }
         .card-container-fix { overflow: hidden; display: flex; flex-direction: column; }
+
+        /* Scrollbar Khusus untuk Riwayat Absensi */
+        .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
     </style>
 </head>
 
@@ -547,48 +553,76 @@
             </div>
         </div>
 
-        <!-- ABSENSI QR CODE VIEW (DITAMBAHKAN DI SINI) -->
-        <!-- ABSENSI QR CODE VIEW -->
+       <!-- ABSENSI QR CODE VIEW (UI PREMIUM) -->
 <div id="viewAbsensi" class="page-view hidden space-y-6">
-    <div class="flex items-center gap-3">
-        <button onclick="tutupMenuAbsensi()" class="px-4 py-2.5 text-xs font-bold bg-white text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-100 transition active:scale-95 flex items-center gap-1.5 shadow-sm">
-            <span class="material-symbols-outlined text-sm">arrow_back</span> Dashboard
-        </button>
-        <div class="h-5 w-[1px] bg-slate-300"></div>
-        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Scanner Kehadiran</h3>
+    <!-- Header Sistem Absensi -->
+    <div class="flex items-center justify-between px-1">
+        <div class="flex items-center gap-3">
+            <button onclick="tutupMenuAbsensi()" class="px-4 py-2.5 text-xs font-bold bg-white text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all active:scale-95 flex items-center gap-1.5 shadow-sm group">
+                <span class="material-symbols-outlined text-sm group-hover:-translate-x-1 transition-transform">arrow_back</span> Kembali
+            </button>
+            <div class="h-5 w-[1px] bg-slate-200"></div>
+            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest hidden sm:block">Sistem Absensi</h3>
+        </div>
+        
+        <!-- Badge "Scanner Aktif" Berkedip -->
+        <span class="flex items-center gap-2 text-[10px] font-bold text-rose-600 bg-white px-3 py-1.5 rounded-full border border-rose-100 shadow-sm">
+            <span class="relative flex h-2.5 w-2.5">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
+            </span>
+            SCANNER AKTIF
+        </span>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 animate-entry">
-        <!-- Kolom Kiri: Scanner -->
-        <div class="bg-white rounded-3xl border border-slate-100 shadow-sm p-5 sm:p-6 card-container-fix flex flex-col items-center text-center">
-            <div class="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center mb-4">
-                <span class="material-symbols-outlined text-2xl">qr_code_scanner</span>
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-entry">
+        
+        <!-- Kolom Kiri: Scanner Area (Porsi Lebih Lebar) -->
+        <div class="lg:col-span-7 bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-rose-500/10 hover:border-rose-200 transition-all duration-300 p-6 sm:p-8 flex flex-col items-center text-center group">
+            <div class="w-16 h-16 rounded-3xl bg-rose-50 text-rose-600 flex items-center justify-center mb-5 group-hover:scale-110 group-hover:bg-rose-100 transition-all shadow-inner">
+                <span class="material-symbols-outlined text-3xl">qr_code_scanner</span>
             </div>
-            <h2 class="text-xl font-bold text-slate-800 tracking-tight mb-1">Arahkan QR Code</h2>
-            <p class="text-xs text-slate-400 font-semibold mb-6">Posisikan QR Code kelas di tengah kotak</p>
+            <h2 class="text-xl sm:text-2xl font-extrabold text-slate-800 tracking-tight mb-2">Verifikasi Kehadiran</h2>
+            <p class="text-xs sm:text-sm text-slate-400 font-medium mb-8 max-w-sm leading-relaxed">Posisikan QR Code kelas tepat di tengah area pemindaian untuk mencatat kehadiran secara otomatis.</p>
             
-            <div id="reader" class="w-full max-w-sm rounded-2xl overflow-hidden shadow-md border-2 border-slate-100 mb-6 bg-slate-50"></div>
+            <!-- Area Kamera dengan Efek Glow Belakang -->
+            <div class="relative w-full max-w-sm">
+                <!-- Ornamen Cahaya Pemindai -->
+                <div class="absolute -inset-1 bg-gradient-to-r from-rose-500 to-pink-500 rounded-3xl blur opacity-20 group-hover:opacity-40 transition duration-700"></div>
+                
+                <div id="reader" class="relative w-full rounded-2xl overflow-hidden shadow-sm border-2 border-slate-100 bg-slate-50 z-10"></div>
+            </div>
             
-            <div id="hasil" class="text-sm font-bold text-slate-500 bg-slate-50 px-6 py-3.5 rounded-xl w-full max-w-sm border border-slate-200 transition-all">
-                Menunggu scan...
+            <!-- Status Bar Hasil Scan -->
+            <div class="mt-8 w-full max-w-sm">
+                <div id="hasil" class="flex items-center justify-center gap-2 text-sm font-bold text-slate-500 bg-slate-50 px-6 py-4 rounded-2xl border border-slate-200 transition-all shadow-sm">
+                    <span class="material-symbols-outlined text-base animate-pulse">flip_camera_ios</span>
+                    Menunggu scan...
+                </div>
             </div>
         </div>
 
-        <!-- Kolom Kanan: Riwayat Firebase -->
-        <div class="bg-white rounded-3xl border border-slate-100 shadow-sm p-5 sm:p-6 flex flex-col">
-            <div class="flex items-center gap-3 mb-5 pb-4 border-b border-slate-100">
-                <div class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-                    <span class="material-symbols-outlined text-xl">history</span>
+        <!-- Kolom Kanan: Riwayat Cloud -->
+        <div class="lg:col-span-5 bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-blue-500/10 hover:border-blue-200 transition-all duration-300 p-6 sm:p-7 flex flex-col group">
+            <div class="flex items-center justify-between mb-6 pb-5 border-b border-slate-100">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 group-hover:bg-blue-100 transition-all shadow-inner">
+                        <span class="material-symbols-outlined text-2xl">history</span>
+                    </div>
+                    <div class="text-left">
+                        <h2 class="text-base sm:text-lg font-extrabold text-slate-800 tracking-tight">Log Aktivitas</h2>
+                        <p class="text-[11px] text-slate-400 font-medium mt-0.5">Disinkronkan ke Firebase</p>
+                    </div>
                 </div>
-                <div class="text-left">
-                    <h2 class="text-lg font-bold text-slate-800 tracking-tight">Riwayat Absensi</h2>
-                    <p class="text-xs text-slate-400 font-semibold">Tercatat di sistem Cloud</p>
+                <!-- Ikon Cloud Sync -->
+                <div class="p-2 bg-slate-50 rounded-xl text-slate-400 border border-slate-100 group-hover:text-blue-500 transition-colors">
+                    <span class="material-symbols-outlined text-sm">cloud_sync</span>
                 </div>
             </div>
             
             <!-- Tempat list absensi akan dirender -->
-            <div id="listRiwayatAbsensi" class="space-y-3 flex-grow max-h-[350px] overflow-y-auto pr-2">
-                <p class="text-xs font-semibold text-slate-400 text-center mt-10">Belum ada data kehadiran.</p>
+            <div id="listRiwayatAbsensi" class="space-y-3 flex-grow max-h-[450px] overflow-y-auto pr-2 custom-scrollbar">
+                <!-- Tampilan akan diisi oleh JavaScript -->
             </div>
         </div>
     </div>
@@ -813,9 +847,16 @@ function renderRiwayatAbsensi() {
     
     // Jika belum ada data absensi
     if (!santriAktif || !santriAktif.absensi || santriAktif.absensi.length === 0) {
-        container.innerHTML = '<p class="text-xs font-semibold text-slate-400 text-center mt-10">Belum ada data kehadiran.</p>';
+        container.innerHTML = `
+        <div class="flex flex-col items-center justify-center h-full opacity-60 mt-12 mb-8">
+            <div class="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-3 border border-slate-100">
+                <span class="material-symbols-outlined text-4xl text-slate-300">inbox</span>
+            </div>
+            <p class="text-xs font-semibold text-slate-400 text-center leading-relaxed">Belum ada rekaman kehadiran.<br>Silakan arahkan QR Code ke kamera.</p>
+        </div>`;
         return;
     }
+    // ... sisa kode di bawahnya biarkan saja
 
     // 1. Ambil data role yang sedang login dari memori lokal
     const currentRole = localStorage.getItem("role"); 
