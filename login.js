@@ -100,3 +100,80 @@ function tutupPeringatan() {
     const modal = document.getElementById("modalPeringatan");
     if (modal) modal.classList.add("hidden");
 }
+
+// ==========================================================
+// FITUR LOGIN MENGGUNAKAN QR CODE (FIREBASE AUTH)
+// ==========================================================
+let loginQrcodeScanner;
+
+function bukaLoginQR() {
+    document.getElementById('areaLoginQR').classList.remove('hidden');
+    
+    // Beri jeda sedikit agar modal muncul sebelum merender kamera
+    setTimeout(() => {
+        if (!loginQrcodeScanner) {
+            loginQrcodeScanner = new Html5QrcodeScanner("loginReader", { fps: 10, qrbox: {width: 250, height: 250} }, false);
+            loginQrcodeScanner.render(onScanLoginSuccess, onScanLoginFailure);
+        }
+    }, 300);
+}
+
+function tutupLoginQR() {
+    document.getElementById('areaLoginQR').classList.add('hidden');
+    if (loginQrcodeScanner) {
+        loginQrcodeScanner.clear().then(() => loginQrcodeScanner = null);
+    }
+    document.getElementById('statusLoginQR').innerText = "Menunggu scan...";
+    document.getElementById('statusLoginQR').className = "w-full text-sm font-bold text-slate-500 mb-5";
+}
+
+function onScanLoginSuccess(decodedText) {
+    if (loginQrcodeScanner) loginQrcodeScanner.pause(true);
+    
+    let statusDiv = document.getElementById('statusLoginQR');
+
+    // Memecah teks QR Code (Format: LOGIN|email|password)
+    let dataLogin = decodedText.split('|');
+
+    if (dataLogin.length >= 3 && dataLogin[0] === 'LOGIN') {
+        let emailAkun = dataLogin[1];
+        let passwordAkun = dataLogin[2];
+        
+        statusDiv.innerHTML = "✅ QR Valid! Sedang memproses...";
+        statusDiv.className = "w-full text-sm font-bold text-emerald-600 mb-5 animate-pulse";
+
+        setTimeout(() => {
+            tutupLoginQR();
+            
+            // =======================================================
+            // ROBOT PENGETIK SESUAI KODE ASLI
+            // =======================================================
+            
+            // 1. Masukkan email ke input dengan id "username"
+            document.getElementById('username').value = emailAkun;
+
+            // 2. Masukkan password ke input dengan id "password"
+            document.getElementById('password').value = passwordAkun;
+
+            // 3. Langsung eksekusi fungsi login() bawaan aplikasimu!
+            // Sistem akan otomatis mengambil data Firestore dan pindah halaman
+            if (typeof login === 'function') {
+                login();
+            } else {
+                console.error("Fungsi login() tidak ditemukan!");
+            }
+
+        }, 500);
+        
+    } else {
+        statusDiv.innerHTML = "❌ Format QR Code tidak valid!";
+        statusDiv.className = "w-full text-sm font-bold text-rose-600 mb-5";
+        
+        setTimeout(() => {
+            if(loginQrcodeScanner) loginQrcodeScanner.resume();
+            statusDiv.innerHTML = "Silakan scan QR Code Login Anda";
+            statusDiv.className = "w-full text-sm font-bold text-slate-500 mb-5";
+        }, 2000);
+    }
+}
+function onScanLoginFailure(error) { /* Abaikan */ }

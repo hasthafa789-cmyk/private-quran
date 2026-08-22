@@ -794,19 +794,40 @@ function onScanSuccess(decodedText) {
     let divHasil = document.getElementById('hasil');
 
     // ==========================================================
-    // 1. FILTER KEAMANAN: CEK APAKAH QR CODE VALID/TERDAFTAR
+    // 1. FILTER KEAMANAN & ADAPTASI QR CODE MULTI-FUNGSI
     // ==========================================================
-    let siswaDitemukan = null;
+    let namaYangDiScan = decodedText;
+    let qrDataAman = decodedText; // Data yang akan disimpan ke Excel
     
+    // Jika santri menggunakan QR Code Login (multi-fungsi) untuk absen
+    if (decodedText.startsWith("LOGIN|")) {
+        let pecahan = decodedText.split('|');
+        
+        // Cek apakah formatnya memuat 5 bagian: LOGIN|email|password|role|NamaSantri
+        if (pecahan.length >= 5) {
+            namaYangDiScan = pecahan[4]; // Ambil nama santri dari urutan ke-5
+            
+            // SANGAT PENTING: Ganti teks yang akan disimpan agar PASSWORD tidak bocor ke Excel!
+            qrDataAman = "QR Terpadu (Aman)"; 
+        } else {
+            divHasil.innerHTML = "❌ Ditolak: QR Login belum dilengkapi Nama!";
+            divHasil.className = "text-sm font-bold text-rose-700 bg-rose-50 px-6 py-3.5 rounded-xl border border-rose-200 shadow-sm";
+            setTimeout(() => { if (html5QrcodeScanner) html5QrcodeScanner.resume(); divHasil.innerHTML = "Menunggu scan..."; divHasil.className = "text-sm font-bold text-slate-500 bg-slate-50 px-6 py-3.5 rounded-xl border border-slate-200 transition-all"; }, 2500);
+            return;
+        }
+    }
+
+    // Mencocokkan nama dengan database Firebase
+    let siswaDitemukan = null;
     if (typeof dataSantri !== 'undefined') {
         siswaDitemukan = dataSantri.find(s => 
-            (s.nama && s.nama.toLowerCase() === decodedText.toLowerCase()) || 
-            (s.id && s.id.toLowerCase() === decodedText.toLowerCase())
+            (s.nama && s.nama.toLowerCase() === namaYangDiScan.toLowerCase()) || 
+            (s.id && s.id.toLowerCase() === namaYangDiScan.toLowerCase())
         );
     }
 
     if (!siswaDitemukan) {
-        divHasil.innerHTML = "❌ Ditolak: QR Code tidak terdaftar!";
+        divHasil.innerHTML = "❌ Ditolak: Santri tidak terdaftar!";
         divHasil.className = "text-sm font-bold text-rose-700 bg-rose-50 px-6 py-3.5 rounded-xl border border-rose-200 shadow-sm";
         
         setTimeout(() => {
@@ -821,16 +842,13 @@ function onScanSuccess(decodedText) {
     // 2. FILTER ANTI-SPAM: CEK APAKAH SUDAH ABSEN HARI INI
     // ==========================================================
     let dateObj = new Date();
-    let waktuLengkap = dateObj.toLocaleString("id-ID"); // Contoh: 22/8/2026, 07:15:30
-    let tanggalHariIni = dateObj.toLocaleDateString("id-ID"); // Contoh: 22/8/2026
+    let waktuLengkap = dateObj.toLocaleString("id-ID"); 
+    let tanggalHariIni = dateObj.toLocaleDateString("id-ID"); 
 
     let riwayatAbsen = siswaDitemukan.absensi || [];
-    
-    // Mengecek apakah di dalam riwayat ada waktu yang mengandung "tanggal hari ini"
     let sudahAbsen = riwayatAbsen.some(absen => absen.waktu && absen.waktu.includes(tanggalHariIni));
 
     if (sudahAbsen) {
-        // Jika sudah absen, munculkan peringatan warna kuning/orange
         divHasil.innerHTML = `⚠️ ${siswaDitemukan.nama} sudah absen hari ini!`;
         divHasil.className = "text-sm font-bold text-amber-700 bg-amber-50 px-6 py-3.5 rounded-xl border border-amber-200 shadow-sm";
         
@@ -839,11 +857,11 @@ function onScanSuccess(decodedText) {
             divHasil.innerHTML = "Menunggu scan berikutnya...";
             divHasil.className = "text-sm font-bold text-slate-500 bg-slate-50 px-6 py-3.5 rounded-xl border border-slate-200 transition-all";
         }, 2500);
-        return; // Hentikan proses, JANGAN simpan ganda!
+        return; 
     }
 
     // ==========================================================
-    // 3. JIKA TERDAFTAR & BELUM ABSEN, LANJUTKAN PROSES SIMPAN
+    // 3. JIKA TERDAFTAR & BELUM ABSEN, SIMPAN
     // ==========================================================
     santriAktif = siswaDitemukan;
     
@@ -851,7 +869,9 @@ function onScanSuccess(decodedText) {
     divHasil.className = "text-sm font-bold text-blue-700 bg-blue-50 px-6 py-3.5 rounded-xl border border-blue-200 shadow-sm";
 
     if (!santriAktif.absensi) santriAktif.absensi = [];
-    santriAktif.absensi.push({ waktu: waktuLengkap, qrData: decodedText });
+    
+    // MENGGUNAKAN qrDataAman (Bukan decodedText) AGAR PASSWORD TIDAK MASUK DATABASE
+    santriAktif.absensi.push({ waktu: waktuLengkap, qrData: qrDataAman });
 
     db.collection("database_hafalan").doc(santriAktif.nama).set({
         absensi: santriAktif.absensi
@@ -859,7 +879,8 @@ function onScanSuccess(decodedText) {
     .then(() => {
         renderRiwayatAbsensi();
         
-        let urlTarget = `${scriptURLAbsen}?nama=${encodeURIComponent(santriAktif.nama)}&waktu=${encodeURIComponent(waktuLengkap)}&qr_data=${encodeURIComponent(decodedText)}`;
+        // MENGIRIM qrDataAman KE GOOGLE SPREADSHEET
+        let urlTarget = `${scriptURLAbsen}?nama=${encodeURIComponent(santriAktif.nama)}&waktu=${encodeURIComponent(waktuLengkap)}&qr_data=${encodeURIComponent(qrDataAman)}`;
         
         fetch(urlTarget, { method: 'GET', mode: 'no-cors' })
             .catch(e => console.error("Gagal backup Excel:", e));
