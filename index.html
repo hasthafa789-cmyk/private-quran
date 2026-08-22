@@ -130,41 +130,87 @@
 </section>
 
 <!-- SEKSI 4 GRAFIK PERKEMBANGAN (HAFALAN, UMMI, HIJAIYAH, TAJWID) -->
-<section class="animate-entry delay-3 space-y-4 pt-2">
-    <div class="flex items-center justify-between mb-4">
-        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Analisis Perkembangan</h3>
-        <span class="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-100">Live Charts</span>
+<section class="animate-entry delay-3 space-y-5 pt-4">
+    <!-- Header Seksi yang Lebih Elegan -->
+    <div class="flex items-center justify-between mb-2 px-1">
+        <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 shadow-sm">
+                <span class="material-symbols-outlined text-lg">monitoring</span>
+            </div>
+            <div>
+                <h3 class="text-sm font-extrabold text-slate-800 tracking-tight">Analisis Perkembangan</h3>
+                <p class="text-[10px] text-slate-400 font-semibold uppercase tracking-widest mt-0.5">Statistik Live Santri</p>
+            </div>
+        </div>
+        
+        <!-- Badge "Live" dengan Efek Berkedip (Ping) -->
+        <span class="flex items-center gap-2 text-[10px] font-bold text-indigo-600 bg-white px-3 py-1.5 rounded-full border border-indigo-100 shadow-sm">
+            <span class="relative flex h-2.5 w-2.5">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-indigo-500"></span>
+            </span>
+            LIVE CHARTS
+        </span>
     </div>
     
-    <!-- Grid 2x2 untuk Grafik -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+    <!-- Grid 2x2 untuk Grafik dengan Kartu Interaktif -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
         
-        <!-- 1. Grafik Hafalan -->
-        <div class="bg-white p-4 sm:p-5 rounded-3xl border border-slate-100 shadow-sm flex flex-col">
-            <h4 class="text-sm font-extrabold text-slate-800 mb-0.5">Hafalan Al-Qur'an</h4>
-            <p class="text-[10px] text-slate-400 font-semibold mb-3">Total ayat yang dikuasai</p>
-            <div class="relative w-full h-40 sm:h-48 flex-grow"><canvas id="progressChart"></canvas></div>
+        <!-- 1. Grafik Hafalan (Tema Ungu) -->
+        <div class="bg-white p-5 sm:p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-purple-500/10 hover:border-purple-200 transition-all duration-300 flex flex-col group">
+            <div class="flex items-start justify-between mb-5">
+                <div>
+                    <h4 class="text-sm font-extrabold text-slate-800 tracking-tight group-hover:text-purple-600 transition-colors">Hafalan Al-Qur'an</h4>
+                    <p class="text-[11px] text-slate-400 font-medium mt-1">Total ayat yang dikuasai</p>
+                </div>
+                <div class="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center group-hover:scale-110 group-hover:bg-purple-100 transition-all">
+                    <span class="material-symbols-outlined text-2xl">menu_book</span>
+                </div>
+            </div>
+            <!-- Canvas dipertinggi sedikit agar grafik lebih leluasa -->
+            <div class="relative w-full h-44 sm:h-52 flex-grow"><canvas id="progressChart"></canvas></div>
         </div>
         
-        <!-- 2. Grafik Ummi -->
-        <div class="bg-white p-4 sm:p-5 rounded-3xl border border-slate-100 shadow-sm flex flex-col">
-            <h4 class="text-sm font-extrabold text-slate-800 mb-0.5">Metode Ummi</h4>
-            <p class="text-[10px] text-slate-400 font-semibold mb-3">Total halaman yang diselesaikan</p>
-            <div class="relative w-full h-40 sm:h-48 flex-grow"><canvas id="ummiChart"></canvas></div>
+        <!-- 2. Grafik Ummi (Tema Biru) -->
+        <div class="bg-white p-5 sm:p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-blue-500/10 hover:border-blue-200 transition-all duration-300 flex flex-col group">
+            <div class="flex items-start justify-between mb-5">
+                <div>
+                    <h4 class="text-sm font-extrabold text-slate-800 tracking-tight group-hover:text-blue-600 transition-colors">Metode Ummi</h4>
+                    <p class="text-[11px] text-slate-400 font-medium mt-1">Total halaman diselesaikan</p>
+                </div>
+                <div class="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 group-hover:bg-blue-100 transition-all">
+                    <span class="material-symbols-outlined text-2xl">library_books</span>
+                </div>
+            </div>
+            <div class="relative w-full h-44 sm:h-52 flex-grow"><canvas id="ummiChart"></canvas></div>
         </div>
         
-        <!-- 3. Grafik Makharijul Huruf -->
-        <div class="bg-white p-4 sm:p-5 rounded-3xl border border-slate-100 shadow-sm flex flex-col">
-            <h4 class="text-sm font-extrabold text-slate-800 mb-0.5">Makharijul Huruf</h4>
-            <p class="text-[10px] text-slate-400 font-semibold mb-3">Kefasihan 28 Huruf Hijaiyah</p>
-            <div class="relative w-full h-40 sm:h-48 flex-grow"><canvas id="hijaiyahChart"></canvas></div>
+        <!-- 3. Grafik Makharijul Huruf (Tema Hijau) -->
+        <div class="bg-white p-5 sm:p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-emerald-500/10 hover:border-emerald-200 transition-all duration-300 flex flex-col group">
+            <div class="flex items-start justify-between mb-5">
+                <div>
+                    <h4 class="text-sm font-extrabold text-slate-800 tracking-tight group-hover:text-emerald-600 transition-colors">Makharijul Huruf</h4>
+                    <p class="text-[11px] text-slate-400 font-medium mt-1">Kefasihan 28 Hijaiyah</p>
+                </div>
+                <div class="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 group-hover:bg-emerald-100 transition-all">
+                    <span class="material-symbols-outlined text-2xl">record_voice_over</span>
+                </div>
+            </div>
+            <div class="relative w-full h-44 sm:h-52 flex-grow"><canvas id="hijaiyahChart"></canvas></div>
         </div>
         
-        <!-- 4. Grafik Tajwid -->
-        <div class="bg-white p-4 sm:p-5 rounded-3xl border border-slate-100 shadow-sm flex flex-col">
-            <h4 class="text-sm font-extrabold text-slate-800 mb-0.5">Hukum Tajwid</h4>
-            <p class="text-[10px] text-slate-400 font-semibold mb-3">Pemahaman Hukum Tajwid</p>
-            <div class="relative w-full h-40 sm:h-48 flex-grow"><canvas id="tajwidChart"></canvas></div>
+        <!-- 4. Grafik Tajwid (Tema Orange) -->
+        <div class="bg-white p-5 sm:p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-amber-500/10 hover:border-amber-200 transition-all duration-300 flex flex-col group">
+            <div class="flex items-start justify-between mb-5">
+                <div>
+                    <h4 class="text-sm font-extrabold text-slate-800 tracking-tight group-hover:text-amber-600 transition-colors">Hukum Tajwid</h4>
+                    <p class="text-[11px] text-slate-400 font-medium mt-1">Pemahaman hukum bacaan</p>
+                </div>
+                <div class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:scale-110 group-hover:bg-amber-100 transition-all">
+                    <span class="material-symbols-outlined text-2xl">lightbulb</span>
+                </div>
+            </div>
+            <div class="relative w-full h-44 sm:h-52 flex-grow"><canvas id="tajwidChart"></canvas></div>
         </div>
 
     </div>
