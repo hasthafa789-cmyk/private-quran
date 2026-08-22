@@ -9,6 +9,9 @@
     <script src="https://unpkg.com/html5-qrcode"></script>
 
     <script src="https://cdn.tailwindcss.com"></script>
+   
+    <!-- CDN Chart.js untuk Grafik Interaktif -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -126,6 +129,46 @@
 
 </section>
 
+<!-- SEKSI 4 GRAFIK PERKEMBANGAN (HAFALAN, UMMI, HIJAIYAH, TAJWID) -->
+<section class="animate-entry delay-3 space-y-4 pt-2">
+    <div class="flex items-center justify-between mb-4">
+        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Analisis Perkembangan</h3>
+        <span class="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-100">Live Charts</span>
+    </div>
+    
+    <!-- Grid 2x2 untuk Grafik -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+        
+        <!-- 1. Grafik Hafalan -->
+        <div class="bg-white p-4 sm:p-5 rounded-3xl border border-slate-100 shadow-sm flex flex-col">
+            <h4 class="text-sm font-extrabold text-slate-800 mb-0.5">Hafalan Al-Qur'an</h4>
+            <p class="text-[10px] text-slate-400 font-semibold mb-3">Total ayat yang dikuasai</p>
+            <div class="relative w-full h-40 sm:h-48 flex-grow"><canvas id="progressChart"></canvas></div>
+        </div>
+        
+        <!-- 2. Grafik Ummi -->
+        <div class="bg-white p-4 sm:p-5 rounded-3xl border border-slate-100 shadow-sm flex flex-col">
+            <h4 class="text-sm font-extrabold text-slate-800 mb-0.5">Metode Ummi</h4>
+            <p class="text-[10px] text-slate-400 font-semibold mb-3">Total halaman yang diselesaikan</p>
+            <div class="relative w-full h-40 sm:h-48 flex-grow"><canvas id="ummiChart"></canvas></div>
+        </div>
+        
+        <!-- 3. Grafik Makharijul Huruf -->
+        <div class="bg-white p-4 sm:p-5 rounded-3xl border border-slate-100 shadow-sm flex flex-col">
+            <h4 class="text-sm font-extrabold text-slate-800 mb-0.5">Makharijul Huruf</h4>
+            <p class="text-[10px] text-slate-400 font-semibold mb-3">Kefasihan 28 Huruf Hijaiyah</p>
+            <div class="relative w-full h-40 sm:h-48 flex-grow"><canvas id="hijaiyahChart"></canvas></div>
+        </div>
+        
+        <!-- 4. Grafik Tajwid -->
+        <div class="bg-white p-4 sm:p-5 rounded-3xl border border-slate-100 shadow-sm flex flex-col">
+            <h4 class="text-sm font-extrabold text-slate-800 mb-0.5">Hukum Tajwid</h4>
+            <p class="text-[10px] text-slate-400 font-semibold mb-3">Pemahaman Hukum Tajwid</p>
+            <div class="relative w-full h-40 sm:h-48 flex-grow"><canvas id="tajwidChart"></canvas></div>
+        </div>
+
+    </div>
+</section>
             <section class="animate-entry delay-2 space-y-3">
                 <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Dashboard Live Overview</h3>
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">

@@ -21,7 +21,17 @@ function mulaiSinkronisasiOtomatis() {
             const found = dataSantri.find(s => s.nama && s.nama.toLowerCase() === santriAktif.nama.toLowerCase());
             if (found) santriAktif = found;
             
+            // Update teks dan angka di dashboard
             updateLiveDashboardStats();
+            
+            // ==========================================================
+            // TAMBAHAN BARU: RENDER GRAFIK SECARA REAL-TIME
+            // ==========================================================
+            if (typeof renderProgressChart === 'function') {
+                renderProgressChart();
+            }
+            
+            // Update halaman lain jika sedang terbuka
             if (currentView === 'viewHafalan' && currentJuzAkses) renderSuratBerdasarkanJuz(currentJuzAkses);
             if (currentView === 'viewPenilaian') renderPenilaianModul();
             if (currentView === 'viewUmmi') {
@@ -130,9 +140,85 @@ function save() {
                 }
             }
 
+            // ==========================================================
+            // KODE BARU: MENGHITUNG 4 SKOR NYATA & MEREKAM RIWAYAT
+            // ==========================================================
+            let waktuSekarang = new Date().toLocaleString("id-ID"); 
+            
+            // 1. Skor Hafalan (Total Ayat Aktif)
+            let totalAyatHafal = 0;
+            if (santriAktif.progress) {
+                for (let key in santriAktif.progress) {
+                    let dataAyat = santriAktif.progress[key];
+                    if (Array.isArray(dataAyat)) totalAyatHafal += dataAyat.filter(v => v === true).length;
+                    else totalAyatHafal += parseInt(dataAyat) || 0;
+                }
+            }
+
+            // 2. Skor Ummi (Total Halaman Bernilai > 0)
+            let totalHalamanUmmi = 0;
+            if (santriAktif.ummi) {
+                for (let jilid in santriAktif.ummi) {
+                    let arr = santriAktif.ummi[jilid];
+                    if (Array.isArray(arr)) {
+                        totalHalamanUmmi += arr.filter(v => v !== null && v !== undefined && v.nilai > 0).length;
+                    }
+                }
+            }
+
+            // 3. Skor Hijaiyah (Sapu Jagat: Deteksi Angka 5 atau 100, baik berupa teks, angka, maupun objek)
+            let totalHijaiyah = 0;
+            if (santriAktif.huruf) {
+                totalHijaiyah = Object.values(santriAktif.huruf).filter(v => {
+                    // Jika data langsung berupa angka/teks 5 atau 100
+                    if (v === true || v === 5 || v === "5" || v === 100 || v === "100") return true;
+                    
+                    // Jika data dibungkus dalam objek (contoh: { nilai: 5 })
+                    if (v && typeof v === 'object') {
+                        let angkaSkor = v.nilai || v.score || v.value; // Mencari nama properti yang mungkin dipakai
+                        if (angkaSkor === 5 || angkaSkor === "5" || angkaSkor === 100 || angkaSkor === "100") return true;
+                    }
+                    return false;
+                }).length;
+            }
+
+            // 4. Skor Tajwid (Sapu Jagat: Deteksi Angka 5 atau 100, baik berupa teks, angka, maupun objek)
+            let totalTajwid = 0;
+            if (santriAktif.tajwid) {
+                totalTajwid = Object.values(santriAktif.tajwid).filter(v => {
+                    if (v === true || v === 5 || v === "5" || v === 100 || v === "100") return true;
+                    
+                    if (v && typeof v === 'object') {
+                        let angkaSkor = v.nilai || v.score || v.value;
+                        if (angkaSkor === 5 || angkaSkor === "5" || angkaSkor === 100 || angkaSkor === "100") return true;
+                    }
+                    return false;
+                }).length;
+            }
+
+            // Simpan Semua Skor ke dalam 1 Titik Riwayat di Firebase
+            db.collection("database_hafalan").doc(santriAktif.nama).update({
+                riwayatHafalan: firebase.firestore.FieldValue.arrayUnion({
+                    waktu: waktuSekarang,
+                    // Data Hafalan
+                    capaian: formatHafalan,
+                    skor: totalAyatHafal,
+                    // Data Ummi
+                    capaianUmmi: formatUmmi,
+                    skorUmmi: totalHalamanUmmi,
+                    // Data Hijaiyah
+                    capaianHijaiyah: formatHijaiyah,
+                    skorHijaiyah: totalHijaiyah,
+                    // Data Tajwid
+                    capaianTajwid: formatTajwid,
+                    skorTajwid: totalTajwid
+                })
+            }).catch(e => console.error("Gagal merekam riwayat grafik:", e));
+            // ==========================================================
+
             if (timerSinkronisasiSpreadsheet) clearTimeout(timerSinkronisasiSpreadsheet);
             timerSinkronisasiSpreadsheet = setTimeout(() => {
-                const scriptURL = 'https://script.google.com/macros/s/AKfycbzfG3lx60LBCCOHGXs4T8gEQmBTjhZO89qY3HpLF_9Z9P-o8w7XLmJBSI-5VX-5IITfGQ/exec'; // URL ANDA
+                const scriptURL = 'https://script.google.com/macros/s/AKfycbzfG3lx60LBCCOHGXs4T8gEQmBTjhZO89qY3HpLF_9Z9P-o8w7XLmJBSI-5VX-5IITfGQ/exec'; // Pastikan URL ini milikmu
                 if(scriptURL === 'URL_APLIKASI_WEB_ANDA_DI_SINI') return;
 
                 fetch(scriptURL, {
@@ -153,5 +239,3 @@ function save() {
     })
     .catch((error) => console.error("Gagal menyimpan progres:", error));
 }
-
-// ==========================================
