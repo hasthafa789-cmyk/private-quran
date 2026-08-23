@@ -80,6 +80,9 @@ window.kembaliKeMenuPenilaian = function() {
 // ==========================================
 window.addEventListener('popstate', function(event) {
     
+    // [KODE BARU] Buka paksa kunci scroll layar (Mencegah Bug Layar Membeku)
+    document.body.classList.remove('overflow-hidden');
+    
     // a. Matikan scanner kamera jika sedang aktif
     if (typeof html5QrcodeScanner !== 'undefined' && html5QrcodeScanner) {
         try { html5QrcodeScanner.clear().then(() => html5QrcodeScanner = null); } catch(e) {}
