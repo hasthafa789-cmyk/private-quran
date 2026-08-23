@@ -21,7 +21,6 @@ document.addEventListener("DOMContentLoaded", function() {
 // 2. SISTEM PENGAMAN TOMBOL BACK HP (HISTORY API CANGGIH)
 // ==========================================
 window.addEventListener('DOMContentLoaded', () => {
-    // Tetapkan halaman Dashboard sebagai titik nol (awal)
     history.replaceState({ level: 'dashboard' }, "Dashboard Utama", "#dashboard");
 });
 
@@ -29,16 +28,13 @@ function catatSejarah(levelId) {
     history.pushState({ level: levelId }, levelId, "#" + levelId);
 }
 
-// Menyadap Navigasi Utama (Hafalan, Ummi, dll)
+// Menyadap Navigasi Utama
 setTimeout(() => {
     if (typeof window.navigateTo === 'function') {
         const fungsiAsliNavigateTo = window.navigateTo;
         window.navigateTo = function(viewId) {
-            if (viewId !== 'viewDashboard') {
-                catatSejarah(viewId);
-            } else {
-                history.pushState({ level: 'dashboard' }, "Dashboard", "#dashboard");
-            }
+            if (viewId !== 'viewDashboard') catatSejarah(viewId);
+            else history.pushState({ level: 'dashboard' }, "Dashboard", "#dashboard");
             fungsiAsliNavigateTo(viewId);
         };
     }
@@ -48,7 +44,7 @@ setTimeout(() => {
 // 3. NAVIGASI BERSARANG (SUB-MENU HAFALAN & PENILAIAN)
 // ==========================================
 window.bukaHalamanJuz = function(nomorJuz) {
-    catatSejarah('subPageDetailSuratJuz'); // Tinggalkan jejak sejarah!
+    catatSejarah('subPageDetailSuratJuz'); 
     document.getElementById('subPageDaftarJuz').classList.add('hidden');
     document.getElementById('subPageDetailSuratJuz').classList.remove('hidden');
     document.getElementById('txtJudulHalamanJuz').innerText = "Daftar Surat - Juz " + nomorJuz;
@@ -56,17 +52,16 @@ window.bukaHalamanJuz = function(nomorJuz) {
 };
 
 window.kembaliKeDaftarJuz = function() {
-    // Agar tombol kembali di layar sinkron dengan memori HP, paksa gunakan fitur back
     history.back(); 
 };
 
 window.bukaSubMenuPenilaian = function(tipe) {
     document.getElementById('subPageMenuPenilaian').classList.add('hidden');
     if (tipe === 'hijaiyah') {
-        catatSejarah('subPageDetailHijaiyah'); // Tinggalkan jejak sejarah!
+        catatSejarah('subPageDetailHijaiyah'); 
         document.getElementById('subPageDetailHijaiyah').classList.remove('hidden');
     } else if (tipe === 'tajwid') {
-        catatSejarah('subPageDetailTajwid'); // Tinggalkan jejak sejarah!
+        catatSejarah('subPageDetailTajwid'); 
         document.getElementById('subPageDetailTajwid').classList.remove('hidden');
     }
 };
@@ -76,66 +71,51 @@ window.kembaliKeMenuPenilaian = function() {
 };
 
 // ==========================================
-// 4. DETEKSI AKSI FISIK TOMBOL BACK DI HP/TAB (ANTI-FROZEN BUG)
+// 4. DETEKSI AKSI FISIK TOMBOL BACK DI HP/TAB
 // ==========================================
 window.addEventListener('popstate', function(event) {
-    
-    // [PENGHANCUR BUG SCROLL] 
-    // Hapus SEMUA kelas yang mungkin mengunci layar dari <body> dan <html>
+    // PENGHANCUR BUG SCROLL (Layar Membeku)
     document.body.classList.remove('overflow-hidden', 'overflow-y-hidden');
     document.documentElement.classList.remove('overflow-hidden', 'overflow-y-hidden');
     
-    // a. Matikan scanner kamera jika sedang aktif
+    // Matikan scanner kamera jika sedang aktif
     if (typeof html5QrcodeScanner !== 'undefined' && html5QrcodeScanner) {
         try { html5QrcodeScanner.clear().then(() => html5QrcodeScanner = null); } catch(e) {}
     }
 
-    // b. Tutup paksa semua Modal/Pop-Up dan Backdrop Gelapnya
+    // Tutup paksa semua Modal/Pop-Up 
     const modals = ['suratDetail', 'ummiDetail', 'modalPenilaianUmmi', 'backdropDetail', 'modalPeringatan'];
     modals.forEach(id => {
         const el = document.getElementById(id);
-        if (el) {
-            el.classList.add('hidden'); // Sembunyikan kotaknya
-            // Jika kotak itu punya style khusus yang menyangkut, bersihkan juga
-            el.style.display = ''; 
-        }
+        if (el) el.classList.add('hidden');
     });
 
-    // PENTING: Jika fungsi penutupan bawaan ada, panggil untuk amannya
-    if (typeof closeDetail === 'function') closeDetail(true); // Kirim 'true' agar fungsi tidak memicu history back lagi
+    // Panggil fungsi penutup khusus jika ada
+    if (typeof closeDetail === 'function') closeDetail(true); 
     if (typeof closeUmmiDetail === 'function') closeUmmiDetail(true);
     if (typeof tutupFormNilaiUmmi === 'function') tutupFormNilaiUmmi();
 
-    // c. Logika Mundur Setahap Demi Setahap
+    // Logika Mundur Setahap Demi Setahap
     if (event.state && event.state.level) {
         const stateSekarang = event.state.level;
         
-        // Mundur dari Detail Hijaiyah/Tajwid -> Ke Menu Penilaian
         if (stateSekarang === 'viewPenilaian') {
             document.getElementById('subPageDetailHijaiyah').classList.add('hidden');
             document.getElementById('subPageDetailTajwid').classList.add('hidden');
             document.getElementById('subPageMenuPenilaian').classList.remove('hidden');
-            
             document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden'));
             document.getElementById('viewPenilaian').classList.remove('hidden');
         }
-        
-        // Mundur dari Detail Juz -> Ke Menu Hafalan
         else if (stateSekarang === 'viewHafalan') {
             document.getElementById('subPageDetailSuratJuz').classList.add('hidden');
             document.getElementById('subPageDaftarJuz').classList.remove('hidden');
-            
             document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden'));
             document.getElementById('viewHafalan').classList.remove('hidden');
         }
-
-        // Mundur ke Dashboard Utama
         else if (stateSekarang === 'dashboard') {
             document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden'));
             document.getElementById('viewDashboard').classList.remove('hidden');
         }
-        
-        // Menangani navigasi antar menu utama lainnya
         else {
             const viewTarget = document.getElementById(stateSekarang);
             if (viewTarget && viewTarget.classList.contains('page-view')) {
@@ -144,13 +124,11 @@ window.addEventListener('popstate', function(event) {
             }
         }
     } else {
-        // Keadaan darurat (Fallback): Lempar kembali ke Dashboard
+        // Fallback
         document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden'));
-        document.getElementById('viewDashboard').classList.remove('hidden');
-        history.replaceState({ level: 'dashboard' }, "Dashboard", "#dashboard");
+        if (document.getElementById('viewDashboard')) document.getElementById('viewDashboard').classList.remove('hidden');
     }
 });
-
 
 // ==========================================
 // 5. SISTEM ABSENSI & QR SCANNER
@@ -159,7 +137,7 @@ let html5QrcodeScanner;
 const scriptURLAbsen = 'https://script.google.com/macros/s/AKfycbzRY0tcV6SnDy_ESEyBeE4PwoY9GVmyAg4Omu5M43WtK0_XvmCuQqS-zQqlQ7NIMeGWow/exec';
 
 window.bukaMenuAbsensi = function() {
-    catatSejarah('viewAbsensi'); // Catat sejarah absensi
+    catatSejarah('viewAbsensi'); 
     document.querySelectorAll('.page-view').forEach(h => h.classList.add('hidden'));
     document.getElementById('viewAbsensi').classList.remove('hidden');
     renderRiwayatAbsensi();
@@ -172,7 +150,7 @@ window.bukaMenuAbsensi = function() {
 };
 
 window.tutupMenuAbsensi = function() {
-    history.back(); // Sinkronkan tombol silang dengan memori mundur HP
+    history.back(); 
 };
 
 window.renderRiwayatAbsensi = function() {
@@ -257,3 +235,48 @@ document.addEventListener('keydown', function(event) {
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js'); });
 }
+
+// ==========================================
+// 7. SENSOR PENGAMAT POP-UP (THE MAGIC OBSERVER)
+// Memastikan menekan Back saat Pop-up terbuka HANYA menutup Pop-up saja!
+// ==========================================
+window.addEventListener('DOMContentLoaded', () => {
+    // Daftar Kotak Pop-up yang akan dipantau oleh sensor
+    const daftarModal = ['suratDetail', 'ummiDetail', 'modalPenilaianUmmi'];
+    
+    daftarModal.forEach(idModal => {
+        const elemenModal = document.getElementById(idModal);
+        if (elemenModal) {
+            // Catat apakah saat ini kotak sedang terbuka atau tertutup
+            elemenModal.dataset.sedangTerbuka = elemenModal.classList.contains('hidden') ? "false" : "true";
+            
+            // Pasang sensor pengamat
+            const pengamat = new MutationObserver((mutasiList) => {
+                mutasiList.forEach((mutasi) => {
+                    if (mutasi.attributeName === 'class') {
+                        const isHidden = elemenModal.classList.contains('hidden');
+                        const wasOpen = elemenModal.dataset.sedangTerbuka === "true";
+                        
+                        // JIKA KOTAK BARU SAJA TERBUKA:
+                        if (!isHidden && !wasOpen) {
+                            elemenModal.dataset.sedangTerbuka = "true";
+                            // Ciptakan sejarah palsu agar sistem memori HP bertambah 1 langkah
+                            history.pushState({ iniModal: true, targetModal: idModal }, "Modal Terbuka", "#modal-" + idModal);
+                        } 
+                        // JIKA KOTAK BARU SAJA DITUTUP (Lewat tombol silang/Simpan):
+                        else if (isHidden && wasOpen) {
+                            elemenModal.dataset.sedangTerbuka = "false";
+                            // Bersihkan "sejarah palsu" dari memori HP agar tidak menumpuk
+                            if (history.state && history.state.iniModal && history.state.targetModal === idModal) {
+                                history.back();
+                            }
+                        }
+                    }
+                });
+            });
+            
+            // Aktifkan sensor
+            pengamat.observe(elemenModal, { attributes: true });
+        }
+    });
+});
