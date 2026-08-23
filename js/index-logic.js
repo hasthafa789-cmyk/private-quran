@@ -18,85 +18,99 @@ document.addEventListener("DOMContentLoaded", function() {
 });
 
 // ==========================================
-// 2. SISTEM PENGAMAN TOMBOL BACK HP (HISTORY API CANGGIH)
+// 2. SISTEM KEMUDI NAVIGASI UTAMA (MENGGANTIKAN YANG LAMA)
 // ==========================================
 window.addEventListener('DOMContentLoaded', () => {
-    // Tetapkan halaman Dashboard sebagai titik nol (awal)
-    history.replaceState({ level: 'dashboard' }, "Dashboard Utama", "#dashboard");
+    // Tanamkan titik nol (Dashboard) di memori HP
+    if (!history.state || !history.state.level) {
+        history.replaceState({ level: 'dashboard' }, "Dashboard Utama", "#dashboard");
+    }
 });
 
-function catatSejarah(levelId) {
-    history.pushState({ level: levelId }, levelId, "#" + levelId);
-}
-
-// Menyadap Navigasi Utama (Hafalan, Ummi, dll)
-setTimeout(() => {
-    if (typeof window.navigateTo === 'function') {
-        const fungsiAsliNavigateTo = window.navigateTo;
-        window.navigateTo = function(viewId) {
-            if (viewId !== 'viewDashboard') {
-                catatSejarah(viewId);
-            } else {
-                history.pushState({ level: 'dashboard' }, "Dashboard", "#dashboard");
-            }
-            fungsiAsliNavigateTo(viewId);
-        };
+// Kita ambil alih fungsi navigateTo secara mutlak agar tidak ada yang terlewat!
+window.navigateTo = function(viewId) {
+    // 1. Tinggalkan jejak secara presisi
+    if (viewId === 'viewDashboard') {
+        history.pushState({ level: 'dashboard' }, "Dashboard", "#dashboard");
+    } else {
+        history.pushState({ level: viewId }, viewId, "#" + viewId);
     }
-}, 500);
+    
+    // 2. Ganti Halaman
+    document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden'));
+    const target = document.getElementById(viewId);
+    if (target) target.classList.remove('hidden');
+    
+    // 3. OBAT ANTI-MACET: Lepaskan kunci scroll setiap kali pindah menu
+    document.body.classList.remove('overflow-hidden');
+    window.scrollTo(0,0);
+};
+
 
 // ==========================================
-// 3. NAVIGASI BERSARANG (SUB-MENU HAFALAN & PENILAIAN)
+// 3. NAVIGASI BERSARANG (SUB-MENU)
 // ==========================================
 window.bukaHalamanJuz = function(nomorJuz) {
-    catatSejarah('subPageDetailSuratJuz'); // Tinggalkan jejak sejarah!
+    history.pushState({ level: 'subPageDetailSuratJuz' }, 'Surat', '#surat'); // Catat!
+    
     document.getElementById('subPageDaftarJuz').classList.add('hidden');
     document.getElementById('subPageDetailSuratJuz').classList.remove('hidden');
     document.getElementById('txtJudulHalamanJuz').innerText = "Daftar Surat - Juz " + nomorJuz;
     if(typeof renderSuratBerdasarkanJuz === "function") renderSuratBerdasarkanJuz(nomorJuz);
+    
+    document.body.classList.remove('overflow-hidden');
+    window.scrollTo(0,0);
 };
 
 window.kembaliKeDaftarJuz = function() {
-    // Agar tombol kembali di layar sinkron dengan memori HP, paksa gunakan fitur back
-    history.back(); 
+    history.back(); // Paksa pakai tombol back HP
 };
 
 window.bukaSubMenuPenilaian = function(tipe) {
     document.getElementById('subPageMenuPenilaian').classList.add('hidden');
     if (tipe === 'hijaiyah') {
-        catatSejarah('subPageDetailHijaiyah'); // Tinggalkan jejak sejarah!
+        history.pushState({ level: 'subPageDetailHijaiyah' }, 'Hijaiyah', '#hijaiyah'); // Catat!
         document.getElementById('subPageDetailHijaiyah').classList.remove('hidden');
     } else if (tipe === 'tajwid') {
-        catatSejarah('subPageDetailTajwid'); // Tinggalkan jejak sejarah!
+        history.pushState({ level: 'subPageDetailTajwid' }, 'Tajwid', '#tajwid'); // Catat!
         document.getElementById('subPageDetailTajwid').classList.remove('hidden');
     }
+    
+    document.body.classList.remove('overflow-hidden');
+    window.scrollTo(0,0);
 };
 
 window.kembaliKeMenuPenilaian = function() {
-    history.back(); 
+    history.back(); // Paksa pakai tombol back HP
 };
 
+
 // ==========================================
-// 4. DETEKSI AKSI FISIK TOMBOL BACK DI HP/TAB
+// 4. MENDETEKSI SAAT TOMBOL BACK FISIK DITEKAN DI HP
 // ==========================================
 window.addEventListener('popstate', function(event) {
     
-    // a. Matikan scanner kamera jika sedang aktif
+    // OBAT ANTI-MACET: Buka paksa gembok scroll dari body!
+    document.body.classList.remove('overflow-hidden');
+    document.body.style.overflow = ''; 
+
+    // Matikan kamera jika sedang hidup
     if (typeof html5QrcodeScanner !== 'undefined' && html5QrcodeScanner) {
         try { html5QrcodeScanner.clear().then(() => html5QrcodeScanner = null); } catch(e) {}
     }
 
-    // b. Tutup paksa semua Modal/Pop-Up 
+    // Sapu bersih semua pop-up yang nyangkut di layar
     const modals = ['suratDetail', 'ummiDetail', 'modalPenilaianUmmi', 'backdropDetail', 'modalPeringatan'];
     modals.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
     });
 
-    // c. Logika Mundur Setahap Demi Setahap
+    // BACA INGATAN HP DAN MUNDUR SECARA BERURUTAN
     if (event.state && event.state.level) {
         const stateSekarang = event.state.level;
         
-        // Mundur dari Detail Hijaiyah/Tajwid -> Ke Menu Penilaian
+        // Logika mundur dari detail kembali ke menu penengah
         if (stateSekarang === 'viewPenilaian') {
             document.getElementById('subPageDetailHijaiyah').classList.add('hidden');
             document.getElementById('subPageDetailTajwid').classList.add('hidden');
@@ -105,8 +119,6 @@ window.addEventListener('popstate', function(event) {
             document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden'));
             document.getElementById('viewPenilaian').classList.remove('hidden');
         }
-        
-        // Mundur dari Detail Juz -> Ke Menu Hafalan
         else if (stateSekarang === 'viewHafalan') {
             document.getElementById('subPageDetailSuratJuz').classList.add('hidden');
             document.getElementById('subPageDaftarJuz').classList.remove('hidden');
@@ -114,23 +126,19 @@ window.addEventListener('popstate', function(event) {
             document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden'));
             document.getElementById('viewHafalan').classList.remove('hidden');
         }
-
-        // Mundur ke Dashboard Utama
         else if (stateSekarang === 'dashboard') {
             document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden'));
             document.getElementById('viewDashboard').classList.remove('hidden');
         }
-        
-        // Menangani navigasi antar menu utama lainnya
         else {
-            const viewTarget = document.getElementById(stateSekarang);
-            if (viewTarget && viewTarget.classList.contains('page-view')) {
+            const target = document.getElementById(stateSekarang);
+            if (target && target.classList.contains('page-view')) {
                 document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden'));
-                viewTarget.classList.remove('hidden');
+                target.classList.remove('hidden');
             }
         }
     } else {
-        // Keadaan darurat (Fallback): Lempar kembali ke Dashboard
+        // Fallback: Lempar ke dashboard jika memori HP kacau
         document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden'));
         document.getElementById('viewDashboard').classList.remove('hidden');
         history.replaceState({ level: 'dashboard' }, "Dashboard", "#dashboard");
@@ -145,9 +153,10 @@ let html5QrcodeScanner;
 const scriptURLAbsen = 'https://script.google.com/macros/s/AKfycbzRY0tcV6SnDy_ESEyBeE4PwoY9GVmyAg4Omu5M43WtK0_XvmCuQqS-zQqlQ7NIMeGWow/exec';
 
 window.bukaMenuAbsensi = function() {
-    catatSejarah('viewAbsensi'); // Catat sejarah absensi
+    history.pushState({ level: 'viewAbsensi' }, 'Absensi', '#absensi');
     document.querySelectorAll('.page-view').forEach(h => h.classList.add('hidden'));
     document.getElementById('viewAbsensi').classList.remove('hidden');
+    window.scrollTo(0,0);
     renderRiwayatAbsensi();
     setTimeout(() => {
         if (!html5QrcodeScanner) {
@@ -158,7 +167,7 @@ window.bukaMenuAbsensi = function() {
 };
 
 window.tutupMenuAbsensi = function() {
-    history.back(); // Sinkronkan tombol silang dengan memori mundur HP
+    history.back(); // Paksa mundur dari memori
 };
 
 window.renderRiwayatAbsensi = function() {
