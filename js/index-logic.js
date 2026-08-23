@@ -198,35 +198,122 @@ window.bukaMenuAbsensi = function() {
     fungsiAsliAbsensi();
 };
 
-// 4. MENDETEKSI SAAT TOMBOL BACK FISIK DI HP/TAB DITEKAN
+// ==========================================
+// SISTEM PENGAMAN TOMBOL BACK HP (HISTORY API CANGGIH)
+// ==========================================
+
+// 1. Saat pertama masuk, catat Dashboard sebagai titik nol (Base State)
+window.addEventListener('DOMContentLoaded', () => {
+    history.replaceState({ level: 'dashboard' }, "Dashboard Utama", "#dashboard");
+});
+
+// 2. Fungsi pencatat sejarah yang cerdas (mencatat sub-menu)
+function catatSejarah(levelId) {
+    history.pushState({ level: levelId }, levelId, "#" + levelId);
+}
+
+// 3. Menyadap Fungsi Navigasi Utama (Hafalan, Ummi, Penilaian Utama)
+setTimeout(() => {
+    if (typeof window.navigateTo === 'function') {
+        const fungsiAsliNavigateTo = window.navigateTo;
+        window.navigateTo = function(viewId) {
+            if (viewId !== 'viewDashboard') {
+                catatSejarah(viewId);
+            } else {
+                history.pushState({ level: 'dashboard' }, "Dashboard", "#dashboard");
+            }
+            fungsiAsliNavigateTo(viewId);
+        };
+    }
+}, 500);
+
+// Menyadap Menu Absensi
+const fungsiAsliAbsensi = window.bukaMenuAbsensi;
+window.bukaMenuAbsensi = function() {
+    catatSejarah('viewAbsensi');
+    fungsiAsliAbsensi();
+};
+
+// ----------------------------------------------------
+// MENGUBAH FUNGSI NAVIGASI BERSARANG (SUB-MENU)
+// Kita harus menimpa fungsi aslinya agar mereka ikut mencatat sejarah!
+// ----------------------------------------------------
+
+// Menyadap Navigasi JUZ (Hafalan -> Daftar Juz -> Detail Surat)
+const fungsiAsliBukaJuz = window.bukaHalamanJuz;
+window.bukaHalamanJuz = function(nomorJuz) {
+    catatSejarah('subPageDetailSuratJuz'); // Catat saat masuk ke detail surat
+    fungsiAsliBukaJuz(nomorJuz);
+};
+
+// Menyadap Menu Penilaian (Penilaian -> Hijaiyah/Tajwid)
+const fungsiAsliBukaSubPenilaian = window.bukaSubMenuPenilaian;
+window.bukaSubMenuPenilaian = function(tipe) {
+    if (tipe === 'hijaiyah') {
+        catatSejarah('subPageDetailHijaiyah');
+    } else if (tipe === 'tajwid') {
+        catatSejarah('subPageDetailTajwid');
+    }
+    fungsiAsliBukaSubPenilaian(tipe);
+};
+
+// 4. MENDETEKSI SAAT TOMBOL BACK FISIK DITEKAN
 window.addEventListener('popstate', function(event) {
-    // a. Matikan kamera/scanner absensi jika masih menyala
+    
+    // Matikan scanner jika sedang aktif
     if (typeof html5QrcodeScanner !== 'undefined' && html5QrcodeScanner) {
         try { html5QrcodeScanner.clear().then(() => html5QrcodeScanner = null); } catch(e) {}
     }
 
-    // b. Tutup semua modal pop-up yang sedang melayang
+    // Tutup paksa semua Modal/Pop-Up (Ini harus selalu jalan saat Back ditekan)
     const modals = ['suratDetail', 'ummiDetail', 'modalPenilaianUmmi', 'backdropDetail', 'modalPeringatan'];
     modals.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
     });
 
-    // c. Sembunyikan seluruh tampilan halaman
-    document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden'));
+    if (event.state && event.state.level) {
+        const stateSekarang = event.state.level;
+        
+        // Logika Mundur untuk Menu Penilaian
+        if (stateSekarang === 'viewPenilaian') {
+            // Jika state mundurnya adalah Menu Penilaian, sembunyikan detail, munculkan menunya
+            document.getElementById('subPageDetailHijaiyah').classList.add('hidden');
+            document.getElementById('subPageDetailTajwid').classList.add('hidden');
+            document.getElementById('subPageMenuPenilaian').classList.remove('hidden');
+            
+            // Pastikan halaman utamanya (viewPenilaian) aktif
+            document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden'));
+            document.getElementById('viewPenilaian').classList.remove('hidden');
+        }
+        
+        // Logika Mundur untuk Menu Hafalan
+        else if (stateSekarang === 'viewHafalan') {
+            document.getElementById('subPageDetailSuratJuz').classList.add('hidden');
+            document.getElementById('subPageDaftarJuz').classList.remove('hidden');
+            
+            document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden'));
+            document.getElementById('viewHafalan').classList.remove('hidden');
+        }
 
-    // d. Baca ingatan HP dan tampilkan halaman yang benar
-    if (event.state && event.state.menu) {
-        if (event.state.menu === 'utama') {
+        // Logika Kembali ke Dashboard Utama
+        else if (stateSekarang === 'dashboard') {
+            document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden'));
             document.getElementById('viewDashboard').classList.remove('hidden');
-        } else {
-            const viewTarget = document.getElementById(event.state.menu);
-            if (viewTarget) viewTarget.classList.remove('hidden');
-            else document.getElementById('viewDashboard').classList.remove('hidden');
+        }
+        
+        // Menangani navigasi biasa antar menu utama
+        else {
+            const viewTarget = document.getElementById(stateSekarang);
+            if (viewTarget && viewTarget.classList.contains('page-view')) {
+                document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden'));
+                viewTarget.classList.remove('hidden');
+            }
         }
     } else {
-        // Jika ingatan kosong, amankan dengan melempar user ke Dashboard
+        // Fallback: Jika terjadi error atau sejarah kosong, kembali ke Dashboard
+        document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden'));
         document.getElementById('viewDashboard').classList.remove('hidden');
-        history.replaceState({ menu: 'utama' }, "Dashboard Utama", "#dashboard");
+        history.replaceState({ level: 'dashboard' }, "Dashboard", "#dashboard");
     }
 });
