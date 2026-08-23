@@ -18,10 +18,22 @@ document.addEventListener("DOMContentLoaded", function() {
 });
 
 // ==========================================
-// 2. ROUTING DASAR (PENGAMAN SEJARAH)
+// 2. ROUTING DASAR & REAL-TIME SEARCH SENSOR
 // ==========================================
 window.addEventListener('DOMContentLoaded', () => {
     history.replaceState({ level: 'viewDashboard' }, "Dashboard", "#dashboard");
+    
+    // SENSOR PENCARIAN REAL-TIME: 
+    // Jika guru mengetik nama di kolom pencarian saat menu Absen terbuka, log akan langsung update!
+    let inputCari = document.getElementById('namaInput');
+    if (inputCari) {
+        inputCari.addEventListener('input', function() {
+            let viewAbsensi = document.getElementById('viewAbsensi');
+            if (viewAbsensi && !viewAbsensi.classList.contains('hidden')) {
+                window.renderRiwayatAbsensi();
+            }
+        });
+    }
 });
 
 function catatSejarah(levelId) {
@@ -73,47 +85,35 @@ window.isPopStateRunning = false;
 window.addEventListener('popstate', function(event) {
     window.isPopStateRunning = true;
     
-    // PEMISAHAN LAPISAN POP-UP
-    const modalsLayer1 = ['suratDetail', 'ummiDetail']; // Pop-up Bawah
-    const modalsLayer2 = ['modalPenilaianUmmi', 'modalPeringatan']; // Pop-up Atas
+    const modalsLayer1 = ['suratDetail', 'ummiDetail']; 
+    const modalsLayer2 = ['modalPenilaianUmmi', 'modalPeringatan'];
 
-    // Matikan Scanner Jika Menyala
     if (typeof html5QrcodeScanner !== 'undefined' && html5QrcodeScanner) {
         try { html5QrcodeScanner.clear().then(() => html5QrcodeScanner = null); } catch(e) {}
     }
 
     if (event.state && event.state.isModal) {
-        // SKENARIO A: KITA MUNDUR KE POP-UP LAPISAN 1 (Contoh: Menutup Form Nilai kembali ke Halaman Jilid)
         const targetModal = event.state.id;
-        
         if (modalsLayer1.includes(targetModal)) {
-            // HANYA Sembunyikan Lapisan 2 agar Lapisan 1 tidak berkedip/ter-reset
             modalsLayer2.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.add('hidden');
             });
-            
-            // Pastikan Lapisan 1 dan scroll tetap terkunci secara sengaja (karena Pop-up Jilid masih terbuka)
             document.getElementById(targetModal).classList.remove('hidden');
             document.getElementById('backdropDetail').classList.remove('hidden');
             document.body.classList.add('overflow-hidden');
         }
     } 
     else {
-        // SKENARIO B: KITA MUNDUR KE HALAMAN UTAMA / SUB-PAGE (Keluar dari semua Modal)
-        
-        // 1. BUKA KUNCI SCROLL SECARA AGRESIF (Obat Anti-Frozen Mutlak)
         document.body.classList.remove('overflow-hidden', 'overflow-y-hidden', 'fixed');
         document.body.style.overflow = '';
         document.documentElement.classList.remove('overflow-hidden', 'overflow-y-hidden');
         
-        // 2. Tutup SEMUA Modal
         [...modalsLayer1, ...modalsLayer2, 'backdropDetail'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.classList.add('hidden');
         });
 
-        // 3. Routing Halaman Yang Sangat Presisi
         const stateSekarang = event.state ? event.state.level : 'viewDashboard';
         document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden'));
 
@@ -146,19 +146,16 @@ window.addEventListener('popstate', function(event) {
             document.getElementById('subPageDetailSuratJuz').classList.add('hidden');
         }
         else {
-            // Fallback umum
             const viewTarget = document.getElementById(stateSekarang);
             if (viewTarget) viewTarget.classList.remove('hidden');
             else document.getElementById('viewDashboard').classList.remove('hidden');
         }
     }
-
-    // Bebaskan sensor setelah logika selesai
     setTimeout(() => { window.isPopStateRunning = false; }, 100);
 });
 
 // ==========================================
-// 5. SISTEM ABSENSI & QR SCANNER
+// 5. SISTEM ABSENSI & LOG AKTIVITAS 
 // ==========================================
 let html5QrcodeScanner;
 const scriptURLAbsen = 'https://script.google.com/macros/s/AKfycbzRY0tcV6SnDy_ESEyBeE4PwoY9GVmyAg4Omu5M43WtK0_XvmCuQqS-zQqlQ7NIMeGWow/exec';
@@ -180,25 +177,105 @@ window.tutupMenuAbsensi = function() { history.back(); };
 
 window.renderRiwayatAbsensi = function() {
     let container = document.getElementById('listRiwayatAbsensi');
-    if (!window.santriAktif || !window.santriAktif.absensi || window.santriAktif.absensi.length === 0) {
-        container.innerHTML = `<div class="flex flex-col items-center justify-center opacity-50 mt-10"><span class="material-symbols-outlined text-4xl mb-2">inbox</span><p class="text-xs font-semibold text-center">Belum ada absen.</p></div>`; 
+    
+    let currentRole = localStorage.getItem("role") || "murid";
+    currentRole = currentRole.toLowerCase();
+    
+    let targetSantri = null;
+
+    if (currentRole === "murid" || currentRole === "santri" || currentRole === "siswa") {
+        // [ATURAN MURID]: HANYA lihat riwayat sendiri secara mutlak
+        let namaAkunLogin = localStorage.getItem("nama") || localStorage.getItem("username") || "";
+        if (!namaAkunLogin) {
+            let elemenNama = document.getElementById('namaSantri');
+            if (elemenNama && elemenNama.innerText !== "-") {
+                namaAkunLogin = elemenNama.innerText.replace('!', '').trim();
+            }
+        }
+        if (typeof dataSantri !== 'undefined' && namaAkunLogin) {
+            let queryNama = namaAkunLogin.trim().toLowerCase();
+            targetSantri = dataSantri.find(s => s.nama && s.nama.trim().toLowerCase() === queryNama);
+        }
+    } 
+    else {
+        // [ATURAN GURU]: Tarik data otomatis dari Kolom Pencarian (Search Bar)
+        let inputPencarian = document.getElementById('namaInput');
+        let namaDicari = inputPencarian ? inputPencarian.value.trim().toLowerCase() : "";
+
+        if (namaDicari !== "" && typeof dataSantri !== 'undefined') {
+            // Cocokkan nama yang diketik dengan database
+            targetSantri = dataSantri.find(s => s.nama && s.nama.toLowerCase().includes(namaDicari));
+            if (targetSantri) window.santriAktif = targetSantri; // Set jadi murid aktif
+        }
+        
+        // Jika kolom pencarian kosong, gunakan data yang baru saja di-scan (jika ada)
+        if (!targetSantri && window.santriAktif) {
+            targetSantri = window.santriAktif;
+        }
+    }
+
+    // Jika Target Tidak Ditemukan
+    if (!targetSantri || !targetSantri.absensi || targetSantri.absensi.length === 0) {
+        let inputPencarian = document.getElementById('namaInput');
+        let sedangMencari = (inputPencarian && inputPencarian.value.trim() !== "");
+        
+        let pesanKosong = (currentRole === "murid" || currentRole === "santri" || currentRole === "siswa")
+            ? "Kamu belum memiliki riwayat absensi."
+            : sedangMencari 
+                ? "Santri tersebut belum memiliki riwayat absen."
+                : "Ketik nama santri di atas atau scan QR untuk melihat log.";
+            
+        container.innerHTML = `
+        <div class="flex flex-col items-center justify-center opacity-50 mt-10">
+            <span class="material-symbols-outlined text-4xl mb-2 text-slate-300">inbox</span>
+            <p class="text-xs font-semibold text-center text-slate-400 px-4">${pesanKosong}</p>
+        </div>`; 
         return;
     }
-    const currentRole = localStorage.getItem("role"); 
+
+    // Jika Data Ditemukan, Render Lognya
     let html = '';
-    for (let i = window.santriAktif.absensi.length - 1; i >= 0; i--) {
-        let item = window.santriAktif.absensi[i];
-        let btnHapus = (currentRole === "admin" || currentRole === "guru") ? `<button onclick="hapusDataAbsen(${i})" class="w-8 h-8 rounded-xl bg-rose-50 text-rose-500 flex items-center justify-center hover:bg-rose-100 transition"><span class="material-symbols-outlined text-sm">delete</span></button>` : '';
-        html += `<div class="flex items-center justify-between p-3.5 bg-slate-50 border border-slate-100 rounded-2xl mb-2 hover:border-slate-200 transition"><div class="flex gap-3"><div class="w-9 h-9 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center"><span class="material-symbols-outlined text-base">check_circle</span></div><div><p class="text-xs font-bold text-slate-700">${item.waktu}</p><p class="text-[10px] text-slate-400">Data: ${item.qrData}</p></div></div>${btnHapus}</div>`;
+    for (let i = targetSantri.absensi.length - 1; i >= 0; i--) {
+        let item = targetSantri.absensi[i];
+        let btnHapus = (currentRole === "admin" || currentRole === "guru") 
+            ? `<button onclick="hapusDataAbsen('${targetSantri.nama}', ${i})" class="w-8 h-8 rounded-xl bg-rose-50 text-rose-500 flex items-center justify-center hover:bg-rose-100 transition active:scale-90 flex-shrink-0" title="Hapus"><span class="material-symbols-outlined text-sm">delete</span></button>` 
+            : '';
+        
+        html += `
+        <div class="flex items-center justify-between p-3.5 bg-slate-50 border border-slate-100 rounded-2xl mb-2 hover:border-blue-200 hover:shadow-sm transition-all group">
+            <div class="flex items-center gap-3 w-full overflow-hidden">
+                <div class="w-9 h-9 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                    <span class="material-symbols-outlined text-base">check_circle</span>
+                </div>
+                <div class="truncate pr-2">
+                    <p class="text-sm font-extrabold text-slate-800 truncate">${targetSantri.nama}</p>
+                    <div class="flex items-center gap-2 mt-0.5">
+                        <span class="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100 shadow-sm">${item.waktu}</span>
+                    </div>
+                </div>
+            </div>
+            ${btnHapus}
+        </div>`;
     }
     container.innerHTML = html;
 };
 
-window.hapusDataAbsen = function(index) {
-    if (confirm("Yakin hapus riwayat absen?")) {
-        window.santriAktif.absensi.splice(index, 1);
-        db.collection("database_hafalan").doc(window.santriAktif.nama).set({ absensi: window.santriAktif.absensi }, { merge: true })
-        .then(() => window.renderRiwayatAbsensi()).catch(e => alert("Gagal hapus data."));
+// Fungsi Hapus
+window.hapusDataAbsen = function(namaPemilik, indexAsli) {
+    if (confirm("Yakin ingin menghapus riwayat absen ini?")) {
+        let target = dataSantri.find(s => s.nama === namaPemilik);
+        if (target && target.absensi) {
+            target.absensi.splice(indexAsli, 1);
+            
+            db.collection("database_hafalan").doc(target.nama).set({ 
+                absensi: target.absensi 
+            }, { merge: true })
+            .then(() => {
+                if (window.santriAktif && window.santriAktif.nama === target.nama) window.santriAktif = target; 
+                window.renderRiwayatAbsensi();
+            })
+            .catch(e => alert("Gagal menghapus data di Cloud."));
+        }
     }
 };
 
@@ -206,24 +283,47 @@ window.onScanSuccess = function(decodedText) {
     if (html5QrcodeScanner) html5QrcodeScanner.pause(true);
     if (navigator.vibrate) navigator.vibrate(200);
     let divHasil = document.getElementById('hasil');
-    let namaYangDiScan = decodedText; let qrDataAman = decodedText; 
+    
+    let namaYangDiScan = decodedText; 
+    let qrDataAman = decodedText; 
     
     if (decodedText.startsWith("LOGIN|")) {
         let pecahan = decodedText.split('|');
-        if (pecahan.length >= 5) { namaYangDiScan = pecahan[4]; qrDataAman = "QR Terpadu (Aman)"; } 
+        if (pecahan.length >= 5) { 
+            namaYangDiScan = pecahan[4].trim(); 
+            qrDataAman = "QR Terpadu (Aman)"; 
+        } 
         else { window.resetScan(divHasil, "❌ QR Login tidak lengkap!", "rose"); return; }
+    } else {
+        namaYangDiScan = namaYangDiScan.trim();
     }
 
+    let queryScan = namaYangDiScan.toLowerCase();
     let siswaDitemukan = null;
     if (typeof dataSantri !== 'undefined') {
-        siswaDitemukan = dataSantri.find(s => (s.nama && s.nama.toLowerCase() === namaYangDiScan.toLowerCase()) || (s.id && s.id.toLowerCase() === namaYangDiScan.toLowerCase()));
+        siswaDitemukan = dataSantri.find(s => 
+            (s.nama && s.nama.trim().toLowerCase() === queryScan) || 
+            (s.id && s.id.trim().toLowerCase() === queryScan)
+        );
     }
 
     if (!siswaDitemukan) { window.resetScan(divHasil, "❌ Santri tidak terdaftar!", "rose"); return; }
 
-    let dateObj = new Date(); let waktuLengkap = dateObj.toLocaleString("id-ID"); let tanggalHariIni = dateObj.toLocaleDateString("id-ID"); 
+    // OTOMATIS MENGISI KOLOM PENCARIAN SAAT BERHASIL SCAN!
+    let inputPencarian = document.getElementById('namaInput');
+    if (inputPencarian) inputPencarian.value = siswaDitemukan.nama;
+
+    let dateObj = new Date(); 
+    let waktuLengkap = dateObj.toLocaleString("id-ID"); 
+    let tanggalHariIni = dateObj.toLocaleDateString("id-ID"); 
+    
     let riwayatAbsen = siswaDitemukan.absensi || [];
-    if (riwayatAbsen.some(a => a.waktu && a.waktu.includes(tanggalHariIni))) { window.resetScan(divHasil, `⚠️ ${siswaDitemukan.nama} sudah absen!`, "amber"); return; }
+    if (riwayatAbsen.some(a => a.waktu && a.waktu.includes(tanggalHariIni))) { 
+        window.santriAktif = siswaDitemukan; 
+        window.renderRiwayatAbsensi();
+        window.resetScan(divHasil, `⚠️ ${siswaDitemukan.nama} sudah absen!`, "amber"); 
+        return; 
+    }
 
     window.santriAktif = siswaDitemukan;
     divHasil.innerHTML = "⏳ Menyimpan..."; 
@@ -234,7 +334,7 @@ window.onScanSuccess = function(decodedText) {
 
     db.collection("database_hafalan").doc(window.santriAktif.nama).set({ absensi: window.santriAktif.absensi }, { merge: true })
     .then(() => {
-        window.renderRiwayatAbsensi();
+        window.renderRiwayatAbsensi(); 
         fetch(`${scriptURLAbsen}?nama=${encodeURIComponent(window.santriAktif.nama)}&waktu=${encodeURIComponent(waktuLengkap)}&qr_data=${encodeURIComponent(qrDataAman)}`, { method: 'GET', mode: 'no-cors' }).catch(e => console.error(e));
         window.resetScan(divHasil, "✅ Tersimpan: " + window.santriAktif.nama, "emerald");
     }).catch(e => window.resetScan(divHasil, "❌ Gagal koneksi Cloud", "rose"));
@@ -280,14 +380,12 @@ window.addEventListener('DOMContentLoaded', () => {
                         if (!isHidden && !wasOpen) {
                             elemenModal.dataset.sedangTerbuka = "true";
                             if (!window.isPopStateRunning) {
-                                // PUSH STATE Saat Modal Terbuka
                                 history.pushState({ isModal: true, id: idModal }, "Modal Terbuka", "#modal-" + idModal);
                             }
                         } 
                         else if (isHidden && wasOpen) {
                             elemenModal.dataset.sedangTerbuka = "false";
                             if (!window.isPopStateRunning) {
-                                // Jika ditutup oleh UI (tombol silang), tarik mundur HP 1 langkah
                                 if (history.state && history.state.isModal && history.state.id === idModal) {
                                     history.back();
                                 }
