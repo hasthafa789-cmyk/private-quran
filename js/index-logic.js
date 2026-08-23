@@ -18,7 +18,7 @@ document.addEventListener("DOMContentLoaded", function() {
 });
 
 // ==========================================
-// 2. SISTEM PENGAMAN TOMBOL BACK HP (HISTORY API CANGGIH)
+// 2. SISTEM PENGAMAN TOMBOL BACK HP (HISTORY API)
 // ==========================================
 window.addEventListener('DOMContentLoaded', () => {
     history.replaceState({ level: 'dashboard' }, "Dashboard Utama", "#dashboard");
@@ -71,34 +71,49 @@ window.kembaliKeMenuPenilaian = function() {
 };
 
 // ==========================================
-// 4. DETEKSI AKSI FISIK TOMBOL BACK DI HP/TAB
+// 4. DETEKSI AKSI FISIK TOMBOL BACK DI HP/TAB (SADAR LAPISAN)
 // ==========================================
+window.isPopStateRunning = false; // Bendera pengaman agar sensor tidak bertabrakan
+
 window.addEventListener('popstate', function(event) {
-    // PENGHANCUR BUG SCROLL (Layar Membeku)
+    window.isPopStateRunning = true; // Nyalakan bendera pengaman
+    
+    // a. Buka kunci scroll secara default
     document.body.classList.remove('overflow-hidden', 'overflow-y-hidden');
     document.documentElement.classList.remove('overflow-hidden', 'overflow-y-hidden');
     
-    // Matikan scanner kamera jika sedang aktif
+    // b. Matikan scanner kamera jika sedang aktif
     if (typeof html5QrcodeScanner !== 'undefined' && html5QrcodeScanner) {
         try { html5QrcodeScanner.clear().then(() => html5QrcodeScanner = null); } catch(e) {}
     }
 
-    // Tutup paksa semua Modal/Pop-Up 
+    // c. Sembunyikan SEMUA Pop-Up terlebih dahulu
     const modals = ['suratDetail', 'ummiDetail', 'modalPenilaianUmmi', 'backdropDetail', 'modalPeringatan'];
     modals.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
     });
 
-    // Panggil fungsi penutup khusus jika ada
-    if (typeof closeDetail === 'function') closeDetail(true); 
-    if (typeof closeUmmiDetail === 'function') closeUmmiDetail(true);
-    if (typeof tutupFormNilaiUmmi === 'function') tutupFormNilaiUmmi();
+    // d. Baca Memori HP (State)
+    const stateSekarang = event.state ? event.state.level : null;
+    const stateModal = event.state ? event.state.targetModal : null;
 
-    // Logika Mundur Setahap Demi Setahap
-    if (event.state && event.state.level) {
-        const stateSekarang = event.state.level;
-        
+    // SKENARIO 1: MUNDUR KE POP-UP LAPISAN 1 (Contoh: Menutup form nilai Ummi -> Kembali ke Halaman Jilid)
+    if (event.state && event.state.iniModal && stateModal) {
+        const modalTarget = document.getElementById(stateModal);
+        if (modalTarget) {
+            modalTarget.classList.remove('hidden'); // Hidupkan kembali Pop-up Lapisan 1
+            document.body.classList.add('overflow-hidden'); // Kunci scroll lagi karena Pop-up masih terbuka
+            
+            // Khusus Pop-Up utama, hidupkan juga layar gelap di belakangnya (Backdrop)
+            if (stateModal === 'suratDetail' || stateModal === 'ummiDetail') {
+                const backdrop = document.getElementById('backdropDetail');
+                if (backdrop) backdrop.classList.remove('hidden');
+            }
+        }
+    } 
+    // SKENARIO 2: MUNDUR KE HALAMAN BIASA
+    else if (stateSekarang) {
         if (stateSekarang === 'viewPenilaian') {
             document.getElementById('subPageDetailHijaiyah').classList.add('hidden');
             document.getElementById('subPageDetailTajwid').classList.add('hidden');
@@ -123,11 +138,15 @@ window.addEventListener('popstate', function(event) {
                 viewTarget.classList.remove('hidden');
             }
         }
-    } else {
-        // Fallback
+    } 
+    // SKENARIO DARURAT
+    else {
         document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden'));
         if (document.getElementById('viewDashboard')) document.getElementById('viewDashboard').classList.remove('hidden');
     }
+
+    // Matikan bendera pengaman dengan sangat cepat
+    setTimeout(() => { window.isPopStateRunning = false; }, 50);
 });
 
 // ==========================================
@@ -140,7 +159,7 @@ window.bukaMenuAbsensi = function() {
     catatSejarah('viewAbsensi'); 
     document.querySelectorAll('.page-view').forEach(h => h.classList.add('hidden'));
     document.getElementById('viewAbsensi').classList.remove('hidden');
-    renderRiwayatAbsensi();
+    window.renderRiwayatAbsensi();
     setTimeout(() => {
         if (!html5QrcodeScanner) {
             html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: {width: 250, height: 250} }, false);
@@ -237,45 +256,44 @@ if ('serviceWorker' in navigator) {
 }
 
 // ==========================================
-// 7. SENSOR PENGAMAT POP-UP (THE MAGIC OBSERVER)
-// Memastikan menekan Back saat Pop-up terbuka HANYA menutup Pop-up saja!
+// 7. SENSOR PENGAMAT POP-UP BERTUMPUK (SMART OBSERVER)
 // ==========================================
 window.addEventListener('DOMContentLoaded', () => {
-    // Daftar Kotak Pop-up yang akan dipantau oleh sensor
     const daftarModal = ['suratDetail', 'ummiDetail', 'modalPenilaianUmmi'];
     
     daftarModal.forEach(idModal => {
         const elemenModal = document.getElementById(idModal);
         if (elemenModal) {
-            // Catat apakah saat ini kotak sedang terbuka atau tertutup
             elemenModal.dataset.sedangTerbuka = elemenModal.classList.contains('hidden') ? "false" : "true";
             
-            // Pasang sensor pengamat
             const pengamat = new MutationObserver((mutasiList) => {
                 mutasiList.forEach((mutasi) => {
                     if (mutasi.attributeName === 'class') {
                         const isHidden = elemenModal.classList.contains('hidden');
                         const wasOpen = elemenModal.dataset.sedangTerbuka === "true";
                         
-                        // JIKA KOTAK BARU SAJA TERBUKA:
+                        // JIKA POP-UP BARU SAJA TERBUKA
                         if (!isHidden && !wasOpen) {
                             elemenModal.dataset.sedangTerbuka = "true";
-                            // Ciptakan sejarah palsu agar sistem memori HP bertambah 1 langkah
-                            history.pushState({ iniModal: true, targetModal: idModal }, "Modal Terbuka", "#modal-" + idModal);
+                            // JANGAN catat sejarah jika pop-up terbuka otomatis karena restorasi tombol Back
+                            if (!window.isPopStateRunning) {
+                                history.pushState({ iniModal: true, targetModal: idModal }, "Modal Terbuka", "#modal-" + idModal);
+                            }
                         } 
-                        // JIKA KOTAK BARU SAJA DITUTUP (Lewat tombol silang/Simpan):
+                        // JIKA POP-UP BARU SAJA DITUTUP (Oleh klik UI pengguna)
                         else if (isHidden && wasOpen) {
                             elemenModal.dataset.sedangTerbuka = "false";
-                            // Bersihkan "sejarah palsu" dari memori HP agar tidak menumpuk
-                            if (history.state && history.state.iniModal && history.state.targetModal === idModal) {
-                                history.back();
+                            // Pastikan yang menutup adalah kursor pengguna, bukan fungsi tombol Back
+                            if (!window.isPopStateRunning) {
+                                // Tarik mundur memori HP 1 langkah
+                                if (history.state && history.state.iniModal && history.state.targetModal === idModal) {
+                                    history.back();
+                                }
                             }
                         }
                     }
                 });
             });
-            
-            // Aktifkan sensor
             pengamat.observe(elemenModal, { attributes: true });
         }
     });
