@@ -18,30 +18,29 @@ document.addEventListener("DOMContentLoaded", function() {
 });
 
 // ==========================================
-// 2. SISTEM PENGAMAN TOMBOL BACK HP (HISTORY API)
+// 2. ROUTING DASAR (PENGAMAN SEJARAH)
 // ==========================================
 window.addEventListener('DOMContentLoaded', () => {
-    history.replaceState({ level: 'dashboard' }, "Dashboard Utama", "#dashboard");
+    history.replaceState({ level: 'viewDashboard' }, "Dashboard", "#dashboard");
 });
 
 function catatSejarah(levelId) {
     history.pushState({ level: levelId }, levelId, "#" + levelId);
 }
 
-// Menyadap Navigasi Utama
 setTimeout(() => {
     if (typeof window.navigateTo === 'function') {
         const fungsiAsliNavigateTo = window.navigateTo;
         window.navigateTo = function(viewId) {
             if (viewId !== 'viewDashboard') catatSejarah(viewId);
-            else history.pushState({ level: 'dashboard' }, "Dashboard", "#dashboard");
+            else history.pushState({ level: 'viewDashboard' }, "Dashboard", "#dashboard");
             fungsiAsliNavigateTo(viewId);
         };
     }
 }, 500);
 
 // ==========================================
-// 3. NAVIGASI BERSARANG (SUB-MENU HAFALAN & PENILAIAN)
+// 3. NAVIGASI SUB-MENU EKSPLISIT
 // ==========================================
 window.bukaHalamanJuz = function(nomorJuz) {
     catatSejarah('subPageDetailSuratJuz'); 
@@ -51,9 +50,7 @@ window.bukaHalamanJuz = function(nomorJuz) {
     if(typeof renderSuratBerdasarkanJuz === "function") renderSuratBerdasarkanJuz(nomorJuz);
 };
 
-window.kembaliKeDaftarJuz = function() {
-    history.back(); 
-};
+window.kembaliKeDaftarJuz = function() { history.back(); };
 
 window.bukaSubMenuPenilaian = function(tipe) {
     document.getElementById('subPageMenuPenilaian').classList.add('hidden');
@@ -66,87 +63,98 @@ window.bukaSubMenuPenilaian = function(tipe) {
     }
 };
 
-window.kembaliKeMenuPenilaian = function() {
-    history.back(); 
-};
+window.kembaliKeMenuPenilaian = function() { history.back(); };
 
 // ==========================================
-// 4. DETEKSI AKSI FISIK TOMBOL BACK DI HP/TAB (SADAR LAPISAN)
+// 4. DETEKSI AKSI BACK (ANTI-FROZEN & SADAR LAPISAN)
 // ==========================================
-window.isPopStateRunning = false; // Bendera pengaman agar sensor tidak bertabrakan
+window.isPopStateRunning = false;
 
 window.addEventListener('popstate', function(event) {
-    window.isPopStateRunning = true; // Nyalakan bendera pengaman
+    window.isPopStateRunning = true;
     
-    // a. Buka kunci scroll secara default
-    document.body.classList.remove('overflow-hidden', 'overflow-y-hidden');
-    document.documentElement.classList.remove('overflow-hidden', 'overflow-y-hidden');
-    
-    // b. Matikan scanner kamera jika sedang aktif
+    // PEMISAHAN LAPISAN POP-UP
+    const modalsLayer1 = ['suratDetail', 'ummiDetail']; // Pop-up Bawah
+    const modalsLayer2 = ['modalPenilaianUmmi', 'modalPeringatan']; // Pop-up Atas
+
+    // Matikan Scanner Jika Menyala
     if (typeof html5QrcodeScanner !== 'undefined' && html5QrcodeScanner) {
         try { html5QrcodeScanner.clear().then(() => html5QrcodeScanner = null); } catch(e) {}
     }
 
-    // c. Sembunyikan SEMUA Pop-Up terlebih dahulu
-    const modals = ['suratDetail', 'ummiDetail', 'modalPenilaianUmmi', 'backdropDetail', 'modalPeringatan'];
-    modals.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.classList.add('hidden');
-    });
-
-    // d. Baca Memori HP (State)
-    const stateSekarang = event.state ? event.state.level : null;
-    const stateModal = event.state ? event.state.targetModal : null;
-
-    // SKENARIO 1: MUNDUR KE POP-UP LAPISAN 1 (Contoh: Menutup form nilai Ummi -> Kembali ke Halaman Jilid)
-    if (event.state && event.state.iniModal && stateModal) {
-        const modalTarget = document.getElementById(stateModal);
-        if (modalTarget) {
-            modalTarget.classList.remove('hidden'); // Hidupkan kembali Pop-up Lapisan 1
-            document.body.classList.add('overflow-hidden'); // Kunci scroll lagi karena Pop-up masih terbuka
+    if (event.state && event.state.isModal) {
+        // SKENARIO A: KITA MUNDUR KE POP-UP LAPISAN 1 (Contoh: Menutup Form Nilai kembali ke Halaman Jilid)
+        const targetModal = event.state.id;
+        
+        if (modalsLayer1.includes(targetModal)) {
+            // HANYA Sembunyikan Lapisan 2 agar Lapisan 1 tidak berkedip/ter-reset
+            modalsLayer2.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.add('hidden');
+            });
             
-            // Khusus Pop-Up utama, hidupkan juga layar gelap di belakangnya (Backdrop)
-            if (stateModal === 'suratDetail' || stateModal === 'ummiDetail') {
-                const backdrop = document.getElementById('backdropDetail');
-                if (backdrop) backdrop.classList.remove('hidden');
-            }
+            // Pastikan Lapisan 1 dan scroll tetap terkunci secara sengaja (karena Pop-up Jilid masih terbuka)
+            document.getElementById(targetModal).classList.remove('hidden');
+            document.getElementById('backdropDetail').classList.remove('hidden');
+            document.body.classList.add('overflow-hidden');
         }
     } 
-    // SKENARIO 2: MUNDUR KE HALAMAN BIASA
-    else if (stateSekarang) {
-        if (stateSekarang === 'viewPenilaian') {
+    else {
+        // SKENARIO B: KITA MUNDUR KE HALAMAN UTAMA / SUB-PAGE (Keluar dari semua Modal)
+        
+        // 1. BUKA KUNCI SCROLL SECARA AGRESIF (Obat Anti-Frozen Mutlak)
+        document.body.classList.remove('overflow-hidden', 'overflow-y-hidden', 'fixed');
+        document.body.style.overflow = '';
+        document.documentElement.classList.remove('overflow-hidden', 'overflow-y-hidden');
+        
+        // 2. Tutup SEMUA Modal
+        [...modalsLayer1, ...modalsLayer2, 'backdropDetail'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.classList.add('hidden');
+        });
+
+        // 3. Routing Halaman Yang Sangat Presisi
+        const stateSekarang = event.state ? event.state.level : 'viewDashboard';
+        document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden'));
+
+        if (stateSekarang === 'subPageDetailHijaiyah') {
+            document.getElementById('viewPenilaian').classList.remove('hidden');
+            document.getElementById('subPageMenuPenilaian').classList.add('hidden');
+            document.getElementById('subPageDetailHijaiyah').classList.remove('hidden');
+            document.getElementById('subPageDetailTajwid').classList.add('hidden');
+        }
+        else if (stateSekarang === 'subPageDetailTajwid') {
+            document.getElementById('viewPenilaian').classList.remove('hidden');
+            document.getElementById('subPageMenuPenilaian').classList.add('hidden');
+            document.getElementById('subPageDetailHijaiyah').classList.add('hidden');
+            document.getElementById('subPageDetailTajwid').classList.remove('hidden');
+        }
+        else if (stateSekarang === 'viewPenilaian') {
+            document.getElementById('viewPenilaian').classList.remove('hidden');
+            document.getElementById('subPageMenuPenilaian').classList.remove('hidden');
             document.getElementById('subPageDetailHijaiyah').classList.add('hidden');
             document.getElementById('subPageDetailTajwid').classList.add('hidden');
-            document.getElementById('subPageMenuPenilaian').classList.remove('hidden');
-            document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden'));
-            document.getElementById('viewPenilaian').classList.remove('hidden');
+        }
+        else if (stateSekarang === 'subPageDetailSuratJuz') {
+            document.getElementById('viewHafalan').classList.remove('hidden');
+            document.getElementById('subPageDaftarJuz').classList.add('hidden');
+            document.getElementById('subPageDetailSuratJuz').classList.remove('hidden');
         }
         else if (stateSekarang === 'viewHafalan') {
-            document.getElementById('subPageDetailSuratJuz').classList.add('hidden');
-            document.getElementById('subPageDaftarJuz').classList.remove('hidden');
-            document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden'));
             document.getElementById('viewHafalan').classList.remove('hidden');
-        }
-        else if (stateSekarang === 'dashboard') {
-            document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden'));
-            document.getElementById('viewDashboard').classList.remove('hidden');
+            document.getElementById('subPageDaftarJuz').classList.remove('hidden');
+            document.getElementById('subPageDetailSuratJuz').classList.add('hidden');
         }
         else {
+            // Fallback umum
             const viewTarget = document.getElementById(stateSekarang);
-            if (viewTarget && viewTarget.classList.contains('page-view')) {
-                document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden'));
-                viewTarget.classList.remove('hidden');
-            }
+            if (viewTarget) viewTarget.classList.remove('hidden');
+            else document.getElementById('viewDashboard').classList.remove('hidden');
         }
-    } 
-    // SKENARIO DARURAT
-    else {
-        document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden'));
-        if (document.getElementById('viewDashboard')) document.getElementById('viewDashboard').classList.remove('hidden');
     }
 
-    // Matikan bendera pengaman dengan sangat cepat
-    setTimeout(() => { window.isPopStateRunning = false; }, 50);
+    // Bebaskan sensor setelah logika selesai
+    setTimeout(() => { window.isPopStateRunning = false; }, 100);
 });
 
 // ==========================================
@@ -168,9 +176,7 @@ window.bukaMenuAbsensi = function() {
     }, 300);
 };
 
-window.tutupMenuAbsensi = function() {
-    history.back(); 
-};
+window.tutupMenuAbsensi = function() { history.back(); };
 
 window.renderRiwayatAbsensi = function() {
     let container = document.getElementById('listRiwayatAbsensi');
@@ -246,8 +252,7 @@ window.onScanFailure = function(error) { /* Abaikan */ };
 // ==========================================
 document.addEventListener('keydown', function(event) {
     if (event.key === 'Enter' && event.target.id === 'inputNilaiUmmi' && typeof simpanNilaiUmmi === "function") {
-        event.preventDefault(); 
-        simpanNilaiUmmi();
+        event.preventDefault(); simpanNilaiUmmi();
     }
 });
 
@@ -256,7 +261,7 @@ if ('serviceWorker' in navigator) {
 }
 
 // ==========================================
-// 7. SENSOR PENGAMAT POP-UP BERTUMPUK (SMART OBSERVER)
+// 7. SENSOR PENGAMAT LAPISAN POP-UP 
 // ==========================================
 window.addEventListener('DOMContentLoaded', () => {
     const daftarModal = ['suratDetail', 'ummiDetail', 'modalPenilaianUmmi'];
@@ -272,21 +277,18 @@ window.addEventListener('DOMContentLoaded', () => {
                         const isHidden = elemenModal.classList.contains('hidden');
                         const wasOpen = elemenModal.dataset.sedangTerbuka === "true";
                         
-                        // JIKA POP-UP BARU SAJA TERBUKA
                         if (!isHidden && !wasOpen) {
                             elemenModal.dataset.sedangTerbuka = "true";
-                            // JANGAN catat sejarah jika pop-up terbuka otomatis karena restorasi tombol Back
                             if (!window.isPopStateRunning) {
-                                history.pushState({ iniModal: true, targetModal: idModal }, "Modal Terbuka", "#modal-" + idModal);
+                                // PUSH STATE Saat Modal Terbuka
+                                history.pushState({ isModal: true, id: idModal }, "Modal Terbuka", "#modal-" + idModal);
                             }
                         } 
-                        // JIKA POP-UP BARU SAJA DITUTUP (Oleh klik UI pengguna)
                         else if (isHidden && wasOpen) {
                             elemenModal.dataset.sedangTerbuka = "false";
-                            // Pastikan yang menutup adalah kursor pengguna, bukan fungsi tombol Back
                             if (!window.isPopStateRunning) {
-                                // Tarik mundur memori HP 1 langkah
-                                if (history.state && history.state.iniModal && history.state.targetModal === idModal) {
+                                // Jika ditutup oleh UI (tombol silang), tarik mundur HP 1 langkah
+                                if (history.state && history.state.isModal && history.state.id === idModal) {
                                     history.back();
                                 }
                             }
