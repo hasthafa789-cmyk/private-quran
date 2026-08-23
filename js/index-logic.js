@@ -160,3 +160,73 @@ window.onScanFailure = function(error) { /* Abaikan */ };
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js'); });
 }
+
+// ==========================================
+// SISTEM PENGAMAN TOMBOL BACK HP (HISTORY API)
+// ==========================================
+
+// 1. Saat pertama masuk aplikasi, catat ini sebagai halaman "Dashboard Utama"
+window.addEventListener('DOMContentLoaded', () => {
+    history.replaceState({ menu: 'utama' }, "Dashboard Utama", "#dashboard");
+});
+
+// 2. Fungsi pembantu untuk mendorong "sejarah palsu" ke memori HP
+function catatSejarah(namaMenu) {
+    history.pushState({ menu: namaMenu }, namaMenu, "#" + namaMenu);
+}
+
+// 3. Sisipkan pencatat sejarah ini ke dalam tombol-tombol navigasimu
+setTimeout(() => {
+    // Menyadap fungsi navigateTo (Untuk Hafalan, Ummi, Penilaian)
+    if (typeof window.navigateTo === 'function') {
+        const fungsiAsliNavigateTo = window.navigateTo;
+        window.navigateTo = function(viewId) {
+            if (viewId !== 'viewDashboard') {
+                catatSejarah(viewId); // Catat sejarah saat masuk menu
+            } else {
+                history.pushState({ menu: 'utama' }, "Dashboard Utama", "#dashboard");
+            }
+            fungsiAsliNavigateTo(viewId);
+        };
+    }
+}, 500); // Tunggu file navigation.js termuat dulu
+
+// Menyadap fungsi bukaMenuAbsensi
+const fungsiAsliAbsensi = window.bukaMenuAbsensi;
+window.bukaMenuAbsensi = function() {
+    catatSejarah('viewAbsensi');
+    fungsiAsliAbsensi();
+};
+
+// 4. MENDETEKSI SAAT TOMBOL BACK FISIK DI HP/TAB DITEKAN
+window.addEventListener('popstate', function(event) {
+    // a. Matikan kamera/scanner absensi jika masih menyala
+    if (typeof html5QrcodeScanner !== 'undefined' && html5QrcodeScanner) {
+        try { html5QrcodeScanner.clear().then(() => html5QrcodeScanner = null); } catch(e) {}
+    }
+
+    // b. Tutup semua modal pop-up yang sedang melayang
+    const modals = ['suratDetail', 'ummiDetail', 'modalPenilaianUmmi', 'backdropDetail', 'modalPeringatan'];
+    modals.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
+    });
+
+    // c. Sembunyikan seluruh tampilan halaman
+    document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden'));
+
+    // d. Baca ingatan HP dan tampilkan halaman yang benar
+    if (event.state && event.state.menu) {
+        if (event.state.menu === 'utama') {
+            document.getElementById('viewDashboard').classList.remove('hidden');
+        } else {
+            const viewTarget = document.getElementById(event.state.menu);
+            if (viewTarget) viewTarget.classList.remove('hidden');
+            else document.getElementById('viewDashboard').classList.remove('hidden');
+        }
+    } else {
+        // Jika ingatan kosong, amankan dengan melempar user ke Dashboard
+        document.getElementById('viewDashboard').classList.remove('hidden');
+        history.replaceState({ menu: 'utama' }, "Dashboard Utama", "#dashboard");
+    }
+});
