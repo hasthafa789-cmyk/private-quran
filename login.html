@@ -19,7 +19,7 @@
     <style>
         body { font-family: 'Plus Jakarta Sans', sans-serif; }
         
-        /* Animasi Latar Belakang (Disesuaikan untuk tema cerah) */
+        /* Animasi Latar Belakang */
         @keyframes blob { 
             0% { transform: translate(0px, 0px) scale(1); } 
             33% { transform: translate(30px, -50px) scale(1.1); } 
@@ -33,87 +33,87 @@
         @keyframes fadeInUp { 0% { opacity: 0; transform: translateY(20px); } 100% { opacity: 1; transform: translateY(0); } }
         .animate-entry { animation: fadeInUp 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; opacity: 0; }
         
-        /* Glassmorphism untuk Tema Cerah */
+        /* Glassmorphism */
         .glass-card { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.5); }
     </style>
 </head>
 
-<body class="relative min-h-screen bg-slate-50 text-slate-800 flex items-center justify-center p-4 overflow-hidden">
+<body class="relative min-h-screen bg-slate-50 text-slate-800 flex items-center justify-center p-4 sm:p-8 overflow-hidden">
 
-    <!-- Efek Latar Belakang -->
+    <!-- Efek Latar Belakang (Responsif Membesar di Laptop) -->
     <div class="fixed top-0 left-0 w-full h-full overflow-hidden z-0 pointer-events-none">
-        <div class="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-200/50 rounded-full mix-blend-multiply filter blur-3xl opacity-40 animate-blob"></div>
-        <div class="absolute bottom-1/4 right-1/4 w-96 h-96 bg-indigo-200/50 rounded-full mix-blend-multiply filter blur-3xl opacity-40 animate-blob animation-delay-2000"></div>
+        <div class="absolute top-1/4 left-1/4 w-72 h-72 md:w-96 md:h-96 lg:w-[30rem] lg:h-[30rem] bg-blue-200/50 rounded-full mix-blend-multiply filter blur-3xl opacity-40 animate-blob"></div>
+        <div class="absolute bottom-1/4 right-1/4 w-72 h-72 md:w-96 md:h-96 lg:w-[30rem] lg:h-[30rem] bg-indigo-200/50 rounded-full mix-blend-multiply filter blur-3xl opacity-40 animate-blob animation-delay-2000"></div>
     </div>
 
-    <div class="animate-entry w-full max-w-sm glass-card rounded-3xl shadow-2xl shadow-slate-200 overflow-hidden relative z-10">
+    <!-- WADAH LOGIN (Lebar Menyesuaikan Layar: max-w-sm di HP, max-w-[420px] di Tab/Laptop) -->
+    <div class="animate-entry w-full max-w-sm md:max-w-md lg:max-w-[420px] glass-card rounded-3xl shadow-2xl shadow-slate-200 overflow-hidden relative z-10 transition-all duration-300">
         
         <!-- Bagian Header Login -->
-        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 p-8 text-white text-center">
-            <div class="relative inline-flex items-center justify-center w-16 h-16 bg-white shadow-2xl rounded-2xl mb-4 overflow-hidden group transform hover:scale-105 transition-all duration-300">
-                <div class="absolute inset-0 bg-gradient-to-tr from-blue-100 to-white opacity-50"></div>
-                <span class="material-symbols-outlined text-4xl text-blue-600 z-10 group-hover:rotate-12 transition-transform duration-300">menu_book</span>
-            </div>
-            <h1 class="text-xl font-extrabold tracking-tight">Hasnan Private App</h1>
-            <p class="text-[10px] text-blue-100 font-bold uppercase tracking-widest mt-1">Sistem Monitoring</p>
+        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 p-8 md:p-10 text-white text-center transition-all duration-300">
+            <!-- NAMA FILE SUDAH DIPASTIKAN logo_v2.png -->
+            <img src="logo_v2.png" alt="Logo App" class="mx-auto w-16 h-16 md:w-20 md:h-20 rounded-2xl object-cover shadow-2xl shadow-blue-500/20 mb-4 md:mb-5 transform hover:scale-105 transition-all duration-300">
+            
+            <h1 class="text-xl md:text-2xl font-extrabold tracking-tight transition-all">Hasnan Private App</h1>
+            <p class="text-[10px] md:text-xs text-blue-100 font-bold uppercase tracking-widest mt-1.5 transition-all">Sistem Monitoring</p>
         </div>
 
         <!-- Form Input -->
-        <div class="p-8 space-y-5">
-            <div class="space-y-1.5">
-                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Email / Username</label>
+        <div class="p-8 md:p-10 space-y-5 md:space-y-6 transition-all duration-300">
+            <div class="space-y-1.5 md:space-y-2">
+                <label class="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest">Email / Username</label>
                 <div class="relative">
-                    <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
-                        <span class="material-symbols-outlined text-lg">account_circle</span>
+                    <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 md:pl-4 text-slate-400">
+                        <span class="material-symbols-outlined text-lg md:text-xl">account_circle</span>
                     </span>
-                    <input type="text" id="username" placeholder="contoh@gmail.com" class="w-full pl-10 pr-4 py-3 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-semibold text-slate-700 placeholder:text-slate-400 shadow-inner">
+                    <input type="text" id="username" placeholder="contoh@gmail.com" class="w-full pl-10 md:pl-12 pr-4 py-3 md:py-3.5 text-sm md:text-base bg-slate-50 border border-slate-200 rounded-xl md:rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-semibold text-slate-700 placeholder:text-slate-400 shadow-inner">
                 </div>
             </div>
 
-            <div class="space-y-1.5">
-                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Password</label>
+            <div class="space-y-1.5 md:space-y-2">
+                <label class="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest">Password</label>
                 <div class="relative">
-                    <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
-                        <span class="material-symbols-outlined text-lg">lock</span>
+                    <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 md:pl-4 text-slate-400">
+                        <span class="material-symbols-outlined text-lg md:text-xl">lock</span>
                     </span>
-                    <input type="password" id="password" placeholder="••••••••" class="w-full pl-10 pr-4 py-3 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-semibold text-slate-700 placeholder:text-slate-400 shadow-inner">
+                    <input type="password" id="password" placeholder="••••••••" class="w-full pl-10 md:pl-12 pr-4 py-3 md:py-3.5 text-sm md:text-base bg-slate-50 border border-slate-200 rounded-xl md:rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-semibold text-slate-700 placeholder:text-slate-400 shadow-inner">
                 </div>
             </div>
 
-            <div class="pt-2">
-                <button onclick="login()" class="w-full py-3.5 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-sm rounded-xl shadow-lg shadow-blue-200 transition-all duration-300 active:scale-[0.98]">
+            <div class="pt-2 md:pt-3">
+                <button onclick="login()" class="w-full py-3.5 md:py-4 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-sm md:text-base rounded-xl md:rounded-2xl shadow-lg shadow-blue-200 transition-all duration-300 active:scale-[0.98]">
                     Masuk
                 </button>
             </div>
 
             <!-- TOMBOL BUKA SCANNER LOGIN -->
-            <div class="mt-6 flex flex-col items-center">
-                <div class="w-full flex items-center gap-3 mb-4">
+            <div class="mt-6 md:mt-8 flex flex-col items-center">
+                <div class="w-full flex items-center gap-3 mb-4 md:mb-5">
                     <div class="h-px bg-slate-200 flex-grow"></div>
-                    <span class="text-xs font-bold text-slate-400 uppercase tracking-widest">Atau</span>
+                    <span class="text-xs md:text-sm font-bold text-slate-400 uppercase tracking-widest">Atau</span>
                     <div class="h-px bg-slate-200 flex-grow"></div>
                 </div>
                 
-                <button onclick="bukaLoginQR()" class="w-full flex items-center justify-center gap-2 px-5 py-3.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold transition-all shadow-lg shadow-slate-900/20 active:scale-95">
-                    <span class="material-symbols-outlined text-xl">qr_code_scanner</span>
+                <button onclick="bukaLoginQR()" class="w-full flex items-center justify-center gap-2 px-5 py-3.5 md:py-4 bg-slate-800 hover:bg-slate-900 text-white rounded-xl md:rounded-2xl font-bold text-sm md:text-base transition-all shadow-lg shadow-slate-900/20 active:scale-95">
+                    <span class="material-symbols-outlined text-xl md:text-2xl">qr_code_scanner</span>
                     Login dengan QR Code
                 </button>
             </div>
 
-            <div class="pt-4 border-t border-slate-100 text-center">
-                <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">© 2026 Hasnan Private System Pro V.1.4</p>
+            <div class="pt-4 md:pt-6 border-t border-slate-100 text-center">
+                <p class="text-[10px] md:text-xs text-slate-400 font-bold uppercase tracking-widest">© 2026 Hasnan Private System Pro</p>
             </div>
         </div>
     </div>
 
-    <!-- AREA KAMERA SCANNER LOGIN (UI Premium & Scroll Landscape) -->
+    <!-- AREA KAMERA SCANNER LOGIN (Responsif di Layar Besar) -->
     <div id="areaLoginQR" class="hidden fixed inset-0 z-[9999] bg-slate-900/90 backdrop-blur-sm transition-all overflow-y-auto">
         <div class="min-h-full flex items-center justify-center p-4 py-10">
-            <div class="bg-white p-6 sm:p-8 rounded-3xl w-full max-w-sm flex flex-col items-center text-center shadow-2xl animate-modal relative">
+            <div class="bg-white p-6 md:p-10 rounded-3xl w-full max-w-sm md:max-w-md flex flex-col items-center text-center shadow-2xl animate-modal relative">
                 
-                <!-- Badge Scanner Aktif Berkedip -->
+                <!-- Badge Scanner Aktif -->
                 <div class="absolute -top-3">
-                    <span class="flex items-center gap-2 text-[10px] font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100 shadow-sm">
+                    <span class="flex items-center gap-2 text-[10px] md:text-xs font-bold text-blue-600 bg-blue-50 px-3 md:px-4 py-1.5 md:py-2 rounded-full border border-blue-100 shadow-sm">
                         <span class="relative flex h-2.5 w-2.5">
                             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
                             <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500"></span>
@@ -122,26 +122,26 @@
                     </span>
                 </div>
 
-                <div class="w-16 h-16 rounded-3xl bg-blue-50 text-blue-600 flex items-center justify-center mt-3 mb-4 shadow-inner">
-                    <span class="material-symbols-outlined text-3xl">qr_code_scanner</span>
+                <div class="w-16 h-16 md:w-20 md:h-20 rounded-3xl bg-blue-50 text-blue-600 flex items-center justify-center mt-3 mb-4 md:mb-5 shadow-inner">
+                    <span class="material-symbols-outlined text-3xl md:text-4xl">qr_code_scanner</span>
                 </div>
                 
-                <h3 class="text-xl font-extrabold text-slate-800 tracking-tight mb-2">Login Instan</h3>
-                <p class="text-xs text-slate-400 font-medium mb-6 leading-relaxed">Posisikan QR Code Anda di tengah layar untuk masuk secara otomatis.</p>
+                <h3 class="text-xl md:text-2xl font-extrabold text-slate-800 tracking-tight mb-2">Login Instan</h3>
+                <p class="text-xs md:text-sm text-slate-400 font-medium mb-6 md:mb-8 leading-relaxed">Posisikan QR Code Anda di tengah layar untuk masuk secara otomatis.</p>
                 
-                <div class="relative w-full mb-6 group">
+                <div class="relative w-full mb-6 md:mb-8 group">
                     <div class="absolute -inset-1 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-3xl blur opacity-25 group-hover:opacity-40 transition duration-700"></div>
                     <div id="loginReader" class="relative w-full rounded-2xl overflow-hidden shadow-sm border-2 border-slate-100 bg-slate-50 z-10"></div>
                 </div>
                 
-                <div class="w-full bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 mb-6 shadow-sm flex items-center justify-center min-h-[50px]">
-                    <div id="statusLoginQR" class="text-sm font-bold text-slate-500 flex items-center justify-center gap-2 transition-all">
-                        <span class="material-symbols-outlined text-base animate-pulse">flip_camera_ios</span>
+                <div class="w-full bg-slate-50 px-4 py-3 md:py-4 rounded-xl border border-slate-200 mb-6 md:mb-8 shadow-sm flex items-center justify-center min-h-[50px]">
+                    <div id="statusLoginQR" class="text-sm md:text-base font-bold text-slate-500 flex items-center justify-center gap-2 transition-all">
+                        <span class="material-symbols-outlined text-base md:text-lg animate-pulse">flip_camera_ios</span>
                         Menunggu scan...
                     </div>
                 </div>
                 
-                <button onclick="tutupLoginQR()" class="w-full flex items-center justify-center gap-2 px-4 py-3.5 bg-rose-50 text-rose-600 font-bold rounded-xl hover:bg-rose-100 transition active:scale-95 border border-rose-100">
+                <button onclick="tutupLoginQR()" class="w-full flex items-center justify-center gap-2 px-4 py-3.5 md:py-4 bg-rose-50 text-rose-600 font-bold text-sm md:text-base rounded-xl hover:bg-rose-100 transition active:scale-95 border border-rose-100">
                     <span class="material-symbols-outlined text-lg">close</span> Batalkan
                 </button>
             </div>
@@ -150,15 +150,15 @@
 
     <!-- MODAL PERINGATAN -->
     <div id="modalPeringatan" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center hidden p-4 transition-all duration-300">
-        <div class="bg-white w-full max-w-sm rounded-3xl p-6 flex flex-col items-center text-center shadow-2xl anim-fade-up">
-            <div class="w-16 h-16 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mb-4 shadow-inner">
-                <span class="material-symbols-outlined text-4xl">info</span>
+        <div class="bg-white w-full max-w-sm md:max-w-md rounded-3xl p-6 md:p-8 flex flex-col items-center text-center shadow-2xl anim-fade-up">
+            <div class="w-16 h-16 md:w-20 md:h-20 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mb-4 md:mb-5 shadow-inner">
+                <span class="material-symbols-outlined text-4xl md:text-5xl">info</span>
             </div>
             
-            <h4 class="text-lg font-extrabold text-slate-800 mb-2">Informasi</h4>
-            <p id="teksPeringatan" class="text-sm text-slate-500 font-medium mb-6">Pesan peringatan akan muncul di sini.</p>
+            <h4 class="text-lg md:text-xl font-extrabold text-slate-800 mb-2">Informasi</h4>
+            <p id="teksPeringatan" class="text-sm md:text-base text-slate-500 font-medium mb-6 md:mb-8">Pesan peringatan akan muncul di sini.</p>
             
-            <button onclick="tutupPeringatan()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl transition-all active:scale-95">
+            <button onclick="tutupPeringatan()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm md:text-base py-3 md:py-4 rounded-xl md:rounded-2xl transition-all active:scale-95">
                 Mengerti
             </button>
         </div>
