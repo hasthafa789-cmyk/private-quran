@@ -1,5 +1,5 @@
 // Service Worker untuk PWA
-const CACHE_NAME = 'hasnan-app-v1';
+const CACHE_NAME = 'hasnan-app-v2';
 
 self.addEventListener('install', event => {
     console.log('[ServiceWorker] Install');
