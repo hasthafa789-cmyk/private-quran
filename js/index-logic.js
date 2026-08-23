@@ -76,24 +76,35 @@ window.kembaliKeMenuPenilaian = function() {
 };
 
 // ==========================================
-// 4. DETEKSI AKSI FISIK TOMBOL BACK DI HP/TAB
+// 4. DETEKSI AKSI FISIK TOMBOL BACK DI HP/TAB (ANTI-FROZEN BUG)
 // ==========================================
 window.addEventListener('popstate', function(event) {
     
-    // [KODE BARU] Buka paksa kunci scroll layar (Mencegah Bug Layar Membeku)
-    document.body.classList.remove('overflow-hidden');
+    // [PENGHANCUR BUG SCROLL] 
+    // Hapus SEMUA kelas yang mungkin mengunci layar dari <body> dan <html>
+    document.body.classList.remove('overflow-hidden', 'overflow-y-hidden');
+    document.documentElement.classList.remove('overflow-hidden', 'overflow-y-hidden');
     
     // a. Matikan scanner kamera jika sedang aktif
     if (typeof html5QrcodeScanner !== 'undefined' && html5QrcodeScanner) {
         try { html5QrcodeScanner.clear().then(() => html5QrcodeScanner = null); } catch(e) {}
     }
 
-    // b. Tutup paksa semua Modal/Pop-Up 
+    // b. Tutup paksa semua Modal/Pop-Up dan Backdrop Gelapnya
     const modals = ['suratDetail', 'ummiDetail', 'modalPenilaianUmmi', 'backdropDetail', 'modalPeringatan'];
     modals.forEach(id => {
         const el = document.getElementById(id);
-        if (el) el.classList.add('hidden');
+        if (el) {
+            el.classList.add('hidden'); // Sembunyikan kotaknya
+            // Jika kotak itu punya style khusus yang menyangkut, bersihkan juga
+            el.style.display = ''; 
+        }
     });
+
+    // PENTING: Jika fungsi penutupan bawaan ada, panggil untuk amannya
+    if (typeof closeDetail === 'function') closeDetail(true); // Kirim 'true' agar fungsi tidak memicu history back lagi
+    if (typeof closeUmmiDetail === 'function') closeUmmiDetail(true);
+    if (typeof tutupFormNilaiUmmi === 'function') tutupFormNilaiUmmi();
 
     // c. Logika Mundur Setahap Demi Setahap
     if (event.state && event.state.level) {
