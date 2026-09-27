@@ -127,7 +127,7 @@
                 </a>
             </section>
 
-            <!-- 3. GRAFIK PERKEMBANGAN (TEMA BERSIH & FOKUS) -->
+            <!-- 3. GRAFIK PERKEMBANGAN -->
             <section class="animate-entry delay-3 space-y-5 pt-2">
                 <div class="flex items-center justify-between mb-2 px-1">
                     <div class="flex items-center gap-3">
@@ -149,7 +149,6 @@
                 </div>
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
-                    <!-- Semua grafik kini menggunakan warna border putih/abu agar terlihat senada dan clean -->
                     <div class="bg-white p-5 sm:p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col group">
                         <div class="flex items-start justify-between mb-5">
                             <div>
@@ -204,12 +203,11 @@
                 </div>
             </section>
 
-            <!-- 4. STATISTIK KARTU (MONOKROM BIRU PREMIUM) -->
+            <!-- 4. STATISTIK KARTU -->
             <section class="animate-entry delay-2 space-y-3 pt-2">
                 <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Dashboard Live Overview</h3>
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
                     
-                    <!-- Kartu 1: Hafalan (Biru Paling Gelap) -->
                     <div class="relative overflow-hidden p-5 sm:p-6 rounded-3xl bg-blue-900 text-white shadow-lg group transition-all duration-300 min-h-[140px] flex flex-col justify-between hover:scale-[1.02] hover:-translate-y-1">
                         <div class="absolute -right-4 -bottom-4 transform text-white/5 font-extrabold text-7xl pointer-events-none select-none">1</div>
                         <div class="flex items-start justify-between w-full z-10">
@@ -227,7 +225,6 @@
                         </div>
                     </div>
 
-                    <!-- Kartu 2: Ummi (Biru Sedang) -->
                     <div class="relative overflow-hidden p-5 sm:p-6 rounded-3xl bg-blue-700 text-white shadow-lg group transition-all duration-300 min-h-[140px] flex flex-col justify-between hover:scale-[1.02] hover:-translate-y-1">
                         <div class="absolute -right-4 -bottom-4 transform text-white/5 font-extrabold text-7xl pointer-events-none select-none">2</div>
                         <div class="flex items-start justify-between w-full z-10">
@@ -245,7 +242,6 @@
                         </div>
                     </div>
 
-                    <!-- Kartu 3: Hijaiyah (Biru Terang) -->
                     <div class="relative overflow-hidden p-5 sm:p-6 rounded-3xl bg-blue-600 text-white shadow-lg group transition-all duration-300 min-h-[140px] flex flex-col justify-between hover:scale-[1.02] hover:-translate-y-1">
                         <div class="absolute -right-4 -bottom-4 transform text-white/5 font-extrabold text-7xl pointer-events-none select-none">3</div>
                         <div class="flex items-start justify-between w-full z-10">
@@ -263,7 +259,6 @@
                         </div>
                     </div>
 
-                    <!-- Kartu 4: Tajwid (Biru Paling Muda/Indigo) -->
                     <div class="relative overflow-hidden p-5 sm:p-6 rounded-3xl bg-indigo-500 text-white shadow-lg group transition-all duration-300 min-h-[140px] flex flex-col justify-between hover:scale-[1.02] hover:-translate-y-1">
                         <div class="absolute -right-4 -bottom-4 transform text-white/5 font-extrabold text-7xl pointer-events-none select-none">4</div>
                         <div class="flex items-start justify-between w-full z-10">
@@ -284,12 +279,24 @@
                 </div>
             </section>
 
-            <!-- 5. AKSES PROGRAM (TOMBOL MENU UTAMA) -->
+            <!-- 5. AKSES PROGRAM -->
             <section class="animate-entry delay-3 space-y-3 pt-2">
                 <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Menu Program Utama</h3>
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+
+                    <button onclick="navigateTo('viewLatihan')" class="text-left bg-white border border-slate-200 rounded-3xl p-6 text-slate-800 shadow-sm group active:scale-[0.98] transition-all hover:-translate-y-1 hover:shadow-lg hover:border-blue-300 flex flex-col justify-between min-h-[160px]">
+                        <div class="flex justify-between items-start w-full">
+                            <div class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                <span class="material-symbols-outlined text-2xl">psychology</span>
+                            </div>
+                            <span class="material-symbols-outlined text-slate-300 group-hover:text-indigo-500 transition-colors">arrow_forward</span>
+                        </div>
+                        <div class="mt-4">
+                            <h3 class="font-extrabold text-lg tracking-tight">Latihan & Kuis</h3>
+                            <p class="text-xs text-slate-500 mt-1 font-medium">Uji pemahaman mandiri.</p>
+                        </div>
+                    </button>
                     
-                    <!-- Tombol Absensi (Dipertahankan warnanya agar terlihat unik/berbeda) -->
                     <button onclick="bukaMenuAbsensi()" class="text-left bg-slate-900 rounded-3xl p-6 text-white shadow-lg shadow-slate-900/10 group active:scale-[0.98] transition-all hover:-translate-y-1 hover:shadow-xl flex flex-col justify-between min-h-[160px]">
                         <div class="flex justify-between items-start w-full">
                             <div class="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center group-hover:bg-blue-500 transition-colors"><span class="material-symbols-outlined text-2xl">qr_code_scanner</span></div>
@@ -355,10 +362,91 @@
         </div>
 
         <!-- ============================================== -->
-        <!-- SUB-MENU (HAFALAN, UMMI, PENILAIAN) -->
+        <!-- VIEW LATIHAN & KUIS -->
         <!-- ============================================== -->
+        <div id="viewLatihan" class="page-view hidden space-y-6">
+            <div class="flex items-center gap-3">
+                <button onclick="navigateTo('viewDashboard')" class="px-4 py-2 text-xs font-bold bg-white text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition active:scale-95 flex items-center gap-1.5 shadow-sm">
+                    <span class="material-symbols-outlined text-sm">arrow_back</span> Kembali
+                </button>
+                <div class="h-4 w-[1px] bg-slate-300"></div>
+                <h3 class="text-xs font-bold text-blue-600 uppercase tracking-widest">Modul Latihan Mandiri</h3>
+            </div>
 
+            <div id="subPageMenuLatihan" class="animate-entry space-y-6">
+                <!-- Pilihan Kuis -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <button onclick="pilihLevel('tajwid')" class="text-left bg-white rounded-3xl border border-slate-200 shadow-sm p-6 hover:shadow-md hover:border-blue-300 transition-all group flex flex-col justify-between min-h-[140px]">
+                        <div class="flex items-center justify-between">
+                            <div class="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:scale-110 group-hover:bg-indigo-600 group-hover:text-white transition-all"><span class="material-symbols-outlined text-2xl">menu_book</span></div>
+                            <span class="material-symbols-outlined text-slate-300 group-hover:text-indigo-500 transition-colors">play_arrow</span>
+                        </div>
+                        <div class="mt-5">
+                            <h2 class="text-lg font-extrabold text-slate-800 tracking-tight">Kuis Hukum Tajwid</h2>
+                            <p class="text-xs text-slate-500 font-medium mt-1">Uji pemahaman hukum bacaan.</p>
+                        </div>
+                    </button>
+
+                    <button onclick="pilihLevel('makharijul')" class="text-left bg-white rounded-3xl border border-slate-200 shadow-sm p-6 hover:shadow-md hover:border-blue-300 transition-all group flex flex-col justify-between min-h-[140px]">
+                        <div class="flex items-center justify-between">
+                            <div class="w-12 h-12 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center group-hover:scale-110 group-hover:bg-teal-600 group-hover:text-white transition-all"><span class="material-symbols-outlined text-2xl">record_voice_over</span></div>
+                            <span class="material-symbols-outlined text-slate-300 group-hover:text-teal-500 transition-colors">play_arrow</span>
+                        </div>
+                        <div class="mt-5">
+                            <h2 class="text-lg font-extrabold text-slate-800 tracking-tight">Makharijul Huruf</h2>
+                            <p class="text-xs text-slate-500 font-medium mt-1">Latihan tempat keluarnya huruf.</p>
+                        </div>
+                    </button>
+
+                    <button onclick="pilihLevel('juz30')" class="text-left bg-white rounded-3xl border border-slate-200 shadow-sm p-6 hover:shadow-md hover:border-blue-300 transition-all group flex flex-col justify-between min-h-[140px]">
+                        <div class="flex items-center justify-between">
+                            <div class="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:scale-110 group-hover:bg-amber-600 group-hover:text-white transition-all"><span class="material-symbols-outlined text-2xl">auto_stories</span></div>
+                            <span class="material-symbols-outlined text-slate-300 group-hover:text-amber-500 transition-colors">play_arrow</span>
+                        </div>
+                        <div class="mt-5">
+                            <h2 class="text-lg font-extrabold text-slate-800 tracking-tight">Hafalan Juz 30</h2>
+                            <p class="text-xs text-slate-500 font-medium mt-1">Sambung ayat dan tebak surat.</p>
+                        </div>
+                    </button>
+
+                    <button onclick="pilihLevel('juz29')" class="text-left bg-white rounded-3xl border border-slate-200 shadow-sm p-6 hover:shadow-md hover:border-blue-300 transition-all group flex flex-col justify-between min-h-[140px]">
+                        <div class="flex items-center justify-between">
+                            <div class="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center group-hover:scale-110 group-hover:bg-rose-600 group-hover:text-white transition-all"><span class="material-symbols-outlined text-2xl">menu_book</span></div>
+                            <span class="material-symbols-outlined text-slate-300 group-hover:text-rose-500 transition-colors">play_arrow</span>
+                        </div>
+                        <div class="mt-5">
+                            <h2 class="text-lg font-extrabold text-slate-800 tracking-tight">Hafalan Juz 29</h2>
+                            <p class="text-xs text-slate-500 font-medium mt-1">Latihan hafalan tingkat lanjut.</p>
+                        </div>
+                    </button>
+                </div>
+
+                <div class="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 mt-6">
+                    <div class="flex items-center gap-3 mb-4 pb-4 border-b border-slate-100">
+                        <div class="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600"><span class="material-symbols-outlined text-sm">history</span></div>
+                        <h2 class="text-base font-extrabold text-slate-800 tracking-tight">Riwayat Nilai <span id="namaSantriLatihan" class="text-blue-600"></span></h2>
+                    </div>
+                    <div id="containerRiwayatLatihan" class="space-y-3 max-h-60 overflow-y-auto custom-scrollbar">
+                        <p class="text-xs text-slate-400 font-medium text-center py-4">Memuat riwayat nilai...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="subPageAreaKuis" class="hidden animate-entry space-y-6">
+                <div class="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 sm:p-8 flex flex-col items-center text-center">
+                    <div class="flex justify-between w-full mb-6 items-center">
+                        <span id="indikatorSoal" class="text-xs font-bold text-slate-400 bg-slate-50 px-3 py-1 rounded-full border border-slate-200">Soal 1 / 5</span>
+                        <span id="skorSementara" class="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-100">Skor: 0</span>
+                    </div>
+                    <h3 id="teksPertanyaan" class="text-lg sm:text-xl font-extrabold text-slate-800 mb-8 leading-relaxed max-w-2xl"></h3>
+                    <div id="opsiJawaban" class="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-2xl"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================== -->
         <!-- HAFALAN -->
+        <!-- ============================================== -->
         <div id="viewHafalan" class="page-view hidden space-y-6">
             <div class="flex items-center gap-3">
                 <button onclick="navigateTo('viewDashboard')" class="px-4 py-2 text-xs font-bold bg-white text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition active:scale-95 flex items-center gap-1.5 shadow-sm">
@@ -398,7 +486,9 @@
             </div>
         </div>
 
+        <!-- ============================================== -->
         <!-- METODE UMMI -->
+        <!-- ============================================== -->
         <div id="viewUmmi" class="page-view hidden space-y-6">
             <div class="flex items-center gap-3">
                 <button onclick="navigateTo('viewDashboard')" class="px-4 py-2 text-xs font-bold bg-white text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition active:scale-95 flex items-center gap-1.5 shadow-sm">
@@ -422,7 +512,9 @@
             <div id="subPageDetailUmmi" class="hidden space-y-6 animate-entry"></div>
         </div>
 
+        <!-- ============================================== -->
         <!-- PENILAIAN BACAAN -->
+        <!-- ============================================== -->
         <div id="viewPenilaian" class="page-view hidden space-y-6">
             <div class="flex items-center gap-3">
                 <button onclick="navigateTo('viewDashboard')" class="px-4 py-2 text-xs font-bold bg-white text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition active:scale-95 flex items-center gap-1.5 shadow-sm">
@@ -615,6 +707,60 @@
         </div>
     </div>
 
+    <!-- Modal Pilih Level Kuis -->
+    <div id="modalPilihLevel" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center hidden p-4 transition-all duration-300">
+        <div class="bg-white w-full max-w-md rounded-3xl p-6 flex flex-col items-center text-center shadow-2xl animate-modal">
+            <div class="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-4 shadow-inner"><span class="material-symbols-outlined text-4xl">psychology</span></div>
+            <h4 class="text-lg font-extrabold text-slate-800 mb-2 whitespace-pre-line" id="judulModalLevel">Pilih Level (1-50)</h4>
+            <div class="flex items-center justify-center gap-3 text-[10px] font-bold text-slate-400 mb-3">
+                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>1-16 Dasar</span>
+                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>17-33 Menengah</span>
+                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-rose-400"></span>34-50 Lanjut</span>
+            </div>
+            <div id="gridLevelKuis" class="w-full grid grid-cols-5 gap-2 max-h-64 overflow-y-auto pr-1"></div>
+            <button onclick="tutupModalLevel()" class="mt-5 text-sm text-slate-400 font-bold hover:text-slate-700 transition-colors">Batal</button>
+        </div>
+    </div>
+
+    <!-- Modal Hasil Kuis (Bertema, menggantikan alert bawaan browser) -->
+    <div id="modalHasilKuis" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 transition-all duration-300">
+        <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl border border-slate-100 overflow-hidden animate-modal">
+            <div class="bg-gradient-to-br from-blue-700 via-blue-600 to-indigo-700 p-6 text-white text-center relative overflow-hidden">
+                <div class="absolute -right-10 -top-10 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
+                <div class="absolute -left-8 -bottom-8 w-24 h-24 bg-indigo-400/20 rounded-full blur-xl"></div>
+                <span class="relative z-10 inline-flex items-center text-[10px] font-bold uppercase tracking-widest text-blue-100 bg-black/10 px-3 py-1 rounded-full border border-white/10">Kuis Selesai</span>
+                <h4 class="relative z-10 text-lg font-extrabold mt-3">Alhamdulillah!</h4>
+                <p class="relative z-10 text-xs text-blue-100 font-semibold mt-1">Level <span id="levelHasilKuis">1</span></p>
+            </div>
+
+            <div class="p-6 flex flex-col items-center text-center">
+                <div id="ikonHasilKuis" class="w-20 h-20 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mb-4 shadow-inner">
+                    <span id="simbolHasilKuis" class="material-symbols-outlined text-4xl">celebration</span>
+                </div>
+
+                <div class="text-4xl font-extrabold text-slate-800 tracking-tight">
+                    <span id="skorHasilKuis">0</span><span class="text-lg text-slate-400 font-bold">/100</span>
+                </div>
+                <p id="pesanMotivasiHasilKuis" class="text-sm text-slate-500 font-medium mt-2 mb-5">Alhamdulillah, hasil yang luar biasa!</p>
+
+                <div class="w-full grid grid-cols-2 gap-3 mb-6">
+                    <div class="bg-emerald-50 border border-emerald-100 rounded-2xl py-3 flex flex-col items-center">
+                        <span class="material-symbols-outlined text-emerald-500 text-xl">check_circle</span>
+                        <span id="benarHasilKuis" class="text-lg font-extrabold text-emerald-700 mt-0.5">0</span>
+                        <span class="text-[10px] font-bold text-emerald-600 uppercase tracking-wide">Benar</span>
+                    </div>
+                    <div class="bg-rose-50 border border-rose-100 rounded-2xl py-3 flex flex-col items-center">
+                        <span class="material-symbols-outlined text-rose-500 text-xl">cancel</span>
+                        <span id="salahHasilKuis" class="text-lg font-extrabold text-rose-700 mt-0.5">0</span>
+                        <span class="text-[10px] font-bold text-rose-600 uppercase tracking-wide">Salah</span>
+                    </div>
+                </div>
+
+                <button onclick="tutupHasilKuis()" class="w-full px-5 py-3 text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 rounded-xl transition-all shadow-md active:scale-95">Lanjutkan</button>
+            </div>
+        </div>
+    </div>
+
     <!-- ============================================== -->
     <!-- PEMANGGILAN SCRIPT EKSTERNAL (PURE HTML) -->
     <!-- ============================================== -->
@@ -639,5 +785,6 @@
 
     <!-- File Script Baru Hasil Refactoring -->
     <script src="js/index-logic.js"></script>
+    <script src="js/latihan.js"></script>
 </body>
 </html>

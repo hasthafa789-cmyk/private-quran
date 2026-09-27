@@ -18,13 +18,12 @@ document.addEventListener("DOMContentLoaded", function() {
 });
 
 // ==========================================
-// 2. ROUTING DASAR & REAL-TIME SEARCH SENSOR
+// 2. ROUTING DASAR & OVERRIDE NAVIGASI (ANTI-BOCOR)
 // ==========================================
 window.addEventListener('DOMContentLoaded', () => {
     history.replaceState({ level: 'viewDashboard' }, "Dashboard", "#dashboard");
     
-    // SENSOR PENCARIAN REAL-TIME: 
-    // Jika guru mengetik nama di kolom pencarian saat menu Absen terbuka, log akan langsung update!
+    // Sensor Pencarian
     let inputCari = document.getElementById('namaInput');
     if (inputCari) {
         inputCari.addEventListener('input', function() {
@@ -36,26 +35,37 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-function catatSejarah(levelId) {
-    history.pushState({ level: levelId }, levelId, "#" + levelId);
-}
+// [PERBAIKAN SUPER]: Menambal fungsi bawaan secara paksa agar tidak ada halaman yang tumpang tindih
+const fungsiAsliNavigateTo = window.navigateTo;
+window.navigateTo = function(viewId) {
+    // 1. TUTUP PAKSA SEMUA HALAMAN (Menambal array yang kurang di navigation.js)
+    document.querySelectorAll('.page-view').forEach(el => {
+        el.classList.add('hidden');
+        el.classList.remove("animate-entry");
+    });
 
-setTimeout(() => {
-    if (typeof window.navigateTo === 'function') {
-        const fungsiAsliNavigateTo = window.navigateTo;
-        window.navigateTo = function(viewId) {
-            if (viewId !== 'viewDashboard') catatSejarah(viewId);
-            else history.pushState({ level: 'viewDashboard' }, "Dashboard", "#dashboard");
-            fungsiAsliNavigateTo(viewId);
-        };
+    // 2. Catat Sejarah URL
+    if (viewId !== 'viewDashboard') {
+        history.pushState({ level: viewId }, viewId, "#" + viewId);
+    } else {
+        history.pushState({ level: 'viewDashboard' }, "Dashboard", "#dashboard");
     }
-}, 500);
 
-// ==========================================
-// 3. NAVIGASI SUB-MENU EKSPLISIT
-// ==========================================
+    // 3. Jalankan fungsi spesifik dari sistem lama
+    if (typeof fungsiAsliNavigateTo === 'function') {
+        fungsiAsliNavigateTo(viewId);
+    }
+
+    // 4. Pastikan target benar-benar terbuka
+    const target = document.getElementById(viewId);
+    if (target) {
+        target.classList.remove("hidden");
+        setTimeout(() => target.classList.add("animate-entry"), 10); 
+    }
+};
+
 window.bukaHalamanJuz = function(nomorJuz) {
-    catatSejarah('subPageDetailSuratJuz'); 
+    history.pushState({ level: 'subPageDetailSuratJuz' }, 'Surat', "#subPageDetailSuratJuz"); 
     document.getElementById('subPageDaftarJuz').classList.add('hidden');
     document.getElementById('subPageDetailSuratJuz').classList.remove('hidden');
     document.getElementById('txtJudulHalamanJuz').innerText = "Daftar Surat - Juz " + nomorJuz;
@@ -67,10 +77,10 @@ window.kembaliKeDaftarJuz = function() { history.back(); };
 window.bukaSubMenuPenilaian = function(tipe) {
     document.getElementById('subPageMenuPenilaian').classList.add('hidden');
     if (tipe === 'hijaiyah') {
-        catatSejarah('subPageDetailHijaiyah'); 
+        history.pushState({ level: 'subPageDetailHijaiyah' }, 'Hijaiyah', "#subPageDetailHijaiyah"); 
         document.getElementById('subPageDetailHijaiyah').classList.remove('hidden');
     } else if (tipe === 'tajwid') {
-        catatSejarah('subPageDetailTajwid'); 
+        history.pushState({ level: 'subPageDetailTajwid' }, 'Tajwid', "#subPageDetailTajwid"); 
         document.getElementById('subPageDetailTajwid').classList.remove('hidden');
     }
 };
@@ -78,7 +88,7 @@ window.bukaSubMenuPenilaian = function(tipe) {
 window.kembaliKeMenuPenilaian = function() { history.back(); };
 
 // ==========================================
-// 4. DETEKSI AKSI BACK (ANTI-FROZEN & SADAR LAPISAN)
+// 4. DETEKSI AKSI BACK (ANTI-FREEZE)
 // ==========================================
 window.isPopStateRunning = false;
 
@@ -86,7 +96,7 @@ window.addEventListener('popstate', function(event) {
     window.isPopStateRunning = true;
     
     const modalsLayer1 = ['suratDetail', 'ummiDetail']; 
-    const modalsLayer2 = ['modalPenilaianUmmi', 'modalPeringatan'];
+    const modalsLayer2 = ['modalPenilaianUmmi', 'modalPeringatan', 'modalPilihLevel'];
 
     if (typeof html5QrcodeScanner !== 'undefined' && html5QrcodeScanner) {
         try { html5QrcodeScanner.clear().then(() => html5QrcodeScanner = null); } catch(e) {}
@@ -102,6 +112,8 @@ window.addEventListener('popstate', function(event) {
             document.getElementById(targetModal).classList.remove('hidden');
             document.getElementById('backdropDetail').classList.remove('hidden');
             document.body.classList.add('overflow-hidden');
+        } else if (modalsLayer2.includes(targetModal)) {
+            document.getElementById(targetModal).classList.remove('hidden');
         }
     } 
     else {
@@ -144,6 +156,15 @@ window.addEventListener('popstate', function(event) {
             document.getElementById('viewHafalan').classList.remove('hidden');
             document.getElementById('subPageDaftarJuz').classList.remove('hidden');
             document.getElementById('subPageDetailSuratJuz').classList.add('hidden');
+        }else if (stateSekarang === 'subPageAreaKuis') {
+            document.getElementById('viewLatihan').classList.remove('hidden');
+            document.getElementById('subPageMenuLatihan').classList.add('hidden');
+            document.getElementById('subPageAreaKuis').classList.remove('hidden');
+        }
+        else if (stateSekarang === 'viewLatihan') {
+            document.getElementById('viewLatihan').classList.remove('hidden');
+            document.getElementById('subPageMenuLatihan').classList.remove('hidden');
+            document.getElementById('subPageAreaKuis').classList.add('hidden');
         }
         else {
             const viewTarget = document.getElementById(stateSekarang);
@@ -161,7 +182,7 @@ let html5QrcodeScanner;
 const scriptURLAbsen = 'https://script.google.com/macros/s/AKfycbzRY0tcV6SnDy_ESEyBeE4PwoY9GVmyAg4Omu5M43WtK0_XvmCuQqS-zQqlQ7NIMeGWow/exec';
 
 window.bukaMenuAbsensi = function() {
-    catatSejarah('viewAbsensi'); 
+    history.pushState({ level: 'viewAbsensi' }, 'Absensi', "#viewAbsensi");
     document.querySelectorAll('.page-view').forEach(h => h.classList.add('hidden'));
     document.getElementById('viewAbsensi').classList.remove('hidden');
     window.renderRiwayatAbsensi();
@@ -177,53 +198,35 @@ window.tutupMenuAbsensi = function() { history.back(); };
 
 window.renderRiwayatAbsensi = function() {
     let container = document.getElementById('listRiwayatAbsensi');
-    
-    let currentRole = localStorage.getItem("role") || "murid";
-    currentRole = currentRole.toLowerCase();
-    
+    let currentRole = (localStorage.getItem("role") || "murid").toLowerCase();
     let targetSantri = null;
 
     if (currentRole === "murid" || currentRole === "santri" || currentRole === "siswa") {
-        // [ATURAN MURID]: HANYA lihat riwayat sendiri secara mutlak
         let namaAkunLogin = localStorage.getItem("nama") || localStorage.getItem("username") || "";
         if (!namaAkunLogin) {
             let elemenNama = document.getElementById('namaSantri');
-            if (elemenNama && elemenNama.innerText !== "-") {
-                namaAkunLogin = elemenNama.innerText.replace('!', '').trim();
-            }
+            if (elemenNama && elemenNama.innerText !== "-") namaAkunLogin = elemenNama.innerText.replace('!', '').trim();
         }
         if (typeof dataSantri !== 'undefined' && namaAkunLogin) {
-            let queryNama = namaAkunLogin.trim().toLowerCase();
-            targetSantri = dataSantri.find(s => s.nama && s.nama.trim().toLowerCase() === queryNama);
+            targetSantri = dataSantri.find(s => s.nama && s.nama.trim().toLowerCase() === namaAkunLogin.trim().toLowerCase());
         }
     } 
     else {
-        // [ATURAN GURU]: Tarik data otomatis dari Kolom Pencarian (Search Bar)
         let inputPencarian = document.getElementById('namaInput');
         let namaDicari = inputPencarian ? inputPencarian.value.trim().toLowerCase() : "";
-
         if (namaDicari !== "" && typeof dataSantri !== 'undefined') {
-            // Cocokkan nama yang diketik dengan database
             targetSantri = dataSantri.find(s => s.nama && s.nama.toLowerCase().includes(namaDicari));
-            if (targetSantri) window.santriAktif = targetSantri; // Set jadi murid aktif
+            if (targetSantri) window.santriAktif = targetSantri; 
         }
-        
-        // Jika kolom pencarian kosong, gunakan data yang baru saja di-scan (jika ada)
-        if (!targetSantri && window.santriAktif) {
-            targetSantri = window.santriAktif;
-        }
+        if (!targetSantri && window.santriAktif) targetSantri = window.santriAktif;
     }
 
-    // Jika Target Tidak Ditemukan
     if (!targetSantri || !targetSantri.absensi || targetSantri.absensi.length === 0) {
         let inputPencarian = document.getElementById('namaInput');
         let sedangMencari = (inputPencarian && inputPencarian.value.trim() !== "");
-        
         let pesanKosong = (currentRole === "murid" || currentRole === "santri" || currentRole === "siswa")
             ? "Kamu belum memiliki riwayat absensi."
-            : sedangMencari 
-                ? "Santri tersebut belum memiliki riwayat absen."
-                : "Ketik nama santri di atas atau scan QR untuk melihat log.";
+            : sedangMencari ? "Santri tersebut belum memiliki riwayat absen." : "Ketik nama santri di atas atau scan QR untuk melihat log.";
             
         container.innerHTML = `
         <div class="flex flex-col items-center justify-center opacity-50 mt-10">
@@ -233,7 +236,6 @@ window.renderRiwayatAbsensi = function() {
         return;
     }
 
-    // Jika Data Ditemukan, Render Lognya
     let html = '';
     for (let i = targetSantri.absensi.length - 1; i >= 0; i--) {
         let item = targetSantri.absensi[i];
@@ -260,21 +262,16 @@ window.renderRiwayatAbsensi = function() {
     container.innerHTML = html;
 };
 
-// Fungsi Hapus
 window.hapusDataAbsen = function(namaPemilik, indexAsli) {
     if (confirm("Yakin ingin menghapus riwayat absen ini?")) {
         let target = dataSantri.find(s => s.nama === namaPemilik);
         if (target && target.absensi) {
             target.absensi.splice(indexAsli, 1);
-            
-            db.collection("database_hafalan").doc(target.nama).set({ 
-                absensi: target.absensi 
-            }, { merge: true })
+            db.collection("database_hafalan").doc(target.nama).set({ absensi: target.absensi }, { merge: true })
             .then(() => {
                 if (window.santriAktif && window.santriAktif.nama === target.nama) window.santriAktif = target; 
                 window.renderRiwayatAbsensi();
-            })
-            .catch(e => alert("Gagal menghapus data di Cloud."));
+            }).catch(e => alert("Gagal menghapus data di Cloud."));
         }
     }
 };
@@ -284,32 +281,18 @@ window.onScanSuccess = function(decodedText) {
     if (navigator.vibrate) navigator.vibrate(200);
     let divHasil = document.getElementById('hasil');
     
-    let namaYangDiScan = decodedText; 
-    let qrDataAman = decodedText; 
+    let namaYangDiScan = decodedText, qrDataAman = decodedText; 
     
     if (decodedText.startsWith("LOGIN|")) {
         let pecahan = decodedText.split('|');
-        if (pecahan.length >= 5) { 
-            namaYangDiScan = pecahan[4].trim(); 
-            qrDataAman = "QR Terpadu (Aman)"; 
-        } 
+        if (pecahan.length >= 5) { namaYangDiScan = pecahan[4].trim(); qrDataAman = "QR Terpadu (Aman)"; } 
         else { window.resetScan(divHasil, "❌ QR Login tidak lengkap!", "rose"); return; }
-    } else {
-        namaYangDiScan = namaYangDiScan.trim();
-    }
+    } else { namaYangDiScan = namaYangDiScan.trim(); }
 
     let queryScan = namaYangDiScan.toLowerCase();
-    let siswaDitemukan = null;
-    if (typeof dataSantri !== 'undefined') {
-        siswaDitemukan = dataSantri.find(s => 
-            (s.nama && s.nama.trim().toLowerCase() === queryScan) || 
-            (s.id && s.id.trim().toLowerCase() === queryScan)
-        );
-    }
-
+    let siswaDitemukan = (typeof dataSantri !== 'undefined') ? dataSantri.find(s => (s.nama && s.nama.trim().toLowerCase() === queryScan) || (s.id && s.id.trim().toLowerCase() === queryScan)) : null;
     if (!siswaDitemukan) { window.resetScan(divHasil, "❌ Santri tidak terdaftar!", "rose"); return; }
 
-    // OTOMATIS MENGISI KOLOM PENCARIAN SAAT BERHASIL SCAN!
     let inputPencarian = document.getElementById('namaInput');
     if (inputPencarian) inputPencarian.value = siswaDitemukan.nama;
 
@@ -319,10 +302,8 @@ window.onScanSuccess = function(decodedText) {
     
     let riwayatAbsen = siswaDitemukan.absensi || [];
     if (riwayatAbsen.some(a => a.waktu && a.waktu.includes(tanggalHariIni))) { 
-        window.santriAktif = siswaDitemukan; 
-        window.renderRiwayatAbsensi();
-        window.resetScan(divHasil, `⚠️ ${siswaDitemukan.nama} sudah absen!`, "amber"); 
-        return; 
+        window.santriAktif = siswaDitemukan; window.renderRiwayatAbsensi();
+        window.resetScan(divHasil, `⚠️ ${siswaDitemukan.nama} sudah absen!`, "amber"); return; 
     }
 
     window.santriAktif = siswaDitemukan;
@@ -347,9 +328,6 @@ window.resetScan = function(div, msg, color) {
 
 window.onScanFailure = function(error) { /* Abaikan */ };
 
-// ==========================================
-// 6. UTILITIES (ENTER KEY & PWA)
-// ==========================================
 document.addEventListener('keydown', function(event) {
     if (event.key === 'Enter' && event.target.id === 'inputNilaiUmmi' && typeof simpanNilaiUmmi === "function") {
         event.preventDefault(); simpanNilaiUmmi();
@@ -360,36 +338,23 @@ if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js'); });
 }
 
-// ==========================================
-// 7. SENSOR PENGAMAT LAPISAN POP-UP 
-// ==========================================
 window.addEventListener('DOMContentLoaded', () => {
-    const daftarModal = ['suratDetail', 'ummiDetail', 'modalPenilaianUmmi'];
-    
+    const daftarModal = ['suratDetail', 'ummiDetail', 'modalPenilaianUmmi', 'modalPilihLevel'];
     daftarModal.forEach(idModal => {
         const elemenModal = document.getElementById(idModal);
         if (elemenModal) {
             elemenModal.dataset.sedangTerbuka = elemenModal.classList.contains('hidden') ? "false" : "true";
-            
             const pengamat = new MutationObserver((mutasiList) => {
                 mutasiList.forEach((mutasi) => {
                     if (mutasi.attributeName === 'class') {
                         const isHidden = elemenModal.classList.contains('hidden');
                         const wasOpen = elemenModal.dataset.sedangTerbuka === "true";
-                        
                         if (!isHidden && !wasOpen) {
                             elemenModal.dataset.sedangTerbuka = "true";
-                            if (!window.isPopStateRunning) {
-                                history.pushState({ isModal: true, id: idModal }, "Modal Terbuka", "#modal-" + idModal);
-                            }
-                        } 
-                        else if (isHidden && wasOpen) {
+                            if (!window.isPopStateRunning) { history.pushState({ isModal: true, id: idModal }, "Modal", "#modal-" + idModal); }
+                        } else if (isHidden && wasOpen) {
                             elemenModal.dataset.sedangTerbuka = "false";
-                            if (!window.isPopStateRunning) {
-                                if (history.state && history.state.isModal && history.state.id === idModal) {
-                                    history.back();
-                                }
-                            }
+                            if (!window.isPopStateRunning && history.state && history.state.isModal && history.state.id === idModal) { history.back(); }
                         }
                     }
                 });
