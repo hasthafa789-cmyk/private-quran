@@ -484,7 +484,18 @@ window.cekJawaban = function(jawabanDipilih, jawabanBenar, elemenTombol) {
 };
 
 window.akhiriKuis = function() {
-    const namaAnak = document.getElementById('namaSantri').innerText;
+    // PERBAIKAN: jangan pakai .innerText di sini. Elemen #namaSantri ada di
+    // dalam #viewDashboard, yang sedang disembunyikan (display:none) selagi
+    // kita berada di halaman Latihan. .innerText SELALU mengembalikan ""
+    // untuk elemen yang tersembunyi, sehingga namaAnak selalu kosong dan
+    // fungsi ini berhenti (return) sebelum sempat menyimpan riwayat ke
+    // Firestore. Ambil nama dari variabel global santriAktif dulu (tidak
+    // bergantung pada tampilan/visibility), baru fallback ke textContent
+    // (yang tetap terbaca walau elemen tersembunyi, beda dengan innerText).
+    const elemenNamaSantri = document.getElementById('namaSantri');
+    const namaAnak = (window.santriAktif && window.santriAktif.nama)
+        ? window.santriAktif.nama
+        : (elemenNamaSantri ? elemenNamaSantri.textContent.replace('!', '').trim() : '');
 
     skorKuis = Math.round(skorKuis);
     if(skorKuis > 100) skorKuis = 100;
@@ -667,7 +678,13 @@ window.navigateTo = function(viewId) {
     }
 
     if (viewId === 'viewLatihan') {
-        const namaAnak = document.getElementById('namaSantri').innerText;
+        // PERBAIKAN: sama seperti di akhiriKuis(), hindari .innerText karena
+        // #namaSantri berada di #viewDashboard yang sudah disembunyikan di
+        // titik ini (oldNavigateTo di atas sudah menyembunyikannya).
+        const elemenNamaSantri = document.getElementById('namaSantri');
+        const namaAnak = (window.santriAktif && window.santriAktif.nama)
+            ? window.santriAktif.nama
+            : (elemenNamaSantri ? elemenNamaSantri.textContent.replace('!', '').trim() : '');
         window.loadRiwayatLatihan(namaAnak);
 
         document.getElementById('subPageAreaKuis').classList.add('hidden');
