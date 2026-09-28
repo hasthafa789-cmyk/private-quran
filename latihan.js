@@ -1,17 +1,9 @@
 // ==========================================
 // LOGIKA FITUR LATIHAN & KUIS (latihan.js)
-// 50 Level, soal diambil dinamis dari bank
+// Hingga 50 Level (tergantung jenis kuis), soal diambil dinamis dari bank
 // soal besar (dasar/menengah/lanjut) sesuai
 // tingkat kesulitan level yang dipilih.
 // ==========================================
-
-// ==========================================
-// KONFIGURASI BACKUP KE GOOGLE SHEETS
-// Ganti nilai di bawah ini dengan URL Web App
-// hasil deploy Google Apps Script kamu.
-// Lihat file apps-script-backup-sheet.gs untuk kodenya.
-// ==========================================
-const URL_BACKUP_SHEET = "GANTI_DENGAN_URL_WEB_APP_APPS_SCRIPT_KAMU";
 
 let kuisAktif = [];
 let indexSoalSaatIni = 0;
@@ -21,6 +13,185 @@ let jawabanSalahTotal = 0;
 let jenisKuisSaatIni = "";
 let levelKuisSaatIni = 1;
 let tempKuisPilihan = "";
+
+// ==========================================
+// ATURAN KUNCI LEVEL
+// Level 1 selalu terbuka. Level N+1 baru terbuka jika Level N sudah
+// LULUS (jumlah salah <= MAKS_SALAH_LULUS dari 10 soal) minimal sekali.
+// Ubah angka di bawah jika aturan kelulusan ingin diganti.
+// ==========================================
+const MAKS_SALAH_LULUS = 3;
+
+// ==========================================
+// BATAS WAKTU PER SOAL (detik)
+// Habis waktu = soal dihitung SALAH, jawaban benar ditampilkan,
+// lalu otomatis lanjut ke soal berikutnya. Ubah angkanya sesuai kebutuhan.
+// ==========================================
+const WAKTU_PER_SOAL = {
+    tajwid: 15,
+    makharijul: 15,
+    juz30: 15,   // sambung ayat: teks lebih panjang, waktu lebih longgar
+    juz29: 15
+};
+function getWaktuPerSoal(jenis) {
+    return WAKTU_PER_SOAL[jenis] || 20;
+}
+
+let sesiKuis = 0;            // naik tiap kuis dimulai; membatalkan callback kuis lama
+let soalSudahDijawab = false;
+let timerSoalId = null;
+let batasWaktuSoal = 0;      // timestamp (ms) kapan waktu soal habis
+let sisaWaktuTersimpan = null; // dipakai saat pause (tab disembunyikan)
+
+const DAFTAR_JENIS = ['tajwid', 'makharijul', 'juz30', 'juz29'];
+const NAMA_KUIS = {
+    tajwid: "Kuis Hukum Tajwid",
+    makharijul: "Kuis Makharijul Huruf",
+    juz30: "Hafalan Juz 30",
+    juz29: "Hafalan Juz 29"
+};
+// Label ini sama persis dengan yang disimpan di Firestore (field jenisKuis)
+const LABEL_JENIS = {
+    tajwid: "Hukum Tajwid",
+    makharijul: "Makharijul Huruf",
+    juz30: "Juz 30",
+    juz29: "Juz 29"
+};
+
+// Cache seluruh percobaan santri aktif (dibaca sekali dari Firestore,
+// lalu diperbarui lokal setiap selesai kuis)
+let dataLatihanCache = [];
+let namaCacheLatihan = "";
+let statusMuatLatihan = "belum"; // belum | memuat | siap | gagal
+// Catatan kuis yang sudah selesai tetapi belum dikonfirmasi server.
+// Dipakai agar hasil tidak hilang jika ada proses muat data yang menimpa cache.
+let rekamanTertunda = [];
+
+function ambilNamaSantriAktif() {
+    if (window.santriAktif && window.santriAktif.nama) return window.santriAktif.nama;
+
+    // Jangan pakai .innerText: #namaSantri ada di view yang tersembunyi
+    const el = document.getElementById('namaSantri');
+    const dariTampilan = el ? el.textContent.replace('!', '').trim() : '';
+    if (dariTampilan && dariTampilan !== '-') return dariTampilan;
+
+    // Cadangan terakhir untuk akun murid: nama dari data login
+    const role = (localStorage.getItem("role") || "").toLowerCase();
+    if (role === "murid" || role === "santri" || role === "siswa") {
+        return (localStorage.getItem("nama") || localStorage.getItem("username") || "").trim();
+    }
+    return '';
+}
+
+function kunciJenisDariLabel(label) {
+    for (let i = 0; i < DAFTAR_JENIS.length; i++) {
+        if (LABEL_JENIS[DAFTAR_JENIS[i]] === label) return DAFTAR_JENIS[i];
+    }
+    return null;
+}
+
+function angkaLevel(level) {
+    if (typeof level === 'number') return level;
+    const a = parseInt(String(level || "").replace(/[^0-9]/g, ""), 10);
+    return isNaN(a) ? null : a;
+}
+
+function waktuRekam(rec) {
+    if (rec.waktu && typeof rec.waktu.toMillis === 'function') return rec.waktu.toMillis();
+    if (rec._waktuLokal) return rec._waktuLokal;
+    return 0;
+}
+
+function apakahLulus(rec) {
+    if (typeof rec.salah === 'number') return rec.salah <= MAKS_SALAH_LULUS;
+    // data lama tanpa jumlah salah: 10 soal, jadi skor >= 70 setara salah <= 3
+    return (rec.skor || 0) >= 100 - MAKS_SALAH_LULUS * 10;
+}
+
+// Peta progres per level untuk satu jenis kuis:
+// { [level]: { percobaan: [...terbaru dulu], terbaik: skor tertinggi, lulus: bool } }
+function petaProgress(jenis) {
+    const peta = {};
+    dataLatihanCache.forEach((rec) => {
+        if (kunciJenisDariLabel(rec.jenisKuis) !== jenis) return;
+        const lv = angkaLevel(rec.level);
+        if (!lv) return;
+        if (!peta[lv]) peta[lv] = { percobaan: [], terbaik: 0, lulus: false };
+        peta[lv].percobaan.push(rec);
+        if ((rec.skor || 0) > peta[lv].terbaik) peta[lv].terbaik = rec.skor || 0;
+        if (apakahLulus(rec)) peta[lv].lulus = true;
+    });
+    Object.keys(peta).forEach((lv) => {
+        peta[lv].percobaan.sort((a, b) => waktuRekam(b) - waktuRekam(a));
+    });
+    return peta;
+}
+
+function levelTerbuka(peta, level) {
+    return level === 1 || !!(peta[level - 1] && peta[level - 1].lulus);
+}
+
+function namaTingkatLevel(level, maksLevel) {
+    if (level > maksLevel * 0.66) return "Lanjut";
+    if (level > maksLevel * 0.33) return "Menengah";
+    return "Dasar";
+}
+
+function perbaruiProgressMenu() {
+    DAFTAR_JENIS.forEach((jenis) => {
+        const el = document.getElementById('progresLatihan-' + jenis);
+        if (!el) return;
+        if (statusMuatLatihan !== 'siap') { el.textContent = ""; return; }
+        const peta = petaProgress(jenis);
+        const maks = getMaksLevel(jenis);
+        let lulus = 0;
+        for (let i = 1; i <= maks; i++) { if (peta[i] && peta[i].lulus) lulus++; }
+        el.textContent = lulus + " / " + maks + " level lulus";
+    });
+}
+
+function muatDataLatihan(namaAnak, paksa) {
+    if (!namaAnak || namaAnak === "-") {
+        dataLatihanCache = [];
+        namaCacheLatihan = "";
+        statusMuatLatihan = "belum";
+        perbaruiProgressMenu();
+        return Promise.resolve();
+    }
+    if (!paksa && statusMuatLatihan === 'siap' && namaCacheLatihan === namaAnak) {
+        return Promise.resolve();
+    }
+    if (namaCacheLatihan !== namaAnak) dataLatihanCache = [];
+    namaCacheLatihan = namaAnak;
+    statusMuatLatihan = "memuat";
+
+    // Tanpa .orderBy() agar tidak butuh composite index; pengurutan di sisi JS.
+    return firebase.firestore().collection("latihan_santri")
+        .where("nama", "==", namaAnak)
+        .get()
+        .then((snap) => {
+            if (namaCacheLatihan !== namaAnak) return; // santri sudah berganti
+            const arr = [];
+            const idServer = {};
+            snap.forEach((doc) => {
+                const d = doc.data();
+                d._id = doc.id;
+                idServer[doc.id] = true;
+                arr.push(d);
+            });
+            // Jangan sampai hasil kuis yang baru selesai hilang tertimpa data server yang lebih lama
+            rekamanTertunda.forEach((rec) => {
+                if (rec.nama === namaAnak && !idServer[rec._id]) arr.push(rec);
+            });
+            dataLatihanCache = arr;
+            statusMuatLatihan = "siap";
+            perbaruiProgressMenu();
+        })
+        .catch((err) => {
+            console.error("Gagal memuat data latihan:", err);
+            if (namaCacheLatihan === namaAnak) statusMuatLatihan = "gagal";
+        });
+}
 
 // Format level (angka 1-50, atau data lama "level1/2/3") jadi label "Level N"
 function formatLabelLevel(level) {
@@ -146,110 +317,328 @@ const bankSoalMakharijul = {
 };
 
 const bankSoalJuz30 = {
+    // Fokus murni SAMBUNG AYAT: setiap soal menampilkan SATU ayat penuh (tidak
+    // pernah dipotong di tengah kata/ayat), lalu meminta ayat SELANJUTNYA secara
+    // utuh. Tidak ada lagi soal tentang isi/arti surat atau jumlah ayat.
     dasar: [
-        { pertanyaan: "Lanjutkan ayat: 'قُلْ هُوَ اللَّهُ ...'", opsi: ["أَحَدٌ", "الصَّمَدُ", "كُفُوًا", "يَلِدْ"], jawabanBenar: "أَحَدٌ" },
-        { pertanyaan: "Surat Al-Falaq terdiri dari berapa ayat?", opsi: ["4 ayat", "5 ayat", "6 ayat", "3 ayat"], jawabanBenar: "5 ayat" },
-        { pertanyaan: "Surat terakhir dalam Al-Qur'an adalah...", opsi: ["An-Nas", "Al-Falaq", "Al-Ikhlas", "Al-Kautsar"], jawabanBenar: "An-Nas" },
-        { pertanyaan: "Surat pertama dalam Juz 30 adalah...", opsi: ["An-Naba", "An-Nazi'at", "Abasa", "At-Takwir"], jawabanBenar: "An-Naba" },
-        { pertanyaan: "Surat Al-Ikhlas artinya...", opsi: ["Memurnikan (keesaan Allah)", "Cahaya", "Permulaan", "Pertolongan"], jawabanBenar: "Memurnikan (keesaan Allah)" },
-        { pertanyaan: "Surat An-Nas terdiri dari berapa ayat?", opsi: ["6 ayat", "4 ayat", "8 ayat", "5 ayat"], jawabanBenar: "6 ayat" },
-        { pertanyaan: "Surat Al-Kautsar terdiri dari berapa ayat?", opsi: ["3 ayat", "5 ayat", "7 ayat", "2 ayat"], jawabanBenar: "3 ayat" },
-        { pertanyaan: "Lanjutkan ayat: 'إِنَّا أَعْطَيْنَاكَ الْـ...'", opsi: ["كَوْثَرَ", "كَهْفَ", "فَجْرَ", "فَلَقَ"], jawabanBenar: "كَوْثَرَ" },
-        { pertanyaan: "Surat Al-'Asr artinya...", opsi: ["Masa/waktu", "Cahaya", "Bintang", "Fajar"], jawabanBenar: "Masa/waktu" },
-        { pertanyaan: "Surat An-Nashr berkaitan dengan peristiwa...", opsi: ["Kemenangan/pertolongan Allah (Fathu Makkah)", "Hijrah ke Madinah", "Perang Badar", "Turunnya wahyu pertama"], jawabanBenar: "Kemenangan/pertolongan Allah (Fathu Makkah)" },
-        { pertanyaan: "Surat Al-Lahab menceritakan tentang...", opsi: ["Abu Lahab dan istrinya yang menentang dakwah Nabi", "Kisah Nabi Musa", "Kaum 'Ad yang durhaka", "Perang Uhud"], jawabanBenar: "Abu Lahab dan istrinya yang menentang dakwah Nabi" },
-        { pertanyaan: "Surat An-Nashr terdiri dari berapa ayat?", opsi: ["3 ayat", "5 ayat", "6 ayat", "4 ayat"], jawabanBenar: "3 ayat" },
-        { pertanyaan: "Surat Al-Kafirun artinya...", opsi: ["Orang-orang kafir", "Orang-orang beriman", "Orang-orang munafik", "Orang-orang yang bersyukur"], jawabanBenar: "Orang-orang kafir" },
-        { pertanyaan: "Surat Quraisy menceritakan tentang...", opsi: ["Nikmat Allah berupa keamanan & kelancaran dagang bagi kaum Quraisy", "Peperangan kaum Quraisy", "Hijrahnya kaum Quraisy", "Kisah Ka'bah dibangun"], jawabanBenar: "Nikmat Allah berupa keamanan & kelancaran dagang bagi kaum Quraisy" },
-        { pertanyaan: "Surat Al-Fatihah (pembuka Al-Qur'an) terletak di...", opsi: ["Juz 1, bukan Juz 30", "Juz 30", "Juz 29", "Juz 15"], jawabanBenar: "Juz 1, bukan Juz 30" }
+        { pertanyaan: "Lanjutkan ayat: 'عَمَّ يَتَسَاءَلُونَ'", opsi: ["عَنِ النَّبَإِ الْعَظِيمِ", "الَّذِي هُمْ فِيهِ مُخْتَلِفُونَ", "كَلَّا سَيَعْلَمُونَ", "أَلَمْ نَجْعَلِ الْأَرْضَ مِهَادًا"], jawabanBenar: "عَنِ النَّبَإِ الْعَظِيمِ" },
+        { pertanyaan: "Lanjutkan ayat: 'عَنِ النَّبَإِ الْعَظِيمِ'", opsi: ["الَّذِي هُمْ فِيهِ مُخْتَلِفُونَ", "كَلَّا سَيَعْلَمُونَ", "ثُمَّ كَلَّا سَيَعْلَمُونَ", "أَلَمْ نَجْعَلِ الْأَرْضَ مِهَادًا"], jawabanBenar: "الَّذِي هُمْ فِيهِ مُخْتَلِفُونَ" },
+        { pertanyaan: "Lanjutkan ayat: 'الَّذِي هُمْ فِيهِ مُخْتَلِفُونَ'", opsi: ["كَلَّا سَيَعْلَمُونَ", "ثُمَّ كَلَّا سَيَعْلَمُونَ", "أَلَمْ نَجْعَلِ الْأَرْضَ مِهَادًا", "وَالْجِبَالَ أَوْتَادًا"], jawabanBenar: "كَلَّا سَيَعْلَمُونَ" },
+        { pertanyaan: "Lanjutkan ayat: 'كَلَّا سَيَعْلَمُونَ'", opsi: ["ثُمَّ كَلَّا سَيَعْلَمُونَ", "أَلَمْ نَجْعَلِ الْأَرْضَ مِهَادًا", "وَالْجِبَالَ أَوْتَادًا", "وَخَلَقْنَاكُمْ أَزْوَاجًا"], jawabanBenar: "ثُمَّ كَلَّا سَيَعْلَمُونَ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَالنَّازِعَاتِ غَرْقًا'", opsi: ["وَالنَّاشِطَاتِ نَشْطًا", "وَالسَّابِحَاتِ سَبْحًا", "فَالسَّابِقَاتِ سَبْقًا", "فَالْمُدَبِّرَاتِ أَمْرًا"], jawabanBenar: "وَالنَّاشِطَاتِ نَشْطًا" },
+        { pertanyaan: "Lanjutkan ayat: 'وَالنَّاشِطَاتِ نَشْطًا'", opsi: ["وَالسَّابِحَاتِ سَبْحًا", "فَالسَّابِقَاتِ سَبْقًا", "فَالْمُدَبِّرَاتِ أَمْرًا", "يَوْمَ تَرْجُفُ الرَّاجِفَةُ"], jawabanBenar: "وَالسَّابِحَاتِ سَبْحًا" },
+        { pertanyaan: "Lanjutkan ayat: 'يَوْمَ تَرْجُفُ الرَّاجِفَةُ'", opsi: ["تَتْبَعُهَا الرَّادِفَةُ", "قُلُوبٌ يَوْمَئِذٍ وَاجِفَةٌ", "أَبْصَارُهَا خَاشِعَةٌ", "يَقُولُونَ أَئِنَّا لَمَرْدُودُونَ فِي الْحَافِرَةِ"], jawabanBenar: "تَتْبَعُهَا الرَّادِفَةُ" },
+        { pertanyaan: "Lanjutkan ayat: 'عَبَسَ وَتَوَلَّىٰ'", opsi: ["أَنْ جَاءَهُ الْأَعْمَىٰ", "وَمَا يُدْرِيكَ لَعَلَّهُ يَزَّكَّىٰ", "أَوْ يَذَّكَّرُ فَتَنْفَعَهُ الذِّكْرَىٰ", "أَمَّا مَنِ اسْتَغْنَىٰ"], jawabanBenar: "أَنْ جَاءَهُ الْأَعْمَىٰ" },
+        { pertanyaan: "Lanjutkan ayat: 'أَنْ جَاءَهُ الْأَعْمَىٰ'", opsi: ["وَمَا يُدْرِيكَ لَعَلَّهُ يَزَّكَّىٰ", "أَوْ يَذَّكَّرُ فَتَنْفَعَهُ الذِّكْرَىٰ", "أَمَّا مَنِ اسْتَغْنَىٰ", "فَأَنْتَ لَهُ تَصَدَّىٰ"], jawabanBenar: "وَمَا يُدْرِيكَ لَعَلَّهُ يَزَّكَّىٰ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَمَا يُدْرِيكَ لَعَلَّهُ يَزَّكَّىٰ'", opsi: ["أَوْ يَذَّكَّرُ فَتَنْفَعَهُ الذِّكْرَىٰ", "أَمَّا مَنِ اسْتَغْنَىٰ", "فَأَنْتَ لَهُ تَصَدَّىٰ", "وَمَا عَلَيْكَ أَلَّا يَزَّكَّىٰ"], jawabanBenar: "أَوْ يَذَّكَّرُ فَتَنْفَعَهُ الذِّكْرَىٰ" },
+        { pertanyaan: "Lanjutkan ayat: 'إِذَا الشَّمْسُ كُوِّرَتْ'", opsi: ["وَإِذَا النُّجُومُ انْكَدَرَتْ", "وَإِذَا الْجِبَالُ سُيِّرَتْ", "وَإِذَا الْعِشَارُ عُطِّلَتْ", "وَإِذَا الْوُحُوشُ حُشِرَتْ"], jawabanBenar: "وَإِذَا النُّجُومُ انْكَدَرَتْ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَإِذَا النُّجُومُ انْكَدَرَتْ'", opsi: ["وَإِذَا الْجِبَالُ سُيِّرَتْ", "وَإِذَا الْعِشَارُ عُطِّلَتْ", "وَإِذَا الْوُحُوشُ حُشِرَتْ", "وَإِذَا الْبِحَارُ سُجِّرَتْ"], jawabanBenar: "وَإِذَا الْجِبَالُ سُيِّرَتْ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَإِذَا الْجِبَالُ سُيِّرَتْ'", opsi: ["وَإِذَا الْعِشَارُ عُطِّلَتْ", "وَإِذَا الْوُحُوشُ حُشِرَتْ", "وَإِذَا الْبِحَارُ سُجِّرَتْ", "وَإِذَا النُّفُوسُ زُوِّجَتْ"], jawabanBenar: "وَإِذَا الْعِشَارُ عُطِّلَتْ" },
+        { pertanyaan: "Lanjutkan ayat: 'إِذَا السَّمَاءُ انْفَطَرَتْ'", opsi: ["وَإِذَا الْكَوَاكِبُ انْتَثَرَتْ", "وَإِذَا الْبِحَارُ فُجِّرَتْ", "وَإِذَا الْقُبُورُ بُعْثِرَتْ", "عَلِمَتْ نَفْسٌ مَا قَدَّمَتْ وَأَخَّرَتْ"], jawabanBenar: "وَإِذَا الْكَوَاكِبُ انْتَثَرَتْ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَإِذَا الْكَوَاكِبُ انْتَثَرَتْ'", opsi: ["وَإِذَا الْبِحَارُ فُجِّرَتْ", "وَإِذَا الْقُبُورُ بُعْثِرَتْ", "عَلِمَتْ نَفْسٌ مَا قَدَّمَتْ وَأَخَّرَتْ", "يَا أَيُّهَا الْإِنْسَانُ مَا غَرَّكَ بِرَبِّكَ الْكَرِيمِ"], jawabanBenar: "وَإِذَا الْبِحَارُ فُجِّرَتْ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَإِذَا الْبِحَارُ فُجِّرَتْ'", opsi: ["وَإِذَا الْقُبُورُ بُعْثِرَتْ", "عَلِمَتْ نَفْسٌ مَا قَدَّمَتْ وَأَخَّرَتْ", "يَا أَيُّهَا الْإِنْسَانُ مَا غَرَّكَ بِرَبِّكَ الْكَرِيمِ", "الَّذِي خَلَقَكَ فَسَوَّاكَ فَعَدَلَكَ"], jawabanBenar: "وَإِذَا الْقُبُورُ بُعْثِرَتْ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَيْلٌ لِلْمُطَفِّفِينَ'", opsi: ["الَّذِينَ إِذَا اكْتَالُوا عَلَى النَّاسِ يَسْتَوْفُونَ", "وَإِذَا كَالُوهُمْ أَوْ وَزَنُوهُمْ يُخْسِرُونَ", "أَلَا يَظُنُّ أُولَٰئِكَ أَنَّهُمْ مَبْعُوثُونَ", "لِيَوْمٍ عَظِيمٍ"], jawabanBenar: "الَّذِينَ إِذَا اكْتَالُوا عَلَى النَّاسِ يَسْتَوْفُونَ" },
+        { pertanyaan: "Lanjutkan ayat: 'الَّذِينَ إِذَا اكْتَالُوا عَلَى النَّاسِ يَسْتَوْفُونَ'", opsi: ["وَإِذَا كَالُوهُمْ أَوْ وَزَنُوهُمْ يُخْسِرُونَ", "أَلَا يَظُنُّ أُولَٰئِكَ أَنَّهُمْ مَبْعُوثُونَ", "لِيَوْمٍ عَظِيمٍ", "يَوْمَ يَقُومُ النَّاسُ لِرَبِّ الْعَالَمِينَ"], jawabanBenar: "وَإِذَا كَالُوهُمْ أَوْ وَزَنُوهُمْ يُخْسِرُونَ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَإِذَا كَالُوهُمْ أَوْ وَزَنُوهُمْ يُخْسِرُونَ'", opsi: ["أَلَا يَظُنُّ أُولَٰئِكَ أَنَّهُمْ مَبْعُوثُونَ", "لِيَوْمٍ عَظِيمٍ", "يَوْمَ يَقُومُ النَّاسُ لِرَبِّ الْعَالَمِينَ", "كَلَّا إِنَّ كِتَابَ الْفُجَّارِ لَفِي سِجِّينٍ"], jawabanBenar: "أَلَا يَظُنُّ أُولَٰئِكَ أَنَّهُمْ مَبْعُوثُونَ" },
+        { pertanyaan: "Lanjutkan ayat: 'إِذَا السَّمَاءُ انْشَقَّتْ'", opsi: ["وَأَذِنَتْ لِرَبِّهَا وَحُقَّتْ", "وَإِذَا الْأَرْضُ مُدَّتْ", "وَأَلْقَتْ مَا فِيهَا وَتَخَلَّتْ", "وَأَذِنَتْ لِرَبِّهَا وَحُقَّتْ (ulangan)"], jawabanBenar: "وَأَذِنَتْ لِرَبِّهَا وَحُقَّتْ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَأَذِنَتْ لِرَبِّهَا وَحُقَّتْ'", opsi: ["وَإِذَا الْأَرْضُ مُدَّتْ", "وَأَلْقَتْ مَا فِيهَا وَتَخَلَّتْ", "وَأَذِنَتْ لِرَبِّهَا وَحُقَّتْ (ulangan)", "يَا أَيُّهَا الْإِنْسَانُ إِنَّكَ كَادِحٌ إِلَىٰ رَبِّكَ"], jawabanBenar: "وَإِذَا الْأَرْضُ مُدَّتْ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَإِذَا الْأَرْضُ مُدَّتْ'", opsi: ["وَأَلْقَتْ مَا فِيهَا وَتَخَلَّتْ", "وَأَذِنَتْ لِرَبِّهَا وَحُقَّتْ", "يَا أَيُّهَا الْإِنْسَانُ إِنَّكَ كَادِحٌ", "فَأَمَّا مَنْ أُوتِيَ كِتَابَهُ بِيَمِينِهِ"], jawabanBenar: "وَأَلْقَتْ مَا فِيهَا وَتَخَلَّتْ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَالسَّمَاءِ ذَاتِ الْبُرُوجِ'", opsi: ["وَالْيَوْمِ الْمَوْعُودِ", "وَشَاهِدٍ وَمَشْهُودٍ", "قُتِلَ أَصْحَابُ الْأُخْدُودِ", "النَّارِ ذَاتِ الْوَقُودِ"], jawabanBenar: "وَالْيَوْمِ الْمَوْعُودِ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَالْيَوْمِ الْمَوْعُودِ'", opsi: ["وَشَاهِدٍ وَمَشْهُودٍ", "قُتِلَ أَصْحَابُ الْأُخْدُودِ", "النَّارِ ذَاتِ الْوَقُودِ", "إِذْ هُمْ عَلَيْهَا قُعُودٌ"], jawabanBenar: "وَشَاهِدٍ وَمَشْهُودٍ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَشَاهِدٍ وَمَشْهُودٍ'", opsi: ["قُتِلَ أَصْحَابُ الْأُخْدُودِ", "النَّارِ ذَاتِ الْوَقُودِ", "إِذْ هُمْ عَلَيْهَا قُعُودٌ", "وَهُمْ عَلَىٰ مَا يَفْعَلُونَ بِالْمُؤْمِنِينَ شُهُودٌ"], jawabanBenar: "قُتِلَ أَصْحَابُ الْأُخْدُودِ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَالسَّمَاءِ وَالطَّارِقِ'", opsi: ["وَمَا أَدْرَاكَ مَا الطَّارِقُ", "النَّجْمُ الثَّاقِبُ", "إِنْ كُلُّ نَفْسٍ لَمَّا عَلَيْهَا حَافِظٌ", "فَلْيَنْظُرِ الْإِنْسَانُ مِمَّ خُلِقَ"], jawabanBenar: "وَمَا أَدْرَاكَ مَا الطَّارِقُ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَمَا أَدْرَاكَ مَا الطَّارِقُ'", opsi: ["النَّجْمُ الثَّاقِبُ", "إِنْ كُلُّ نَفْسٍ لَمَّا عَلَيْهَا حَافِظٌ", "فَلْيَنْظُرِ الْإِنْسَانُ مِمَّ خُلِقَ", "خُلِقَ مِنْ مَاءٍ دَافِقٍ"], jawabanBenar: "النَّجْمُ الثَّاقِبُ" },
+        { pertanyaan: "Lanjutkan ayat: 'سَبِّحِ اسْمَ رَبِّكَ الْأَعْلَى'", opsi: ["الَّذِي خَلَقَ فَسَوَّىٰ", "وَالَّذِي قَدَّرَ فَهَدَىٰ", "وَالَّذِي أَخْرَجَ الْمَرْعَىٰ", "فَجَعَلَهُ غُثَاءً أَحْوَىٰ"], jawabanBenar: "الَّذِي خَلَقَ فَسَوَّىٰ" },
+        { pertanyaan: "Lanjutkan ayat: 'الَّذِي خَلَقَ فَسَوَّىٰ'", opsi: ["وَالَّذِي قَدَّرَ فَهَدَىٰ", "وَالَّذِي أَخْرَجَ الْمَرْعَىٰ", "فَجَعَلَهُ غُثَاءً أَحْوَىٰ", "سَنُقْرِئُكَ فَلَا تَنْسَىٰ"], jawabanBenar: "وَالَّذِي قَدَّرَ فَهَدَىٰ" },
+        { pertanyaan: "Lanjutkan ayat: 'هَلْ أَتَاكَ حَدِيثُ الْغَاشِيَةِ'", opsi: ["وُجُوهٌ يَوْمَئِذٍ خَاشِعَةٌ", "عَامِلَةٌ نَاصِبَةٌ", "تَصْلَىٰ نَارًا حَامِيَةً", "تُسْقَىٰ مِنْ عَيْنٍ آنِيَةٍ"], jawabanBenar: "وُجُوهٌ يَوْمَئِذٍ خَاشِعَةٌ" },
+        { pertanyaan: "Lanjutkan ayat: 'وُجُوهٌ يَوْمَئِذٍ خَاشِعَةٌ'", opsi: ["عَامِلَةٌ نَاصِبَةٌ", "تَصْلَىٰ نَارًا حَامِيَةً", "تُسْقَىٰ مِنْ عَيْنٍ آنِيَةٍ", "لَيْسَ لَهُمْ طَعَامٌ إِلَّا مِنْ ضَرِيعٍ"], jawabanBenar: "عَامِلَةٌ نَاصِبَةٌ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَالْفَجْرِ'", opsi: ["وَلَيَالٍ عَشْرٍ", "وَالشَّفْعِ وَالْوَتْرِ", "وَاللَّيْلِ إِذَا يَسْرِ", "هَلْ فِي ذَٰلِكَ قَسَمٌ لِذِي حِجْرٍ"], jawabanBenar: "وَلَيَالٍ عَشْرٍ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَلَيَالٍ عَشْرٍ'", opsi: ["وَالشَّفْعِ وَالْوَتْرِ", "وَاللَّيْلِ إِذَا يَسْرِ", "هَلْ فِي ذَٰلِكَ قَسَمٌ لِذِي حِجْرٍ", "أَلَمْ تَرَ كَيْفَ فَعَلَ رَبُّكَ بِعَادٍ"], jawabanBenar: "وَالشَّفْعِ وَالْوَتْرِ" },
+        { pertanyaan: "Lanjutkan ayat: 'لَا أُقْسِمُ بِهَٰذَا الْبَلَدِ'", opsi: ["وَأَنْتَ حِلٌّ بِهَٰذَا الْبَلَدِ", "وَوَالِدٍ وَمَا وَلَدَ", "لَقَدْ خَلَقْنَا الْإِنْسَانَ فِي كَبَدٍ", "أَيَحْسَبُ أَنْ لَنْ يَقْدِرَ عَلَيْهِ أَحَدٌ"], jawabanBenar: "وَأَنْتَ حِلٌّ بِهَٰذَا الْبَلَدِ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَأَنْتَ حِلٌّ بِهَٰذَا الْبَلَدِ'", opsi: ["وَوَالِدٍ وَمَا وَلَدَ", "لَقَدْ خَلَقْنَا الْإِنْسَانَ فِي كَبَدٍ", "أَيَحْسَبُ أَنْ لَنْ يَقْدِرَ عَلَيْهِ أَحَدٌ", "يَقُولُ أَهْلَكْتُ مَالًا لُبَدًا"], jawabanBenar: "وَوَالِدٍ وَمَا وَلَدَ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَالشَّمْسِ وَضُحَاهَا'", opsi: ["وَالْقَمَرِ إِذَا تَلَاهَا", "وَالنَّهَارِ إِذَا جَلَّاهَا", "وَاللَّيْلِ إِذَا يَغْشَاهَا", "وَالسَّمَاءِ وَمَا بَنَاهَا"], jawabanBenar: "وَالْقَمَرِ إِذَا تَلَاهَا" },
+        { pertanyaan: "Lanjutkan ayat: 'وَالْقَمَرِ إِذَا تَلَاهَا'", opsi: ["وَالنَّهَارِ إِذَا جَلَّاهَا", "وَاللَّيْلِ إِذَا يَغْشَاهَا", "وَالسَّمَاءِ وَمَا بَنَاهَا", "وَالْأَرْضِ وَمَا طَحَاهَا"], jawabanBenar: "وَالنَّهَارِ إِذَا جَلَّاهَا" },
+        { pertanyaan: "Lanjutkan ayat: 'وَاللَّيْلِ إِذَا يَغْشَىٰ'", opsi: ["وَالنَّهَارِ إِذَا تَجَلَّىٰ", "وَمَا خَلَقَ الذَّكَرَ وَالْأُنْثَىٰ", "إِنَّ سَعْيَكُمْ لَشَتَّىٰ", "فَأَمَّا مَنْ أَعْطَىٰ وَاتَّقَىٰ"], jawabanBenar: "وَالنَّهَارِ إِذَا تَجَلَّىٰ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَالنَّهَارِ إِذَا تَجَلَّىٰ'", opsi: ["وَمَا خَلَقَ الذَّكَرَ وَالْأُنْثَىٰ", "إِنَّ سَعْيَكُمْ لَشَتَّىٰ", "فَأَمَّا مَنْ أَعْطَىٰ وَاتَّقَىٰ", "وَصَدَّقَ بِالْحُسْنَىٰ"], jawabanBenar: "وَمَا خَلَقَ الذَّكَرَ وَالْأُنْثَىٰ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَالضُّحَىٰ'", opsi: ["وَاللَّيْلِ إِذَا سَجَىٰ", "مَا وَدَّعَكَ رَبُّكَ وَمَا قَلَىٰ", "وَلَلْآخِرَةُ خَيْرٌ لَكَ مِنَ الْأُولَىٰ", "وَلَسَوْفَ يُعْطِيكَ رَبُّكَ فَتَرْضَىٰ"], jawabanBenar: "وَاللَّيْلِ إِذَا سَجَىٰ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَاللَّيْلِ إِذَا سَجَىٰ'", opsi: ["مَا وَدَّعَكَ رَبُّكَ وَمَا قَلَىٰ", "وَلَلْآخِرَةُ خَيْرٌ لَكَ مِنَ الْأُولَىٰ", "وَلَسَوْفَ يُعْطِيكَ رَبُّكَ فَتَرْضَىٰ", "أَلَمْ يَجِدْكَ يَتِيمًا فَآوَىٰ"], jawabanBenar: "مَا وَدَّعَكَ رَبُّكَ وَمَا قَلَىٰ" },
+        { pertanyaan: "Lanjutkan ayat: 'أَلَمْ نَشْرَحْ لَكَ صَدْرَكَ'", opsi: ["وَوَضَعْنَا عَنْكَ وِزْرَكَ", "الَّذِي أَنْقَضَ ظَهْرَكَ", "وَرَفَعْنَا لَكَ ذِكْرَكَ", "فَإِنَّ مَعَ الْعُسْرِ يُسْرًا"], jawabanBenar: "وَوَضَعْنَا عَنْكَ وِزْرَكَ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَوَضَعْنَا عَنْكَ وِزْرَكَ'", opsi: ["الَّذِي أَنْقَضَ ظَهْرَكَ", "وَرَفَعْنَا لَكَ ذِكْرَكَ", "فَإِنَّ مَعَ الْعُسْرِ يُسْرًا", "إِنَّ مَعَ الْعُسْرِ يُسْرًا"], jawabanBenar: "الَّذِي أَنْقَضَ ظَهْرَكَ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَالتِّينِ وَالزَّيْتُونِ'", opsi: ["وَطُورِ سِينِينَ", "وَهَٰذَا الْبَلَدِ الْأَمِينِ", "لَقَدْ خَلَقْنَا الْإِنْسَانَ فِي أَحْسَنِ تَقْوِيمٍ", "ثُمَّ رَدَدْنَاهُ أَسْفَلَ سَافِلِينَ"], jawabanBenar: "وَطُورِ سِينِينَ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَطُورِ سِينِينَ'", opsi: ["وَهَٰذَا الْبَلَدِ الْأَمِينِ", "لَقَدْ خَلَقْنَا الْإِنْسَانَ فِي أَحْسَنِ تَقْوِيمٍ", "ثُمَّ رَدَدْنَاهُ أَسْفَلَ سَافِلِينَ", "إِلَّا الَّذِينَ آمَنُوا وَعَمِلُوا الصَّالِحَاتِ"], jawabanBenar: "وَهَٰذَا الْبَلَدِ الْأَمِينِ" },
+        { pertanyaan: "Lanjutkan ayat: 'اقْرَأْ بِاسْمِ رَبِّكَ الَّذِي خَلَقَ'", opsi: ["خَلَقَ الْإِنْسَانَ مِنْ عَلَقٍ", "اقْرَأْ وَرَبُّكَ الْأَكْرَمُ", "الَّذِي عَلَّمَ بِالْقَلَمِ", "عَلَّمَ الْإِنْسَانَ مَا لَمْ يَعْلَمْ"], jawabanBenar: "خَلَقَ الْإِنْسَانَ مِنْ عَلَقٍ" },
+        { pertanyaan: "Lanjutkan ayat: 'خَلَقَ الْإِنْسَانَ مِنْ عَلَقٍ'", opsi: ["اقْرَأْ وَرَبُّكَ الْأَكْرَمُ", "الَّذِي عَلَّمَ بِالْقَلَمِ", "عَلَّمَ الْإِنْسَانَ مَا لَمْ يَعْلَمْ", "كَلَّا إِنَّ الْإِنْسَانَ لَيَطْغَىٰ"], jawabanBenar: "اقْرَأْ وَرَبُّكَ الْأَكْرَمُ" },
+        { pertanyaan: "Lanjutkan ayat: 'إِنَّا أَنْزَلْنَاهُ فِي لَيْلَةِ الْقَدْرِ'", opsi: ["وَمَا أَدْرَاكَ مَا لَيْلَةُ الْقَدْرِ", "لَيْلَةُ الْقَدْرِ خَيْرٌ مِنْ أَلْفِ شَهْرٍ", "تَنَزَّلُ الْمَلَائِكَةُ وَالرُّوحُ فِيهَا", "سَلَامٌ هِيَ حَتَّىٰ مَطْلَعِ الْفَجْرِ"], jawabanBenar: "وَمَا أَدْرَاكَ مَا لَيْلَةُ الْقَدْرِ" },
+        { pertanyaan: "Lanjutkan ayat: 'لَمْ يَكُنِ الَّذِينَ كَفَرُوا مِنْ أَهْلِ الْكِتَابِ وَالْمُشْرِكِينَ مُنْفَكِّينَ حَتَّىٰ تَأْتِيَهُمُ الْبَيِّنَةُ'", opsi: ["رَسُولٌ مِنَ اللَّهِ يَتْلُو صُحُفًا مُطَهَّرَةً", "فِيهَا كُتُبٌ قَيِّمَةٌ", "وَمَا تَفَرَّقَ الَّذِينَ أُوتُوا الْكِتَابَ", "وَمَا أُمِرُوا إِلَّا لِيَعْبُدُوا اللَّهَ مُخْلِصِينَ لَهُ الدِّينَ"], jawabanBenar: "رَسُولٌ مِنَ اللَّهِ يَتْلُو صُحُفًا مُطَهَّرَةً" },
+        { pertanyaan: "Lanjutkan ayat: 'إِذَا زُلْزِلَتِ الْأَرْضُ زِلْزَالَهَا'", opsi: ["وَأَخْرَجَتِ الْأَرْضُ أَثْقَالَهَا", "وَقَالَ الْإِنْسَانُ مَا لَهَا", "يَوْمَئِذٍ تُحَدِّثُ أَخْبَارَهَا", "بِأَنَّ رَبَّكَ أَوْحَىٰ لَهَا"], jawabanBenar: "وَأَخْرَجَتِ الْأَرْضُ أَثْقَالَهَا" },
+        { pertanyaan: "Lanjutkan ayat: 'وَأَخْرَجَتِ الْأَرْضُ أَثْقَالَهَا'", opsi: ["وَقَالَ الْإِنْسَانُ مَا لَهَا", "يَوْمَئِذٍ تُحَدِّثُ أَخْبَارَهَا", "بِأَنَّ رَبَّكَ أَوْحَىٰ لَهَا", "يَوْمَئِذٍ يَصْدُرُ النَّاسُ أَشْتَاتًا لِيُرَوْا أَعْمَالَهُمْ"], jawabanBenar: "وَقَالَ الْإِنْسَانُ مَا لَهَا" },
+        { pertanyaan: "Lanjutkan ayat: 'وَالْعَادِيَاتِ ضَبْحًا'", opsi: ["فَالْمُورِيَاتِ قَدْحًا", "فَالْمُغِيرَاتِ صُبْحًا", "فَأَثَرْنَ بِهِ نَقْعًا", "فَوَسَطْنَ بِهِ جَمْعًا"], jawabanBenar: "فَالْمُورِيَاتِ قَدْحًا" },
+        { pertanyaan: "Lanjutkan ayat: 'فَالْمُورِيَاتِ قَدْحًا'", opsi: ["فَالْمُغِيرَاتِ صُبْحًا", "فَأَثَرْنَ بِهِ نَقْعًا", "فَوَسَطْنَ بِهِ جَمْعًا", "إِنَّ الْإِنْسَانَ لِرَبِّهِ لَكَنُودٌ"], jawabanBenar: "فَالْمُغِيرَاتِ صُبْحًا" },
+        { pertanyaan: "Lanjutkan ayat: 'الْقَارِعَةُ'", opsi: ["مَا الْقَارِعَةُ", "وَمَا أَدْرَاكَ مَا الْقَارِعَةُ", "يَوْمَ يَكُونُ النَّاسُ كَالْفَرَاشِ الْمَبْثُوثِ", "وَتَكُونُ الْجِبَالُ كَالْعِهْنِ الْمَنْفُوشِ"], jawabanBenar: "مَا الْقَارِعَةُ" },
+        { pertanyaan: "Lanjutkan ayat: 'أَلْهَاكُمُ التَّكَاثُرُ'", opsi: ["حَتَّىٰ زُرْتُمُ الْمَقَابِرَ", "كَلَّا سَوْفَ تَعْلَمُونَ", "ثُمَّ كَلَّا سَوْفَ تَعْلَمُونَ", "كَلَّا لَوْ تَعْلَمُونَ عِلْمَ الْيَقِينِ"], jawabanBenar: "حَتَّىٰ زُرْتُمُ الْمَقَابِرَ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَالْعَصْرِ'", opsi: ["إِنَّ الْإِنْسَانَ لَفِي خُسْرٍ", "إِلَّا الَّذِينَ آمَنُوا وَعَمِلُوا الصَّالِحَاتِ", "وَتَوَاصَوْا بِالْحَقِّ وَتَوَاصَوْا بِالصَّبْرِ", "وَيْلٌ لِكُلِّ هُمَزَةٍ لُمَزَةٍ"], jawabanBenar: "إِنَّ الْإِنْسَانَ لَفِي خُسْرٍ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَيْلٌ لِكُلِّ هُمَزَةٍ لُمَزَةٍ'", opsi: ["الَّذِي جَمَعَ مَالًا وَعَدَّدَهُ", "يَحْسَبُ أَنَّ مَالَهُ أَخْلَدَهُ", "كَلَّا ۖ لَيُنْبَذَنَّ فِي الْحُطَمَةِ", "وَمَا أَدْرَاكَ مَا الْحُطَمَةُ"], jawabanBenar: "الَّذِي جَمَعَ مَالًا وَعَدَّدَهُ" },
+        { pertanyaan: "Lanjutkan ayat: 'أَلَمْ تَرَ كَيْفَ فَعَلَ رَبُّكَ بِأَصْحَابِ الْفِيلِ'", opsi: ["أَلَمْ يَجْعَلْ كَيْدَهُمْ فِي تَضْلِيلٍ", "وَأَرْسَلَ عَلَيْهِمْ طَيْرًا أَبَابِيلَ", "تَرْمِيهِمْ بِحِجَارَةٍ مِنْ سِجِّيلٍ", "فَجَعَلَهُمْ كَعَصْفٍ مَأْكُولٍ"], jawabanBenar: "أَلَمْ يَجْعَلْ كَيْدَهُمْ فِي تَضْلِيلٍ" },
+        { pertanyaan: "Lanjutkan ayat: 'لِإِيلَافِ قُرَيْشٍ'", opsi: ["إِيلَافِهِمْ رِحْلَةَ الشِّتَاءِ وَالصَّيْفِ", "فَلْيَعْبُدُوا رَبَّ هَٰذَا الْبَيْتِ", "الَّذِي أَطْعَمَهُمْ مِنْ جُوعٍ", "وَآمَنَهُمْ مِنْ خَوْفٍ"], jawabanBenar: "إِيلَافِهِمْ رِحْلَةَ الشِّتَاءِ وَالصَّيْفِ" },
+        { pertanyaan: "Lanjutkan ayat: 'أَرَأَيْتَ الَّذِي يُكَذِّبُ بِالدِّينِ'", opsi: ["فَذَٰلِكَ الَّذِي يَدُعُّ الْيَتِيمَ", "وَلَا يَحُضُّ عَلَىٰ طَعَامِ الْمِسْكِينِ", "فَوَيْلٌ لِلْمُصَلِّينَ", "الَّذِينَ هُمْ عَنْ صَلَاتِهِمْ سَاهُونَ"], jawabanBenar: "فَذَٰلِكَ الَّذِي يَدُعُّ الْيَتِيمَ" },
+        { pertanyaan: "Lanjutkan ayat: 'إِنَّا أَعْطَيْنَاكَ الْكَوْثَرَ'", opsi: ["فَصَلِّ لِرَبِّكَ وَانْحَرْ", "إِنَّ شَانِئَكَ هُوَ الْأَبْتَرُ", "قُلْ يَا أَيُّهَا الْكَافِرُونَ", "لَا أَعْبُدُ مَا تَعْبُدُونَ"], jawabanBenar: "فَصَلِّ لِرَبِّكَ وَانْحَرْ" },
+        { pertanyaan: "Lanjutkan ayat: 'قُلْ يَا أَيُّهَا الْكَافِرُونَ'", opsi: ["لَا أَعْبُدُ مَا تَعْبُدُونَ", "وَلَا أَنْتُمْ عَابِدُونَ مَا أَعْبُدُ", "وَلَا أَنَا عَابِدٌ مَا عَبَدْتُمْ", "لَكُمْ دِينُكُمْ وَلِيَ دِينِ"], jawabanBenar: "لَا أَعْبُدُ مَا تَعْبُدُونَ" },
+        { pertanyaan: "Lanjutkan ayat: 'إِذَا جَاءَ نَصْرُ اللَّهِ وَالْفَتْحُ'", opsi: ["وَرَأَيْتَ النَّاسَ يَدْخُلُونَ فِي دِينِ اللَّهِ أَفْوَاجًا", "فَسَبِّحْ بِحَمْدِ رَبِّكَ وَاسْتَغْفِرْهُ", "إِنَّهُ كَانَ تَوَّابًا", "تَبَّتْ يَدَا أَبِي لَهَبٍ وَتَبَّ"], jawabanBenar: "وَرَأَيْتَ النَّاسَ يَدْخُلُونَ فِي دِينِ اللَّهِ أَفْوَاجًا" },
+        { pertanyaan: "Lanjutkan ayat: 'تَبَّتْ يَدَا أَبِي لَهَبٍ وَتَبَّ'", opsi: ["مَا أَغْنَىٰ عَنْهُ مَالُهُ وَمَا كَسَبَ", "سَيَصْلَىٰ نَارًا ذَاتَ لَهَبٍ", "وَامْرَأَتُهُ حَمَّالَةَ الْحَطَبِ", "فِي جِيدِهَا حَبْلٌ مِنْ مَسَدٍ"], jawabanBenar: "مَا أَغْنَىٰ عَنْهُ مَالُهُ وَمَا كَسَبَ" },
+        { pertanyaan: "Lanjutkan ayat: 'قُلْ هُوَ اللَّهُ أَحَدٌ'", opsi: ["اللَّهُ الصَّمَدُ", "لَمْ يَلِدْ وَلَمْ يُولَدْ", "وَلَمْ يَكُنْ لَهُ كُفُوًا أَحَدٌ", "مِنْ شَرِّ مَا خَلَقَ"], jawabanBenar: "اللَّهُ الصَّمَدُ" }
     ],
     menengah: [
-        { pertanyaan: "Lanjutkan ayat: 'وَالضُّحَىٰ ۝ وَاللَّيْلِ إِذَا ...'", opsi: ["سَجَىٰ", "قَالَ", "تَرْضَىٰ", "فَهَدَىٰ"], jawabanBenar: "سَجَىٰ" },
-        { pertanyaan: "Surat apakah yang memiliki arti 'Waktu Subuh'?", opsi: ["Al-Falaq", "An-Nas", "Al-'Asr", "Al-Fajr"], jawabanBenar: "Al-Falaq" },
-        { pertanyaan: "Lanjutkan ayat: 'وَالتِّينِ وَالزَّ...'", opsi: ["يْتُونِ", "لْزَلَةِ", "مَرِ", "خْرُفِ"], jawabanBenar: "يْتُونِ" },
-        { pertanyaan: "Surat Al-Ma'un menjelaskan tentang...", opsi: ["Orang yang mendustakan agama, enggan membantu anak yatim", "Kisah Nabi Musa", "Keindahan surga", "Peristiwa hari kiamat secara rinci"], jawabanBenar: "Orang yang mendustakan agama, enggan membantu anak yatim" },
-        { pertanyaan: "Lanjutkan ayat: 'إِنَّا أَنزَلْنَاهُ فِي لَيْلَةِ الْـ...'", opsi: ["قَدْرِ", "بَرَكَةِ", "نُّورِ", "مُبَارَك"], jawabanBenar: "قَدْرِ" },
-        { pertanyaan: "Surat Al-Fil menceritakan tentang...", opsi: ["Pasukan bergajah yang hendak menghancurkan Ka'bah", "Kisah Nabi Sulaiman", "Perjanjian Hudaibiyah", "Kisah kaum 'Ad"], jawabanBenar: "Pasukan bergajah yang hendak menghancurkan Ka'bah" },
-        { pertanyaan: "Lanjutkan ayat: 'وَيْلٌ لِّكُلِّ هُمَزَةٍ ...'", opsi: ["لُّمَزَةٍ", "حُطَمَةٌ", "صَّاعِقَةٌ", "قَارِعَةٌ"], jawabanBenar: "لُّمَزَةٍ" },
-        { pertanyaan: "Surat At-Takatsur mengingatkan manusia tentang...", opsi: ["Sikap bermegah-megahan yang melalaikan", "Pentingnya sedekah", "Kisah para nabi", "Keutamaan puasa"], jawabanBenar: "Sikap bermegah-megahan yang melalaikan" },
-        { pertanyaan: "Lanjutkan ayat: 'إِذَا زُلْزِلَتِ الْأَرْضُ ...'", opsi: ["زِلْزَالَهَا", "أَثْقَالَهَا", "يَوْمَئِذٍ", "مِثْقَالَ ذَرَّةٍ"], jawabanBenar: "زِلْزَالَهَا" },
-        { pertanyaan: "Surat Al-Qari'ah artinya...", opsi: ["Hari kiamat yang menggetarkan", "Hari kemenangan", "Waktu dhuha", "Cahaya di malam hari"], jawabanBenar: "Hari kiamat yang menggetarkan" },
-        { pertanyaan: "Lanjutkan ayat: 'أَلَمْ نَشْرَحْ لَكَ ...'", opsi: ["صَدْرَكَ", "قَلْبَكَ", "أَمْرَكَ", "ذِكْرَكَ"], jawabanBenar: "صَدْرَكَ" },
-        { pertanyaan: "Surat Al-Insyirah menjelaskan tentang...", opsi: ["Kemudahan yang datang setelah kesulitan", "Kisah kaum Nabi Nuh", "Larangan bermegah-megahan", "Kisah pasukan bergajah"], jawabanBenar: "Kemudahan yang datang setelah kesulitan" },
-        { pertanyaan: "Lanjutkan ayat: 'وَالْعَصْرِ ۝ إِنَّ الْإِنسَانَ لَفِي ...'", opsi: ["خُسْرٍ", "قَدْرٍ", "أَجْرٍ", "نُورٍ"], jawabanBenar: "خُسْرٍ" },
-        { pertanyaan: "Surat At-Tin bersumpah dengan...", opsi: ["Buah Tin, Zaitun, dan Gunung Sinai", "Matahari dan bulan", "Bintang-bintang", "Malam dan siang"], jawabanBenar: "Buah Tin, Zaitun, dan Gunung Sinai" },
-        { pertanyaan: "Lanjutkan ayat: 'اقْرَأْ بِاسْمِ رَبِّكَ الَّذِي ...'", opsi: ["خَلَقَ", "رَزَقَ", "هَدَىٰ", "أَنزَلَ"], jawabanBenar: "خَلَقَ" }
+        { pertanyaan: "Lanjutkan ayat: 'وَجَعَلْنَا النَّهَارَ مَعَاشًا'", opsi: ["وَبَنَيْنَا فَوْقَكُمْ سَبْعًا شِدَادًا", "وَجَعَلْنَا سِرَاجًا وَهَّاجًا", "وَأَنْزَلْنَا مِنَ الْمُعْصِرَاتِ مَاءً ثَجَّاجًا", "لِنُخْرِجَ بِهِ حَبًّا وَنَبَاتًا"], jawabanBenar: "وَبَنَيْنَا فَوْقَكُمْ سَبْعًا شِدَادًا" },
+        { pertanyaan: "Lanjutkan ayat: 'وَبَنَيْنَا فَوْقَكُمْ سَبْعًا شِدَادًا'", opsi: ["وَجَعَلْنَا سِرَاجًا وَهَّاجًا", "وَأَنْزَلْنَا مِنَ الْمُعْصِرَاتِ مَاءً ثَجَّاجًا", "لِنُخْرِجَ بِهِ حَبًّا وَنَبَاتًا", "وَجَنَّاتٍ أَلْفَافًا"], jawabanBenar: "وَجَعَلْنَا سِرَاجًا وَهَّاجًا" },
+        { pertanyaan: "Lanjutkan ayat: 'إِنَّ يَوْمَ الْفَصْلِ كَانَ مِيقَاتًا'", opsi: ["يَوْمَ يُنْفَخُ فِي الصُّورِ فَتَأْتُونَ أَفْوَاجًا", "وَفُتِحَتِ السَّمَاءُ فَكَانَتْ أَبْوَابًا", "وَسُيِّرَتِ الْجِبَالُ فَكَانَتْ سَرَابًا", "إِنَّ جَهَنَّمَ كَانَتْ مِرْصَادًا"], jawabanBenar: "يَوْمَ يُنْفَخُ فِي الصُّورِ فَتَأْتُونَ أَفْوَاجًا" },
+        { pertanyaan: "Lanjutkan ayat: 'وَفُتِحَتِ السَّمَاءُ فَكَانَتْ أَبْوَابًا'", opsi: ["وَسُيِّرَتِ الْجِبَالُ فَكَانَتْ سَرَابًا", "إِنَّ جَهَنَّمَ كَانَتْ مِرْصَادًا", "لِلطَّاغِينَ مَآبًا", "لَابِثِينَ فِيهَا أَحْقَابًا"], jawabanBenar: "وَسُيِّرَتِ الْجِبَالُ فَكَانَتْ سَرَابًا" },
+        { pertanyaan: "Lanjutkan ayat: 'إِنَّ لِلْمُتَّقِينَ مَفَازًا'", opsi: ["حَدَائِقَ وَأَعْنَابًا", "وَكَوَاعِبَ أَتْرَابًا", "وَكَأْسًا دِهَاقًا", "لَا يَسْمَعُونَ فِيهَا لَغْوًا وَلَا كِذَّابًا"], jawabanBenar: "حَدَائِقَ وَأَعْنَابًا" },
+        { pertanyaan: "Lanjutkan ayat: 'هَلْ أَتَاكَ حَدِيثُ مُوسَىٰ'", opsi: ["إِذْ نَادَاهُ رَبُّهُ بِالْوَادِ الْمُقَدَّسِ طُوًى", "اذْهَبْ إِلَىٰ فِرْعَوْنَ إِنَّهُ طَغَىٰ", "فَقُلْ هَلْ لَكَ إِلَىٰ أَنْ تَزَكَّىٰ", "وَأَهْدِيَكَ إِلَىٰ رَبِّكَ فَتَخْشَىٰ"], jawabanBenar: "إِذْ نَادَاهُ رَبُّهُ بِالْوَادِ الْمُقَدَّسِ طُوًى" },
+        { pertanyaan: "Lanjutkan ayat: 'اذْهَبْ إِلَىٰ فِرْعَوْنَ إِنَّهُ طَغَىٰ'", opsi: ["فَقُلْ هَلْ لَكَ إِلَىٰ أَنْ تَزَكَّىٰ", "وَأَهْدِيَكَ إِلَىٰ رَبِّكَ فَتَخْشَىٰ", "فَأَرَاهُ الْآيَةَ الْكُبْرَىٰ", "فَكَذَّبَ وَعَصَىٰ"], jawabanBenar: "فَقُلْ هَلْ لَكَ إِلَىٰ أَنْ تَزَكَّىٰ" },
+        { pertanyaan: "Lanjutkan ayat: 'فَأَرَاهُ الْآيَةَ الْكُبْرَىٰ'", opsi: ["فَكَذَّبَ وَعَصَىٰ", "ثُمَّ أَدْبَرَ يَسْعَىٰ", "فَحَشَرَ فَنَادَىٰ", "فَقَالَ أَنَا رَبُّكُمُ الْأَعْلَىٰ"], jawabanBenar: "فَكَذَّبَ وَعَصَىٰ" },
+        { pertanyaan: "Lanjutkan ayat: 'أَأَنْتُمْ أَشَدُّ خَلْقًا أَمِ السَّمَاءُ ۚ بَنَاهَا'", opsi: ["رَفَعَ سَمْكَهَا فَسَوَّاهَا", "وَأَغْطَشَ لَيْلَهَا وَأَخْرَجَ ضُحَاهَا", "وَالْأَرْضَ بَعْدَ ذَٰلِكَ دَحَاهَا", "أَخْرَجَ مِنْهَا مَاءَهَا وَمَرْعَاهَا"], jawabanBenar: "رَفَعَ سَمْكَهَا فَسَوَّاهَا" },
+        { pertanyaan: "Lanjutkan ayat: 'وَأَغْطَشَ لَيْلَهَا وَأَخْرَجَ ضُحَاهَا'", opsi: ["وَالْأَرْضَ بَعْدَ ذَٰلِكَ دَحَاهَا", "أَخْرَجَ مِنْهَا مَاءَهَا وَمَرْعَاهَا", "وَالْجِبَالَ أَرْسَاهَا", "مَتَاعًا لَكُمْ وَلِأَنْعَامِكُمْ"], jawabanBenar: "وَالْأَرْضَ بَعْدَ ذَٰلِكَ دَحَاهَا" },
+        { pertanyaan: "Lanjutkan ayat: 'فَلْيَنْظُرِ الْإِنْسَانُ إِلَىٰ طَعَامِهِ'", opsi: ["أَنَّا صَبَبْنَا الْمَاءَ صَبًّا", "ثُمَّ شَقَقْنَا الْأَرْضَ شَقًّا", "فَأَنْبَتْنَا فِيهَا حَبًّا", "وَعِنَبًا وَقَضْبًا"], jawabanBenar: "أَنَّا صَبَبْنَا الْمَاءَ صَبًّا" },
+        { pertanyaan: "Lanjutkan ayat: 'أَنَّا صَبَبْنَا الْمَاءَ صَبًّا'", opsi: ["ثُمَّ شَقَقْنَا الْأَرْضَ شَقًّا", "فَأَنْبَتْنَا فِيهَا حَبًّا", "وَعِنَبًا وَقَضْبًا", "وَزَيْتُونًا وَنَخْلًا"], jawabanBenar: "ثُمَّ شَقَقْنَا الْأَرْضَ شَقًّا" },
+        { pertanyaan: "Lanjutkan ayat: 'وَزَيْتُونًا وَنَخْلًا'", opsi: ["وَحَدَائِقَ غُلْبًا", "وَفَاكِهَةً وَأَبًّا", "مَتَاعًا لَكُمْ وَلِأَنْعَامِكُمْ", "فَإِذَا جَاءَتِ الصَّاخَّةُ"], jawabanBenar: "وَحَدَائِقَ غُلْبًا" },
+        { pertanyaan: "Lanjutkan ayat: 'وَحَدَائِقَ غُلْبًا'", opsi: ["وَفَاكِهَةً وَأَبًّا", "مَتَاعًا لَكُمْ وَلِأَنْعَامِكُمْ", "فَإِذَا جَاءَتِ الصَّاخَّةُ", "يَوْمَ يَفِرُّ الْمَرْءُ مِنْ أَخِيهِ"], jawabanBenar: "وَفَاكِهَةً وَأَبًّا" },
+        { pertanyaan: "Lanjutkan ayat: 'فَلَا أُقْسِمُ بِالْخُنَّسِ'", opsi: ["الْجَوَارِ الْكُنَّسِ", "وَاللَّيْلِ إِذَا عَسْعَسَ", "وَالصُّبْحِ إِذَا تَنَفَّسَ", "إِنَّهُ لَقَوْلُ رَسُولٍ كَرِيمٍ"], jawabanBenar: "الْجَوَارِ الْكُنَّسِ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَاللَّيْلِ إِذَا عَسْعَسَ'", opsi: ["وَالصُّبْحِ إِذَا تَنَفَّسَ", "إِنَّهُ لَقَوْلُ رَسُولٍ كَرِيمٍ", "ذِي قُوَّةٍ عِنْدَ ذِي الْعَرْشِ مَكِينٍ", "مُطَاعٍ ثَمَّ أَمِينٍ"], jawabanBenar: "وَالصُّبْحِ إِذَا تَنَفَّسَ" },
+        { pertanyaan: "Lanjutkan ayat: 'مُطَاعٍ ثَمَّ أَمِينٍ'", opsi: ["وَمَا صَاحِبُكُمْ بِمَجْنُونٍ", "وَلَقَدْ رَآهُ بِالْأُفُقِ الْمُبِينِ", "وَمَا هُوَ عَلَى الْغَيْبِ بِضَنِينٍ", "وَمَا هُوَ بِقَوْلِ شَيْطَانٍ رَجِيمٍ"], jawabanBenar: "وَمَا صَاحِبُكُمْ بِمَجْنُونٍ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَمَا صَاحِبُكُمْ بِمَجْنُونٍ'", opsi: ["وَلَقَدْ رَآهُ بِالْأُفُقِ الْمُبِينِ", "وَمَا هُوَ عَلَى الْغَيْبِ بِضَنِينٍ", "وَمَا هُوَ بِقَوْلِ شَيْطَانٍ رَجِيمٍ", "فَأَيْنَ تَذْهَبُونَ"], jawabanBenar: "وَلَقَدْ رَآهُ بِالْأُفُقِ الْمُبِينِ" },
+        { pertanyaan: "Lanjutkan ayat: 'يَعْلَمُونَ مَا تَفْعَلُونَ'", opsi: ["إِنَّ الْأَبْرَارَ لَفِي نَعِيمٍ", "وَإِنَّ الْفُجَّارَ لَفِي جَحِيمٍ", "يَصْلَوْنَهَا يَوْمَ الدِّينِ", "وَمَا هُمْ عَنْهَا بِغَائِبِينَ"], jawabanBenar: "إِنَّ الْأَبْرَارَ لَفِي نَعِيمٍ" },
+        { pertanyaan: "Lanjutkan ayat: 'إِنَّ الْأَبْرَارَ لَفِي نَعِيمٍ'", opsi: ["وَإِنَّ الْفُجَّارَ لَفِي جَحِيمٍ", "يَصْلَوْنَهَا يَوْمَ الدِّينِ", "وَمَا هُمْ عَنْهَا بِغَائِبِينَ", "وَمَا أَدْرَاكَ مَا يَوْمُ الدِّينِ"], jawabanBenar: "وَإِنَّ الْفُجَّارَ لَفِي جَحِيمٍ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَإِنَّ الْفُجَّارَ لَفِي جَحِيمٍ'", opsi: ["يَصْلَوْنَهَا يَوْمَ الدِّينِ", "وَمَا هُمْ عَنْهَا بِغَائِبِينَ", "وَمَا أَدْرَاكَ مَا يَوْمُ الدِّينِ", "ثُمَّ مَا أَدْرَاكَ مَا يَوْمُ الدِّينِ"], jawabanBenar: "يَصْلَوْنَهَا يَوْمَ الدِّينِ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَيْلٌ يَوْمَئِذٍ لِلْمُكَذِّبِينَ'", opsi: ["الَّذِينَ يُكَذِّبُونَ بِيَوْمِ الدِّينِ", "وَمَا يُكَذِّبُ بِهِ إِلَّا كُلُّ مُعْتَدٍ أَثِيمٍ", "إِذَا تُتْلَىٰ عَلَيْهِ آيَاتُنَا قَالَ أَسَاطِيرُ الْأَوَّلِينَ", "كَلَّا ۖ بَلْ ۜ رَانَ عَلَىٰ قُلُوبِهِمْ مَا كَانُوا يَكْسِبُونَ"], jawabanBenar: "الَّذِينَ يُكَذِّبُونَ بِيَوْمِ الدِّينِ" },
+        { pertanyaan: "Lanjutkan ayat: 'إِذَا تُتْلَىٰ عَلَيْهِ آيَاتُنَا قَالَ أَسَاطِيرُ الْأَوَّلِينَ'", opsi: ["كَلَّا ۖ بَلْ ۜ رَانَ عَلَىٰ قُلُوبِهِمْ مَا كَانُوا يَكْسِبُونَ", "كَلَّا إِنَّهُمْ عَنْ رَبِّهِمْ يَوْمَئِذٍ لَمَحْجُوبُونَ", "ثُمَّ إِنَّهُمْ لَصَالُو الْجَحِيمِ", "ثُمَّ يُقَالُ هَٰذَا الَّذِي كُنْتُمْ بِهِ تُكَذِّبُونَ"], jawabanBenar: "كَلَّا ۖ بَلْ ۜ رَانَ عَلَىٰ قُلُوبِهِمْ مَا كَانُوا يَكْسِبُونَ" },
+        { pertanyaan: "Lanjutkan ayat: 'خِتَامُهُ مِسْكٌ ۚ وَفِي ذَٰلِكَ فَلْيَتَنَافَسِ الْمُتَنَافِسُونَ'", opsi: ["وَمِزَاجُهُ مِنْ تَسْنِيمٍ", "عَيْنًا يَشْرَبُ بِهَا الْمُقَرَّبُونَ", "إِنَّ الَّذِينَ أَجْرَمُوا كَانُوا مِنَ الَّذِينَ آمَنُوا يَضْحَكُونَ", "وَإِذَا مَرُّوا بِهِمْ يَتَغَامَزُونَ"], jawabanBenar: "وَمِزَاجُهُ مِنْ تَسْنِيمٍ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَمِزَاجُهُ مِنْ تَسْنِيمٍ'", opsi: ["عَيْنًا يَشْرَبُ بِهَا الْمُقَرَّبُونَ", "إِنَّ الَّذِينَ أَجْرَمُوا كَانُوا مِنَ الَّذِينَ آمَنُوا يَضْحَكُونَ", "وَإِذَا مَرُّوا بِهِمْ يَتَغَامَزُونَ", "وَإِذَا انْقَلَبُوا إِلَىٰ أَهْلِهِمُ انْقَلَبُوا فَكِهِينَ"], jawabanBenar: "عَيْنًا يَشْرَبُ بِهَا الْمُقَرَّبُونَ" },
+        { pertanyaan: "Lanjutkan ayat: 'فَلَا أُقْسِمُ بِالشَّفَقِ'", opsi: ["وَاللَّيْلِ وَمَا وَسَقَ", "وَالْقَمَرِ إِذَا اتَّسَقَ", "لَتَرْكَبُنَّ طَبَقًا عَنْ طَبَقٍ", "فَمَا لَهُمْ لَا يُؤْمِنُونَ"], jawabanBenar: "وَاللَّيْلِ وَمَا وَسَقَ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَاللَّيْلِ وَمَا وَسَقَ'", opsi: ["وَالْقَمَرِ إِذَا اتَّسَقَ", "لَتَرْكَبُنَّ طَبَقًا عَنْ طَبَقٍ", "فَمَا لَهُمْ لَا يُؤْمِنُونَ", "وَإِذَا قُرِئَ عَلَيْهِمُ الْقُرْآنُ لَا يَسْجُدُونَ ۩"], jawabanBenar: "وَالْقَمَرِ إِذَا اتَّسَقَ" },
+        { pertanyaan: "Lanjutkan ayat: 'إِنَّ بَطْشَ رَبِّكَ لَشَدِيدٌ'", opsi: ["إِنَّهُ هُوَ يُبْدِئُ وَيُعِيدُ", "وَهُوَ الْغَفُورُ الْوَدُودُ", "ذُو الْعَرْشِ الْمَجِيدُ", "فَعَّالٌ لِمَا يُرِيدُ"], jawabanBenar: "إِنَّهُ هُوَ يُبْدِئُ وَيُعِيدُ" },
+        { pertanyaan: "Lanjutkan ayat: 'إِنَّهُ هُوَ يُبْدِئُ وَيُعِيدُ'", opsi: ["وَهُوَ الْغَفُورُ الْوَدُودُ", "ذُو الْعَرْشِ الْمَجِيدُ", "فَعَّالٌ لِمَا يُرِيدُ", "هَلْ أَتَاكَ حَدِيثُ الْجُنُودِ"], jawabanBenar: "وَهُوَ الْغَفُورُ الْوَدُودُ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَهُوَ الْغَفُورُ الْوَدُودُ'", opsi: ["ذُو الْعَرْشِ الْمَجِيدُ", "فَعَّالٌ لِمَا يُرِيدُ", "هَلْ أَتَاكَ حَدِيثُ الْجُنُودِ", "فِرْعَوْنَ وَثَمُودَ"], jawabanBenar: "ذُو الْعَرْشِ الْمَجِيدُ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَالسَّمَاءِ ذَاتِ الرَّجْعِ'", opsi: ["وَالْأَرْضِ ذَاتِ الصَّدْعِ", "إِنَّهُ لَقَوْلٌ فَصْلٌ", "وَمَا هُوَ بِالْهَزْلِ", "إِنَّهُمْ يَكِيدُونَ كَيْدًا"], jawabanBenar: "وَالْأَرْضِ ذَاتِ الصَّدْعِ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَالْأَرْضِ ذَاتِ الصَّدْعِ'", opsi: ["إِنَّهُ لَقَوْلٌ فَصْلٌ", "وَمَا هُوَ بِالْهَزْلِ", "إِنَّهُمْ يَكِيدُونَ كَيْدًا", "وَأَكِيدُ كَيْدًا"], jawabanBenar: "إِنَّهُ لَقَوْلٌ فَصْلٌ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَالَّذِي قَدَّرَ فَهَدَىٰ'", opsi: ["وَالَّذِي أَخْرَجَ الْمَرْعَىٰ", "فَجَعَلَهُ غُثَاءً أَحْوَىٰ", "سَنُقْرِئُكَ فَلَا تَنْسَىٰ", "إِلَّا مَا شَاءَ اللَّهُ"], jawabanBenar: "وَالَّذِي أَخْرَجَ الْمَرْعَىٰ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَالَّذِي أَخْرَجَ الْمَرْعَىٰ'", opsi: ["فَجَعَلَهُ غُثَاءً أَحْوَىٰ", "سَنُقْرِئُكَ فَلَا تَنْسَىٰ", "إِلَّا مَا شَاءَ اللَّهُ ۚ إِنَّهُ يَعْلَمُ الْجَهْرَ وَمَا يَخْفَىٰ", "وَنُيَسِّرُكَ لِلْيُسْرَىٰ"], jawabanBenar: "فَجَعَلَهُ غُثَاءً أَحْوَىٰ" },
+        { pertanyaan: "Lanjutkan ayat: 'أَفَلَا يَنْظُرُونَ إِلَى الْإِبِلِ كَيْفَ خُلِقَتْ'", opsi: ["وَإِلَى السَّمَاءِ كَيْفَ رُفِعَتْ", "وَإِلَى الْجِبَالِ كَيْفَ نُصِبَتْ", "وَإِلَى الْأَرْضِ كَيْفَ سُطِحَتْ", "فَذَكِّرْ إِنَّمَا أَنْتَ مُذَكِّرٌ"], jawabanBenar: "وَإِلَى السَّمَاءِ كَيْفَ رُفِعَتْ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَإِلَى السَّمَاءِ كَيْفَ رُفِعَتْ'", opsi: ["وَإِلَى الْجِبَالِ كَيْفَ نُصِبَتْ", "وَإِلَى الْأَرْضِ كَيْفَ سُطِحَتْ", "فَذَكِّرْ إِنَّمَا أَنْتَ مُذَكِّرٌ", "لَسْتَ عَلَيْهِمْ بِمُصَيْطِرٍ"], jawabanBenar: "وَإِلَى الْجِبَالِ كَيْفَ نُصِبَتْ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَإِلَى الْجِبَالِ كَيْفَ نُصِبَتْ'", opsi: ["وَإِلَى الْأَرْضِ كَيْفَ سُطِحَتْ", "فَذَكِّرْ إِنَّمَا أَنْتَ مُذَكِّرٌ", "لَسْتَ عَلَيْهِمْ بِمُصَيْطِرٍ", "إِلَّا مَنْ تَوَلَّىٰ وَكَفَرَ"], jawabanBenar: "وَإِلَى الْأَرْضِ كَيْفَ سُطِحَتْ" },
+        { pertanyaan: "Lanjutkan ayat: 'يَا أَيَّتُهَا النَّفْسُ الْمُطْمَئِنَّةُ'", opsi: ["ارْجِعِي إِلَىٰ رَبِّكِ رَاضِيَةً مَرْضِيَّةً", "فَادْخُلِي فِي عِبَادِي", "وَادْخُلِي جَنَّتِي", "يَوْمَئِذٍ يَتَذَكَّرُ الْإِنْسَانُ وَأَنَّىٰ لَهُ الذِّكْرَىٰ"], jawabanBenar: "ارْجِعِي إِلَىٰ رَبِّكِ رَاضِيَةً مَرْضِيَّةً" },
+        { pertanyaan: "Lanjutkan ayat: 'ارْجِعِي إِلَىٰ رَبِّكِ رَاضِيَةً مَرْضِيَّةً'", opsi: ["فَادْخُلِي فِي عِبَادِي", "وَادْخُلِي جَنَّتِي", "فَيَوْمَئِذٍ لَا يُعَذِّبُ عَذَابَهُ أَحَدٌ", "وَلَا يُوثِقُ وَثَاقَهُ أَحَدٌ"], jawabanBenar: "فَادْخُلِي فِي عِبَادِي" },
+        { pertanyaan: "Lanjutkan ayat: 'فَادْخُلِي فِي عِبَادِي'", opsi: ["وَادْخُلِي جَنَّتِي", "يَا أَيَّتُهَا النَّفْسُ الْمُطْمَئِنَّةُ", "ارْجِعِي إِلَىٰ رَبِّكِ رَاضِيَةً مَرْضِيَّةً", "(Ini adalah akhir surat)"], jawabanBenar: "وَادْخُلِي جَنَّتِي" },
+        { pertanyaan: "Lanjutkan ayat: 'فَأَنْذَرْتُكُمْ نَارًا تَلَظَّىٰ'", opsi: ["لَا يَصْلَاهَا إِلَّا الْأَشْقَى", "الَّذِي كَذَّبَ وَتَوَلَّىٰ", "وَسَيُجَنَّبُهَا الْأَتْقَى", "الَّذِي يُؤْتِي مَالَهُ يَتَزَكَّىٰ"], jawabanBenar: "لَا يَصْلَاهَا إِلَّا الْأَشْقَى" },
+        { pertanyaan: "Lanjutkan ayat: 'لَا يَصْلَاهَا إِلَّا الْأَشْقَى'", opsi: ["الَّذِي كَذَّبَ وَتَوَلَّىٰ", "وَسَيُجَنَّبُهَا الْأَتْقَى", "الَّذِي يُؤْتِي مَالَهُ يَتَزَكَّىٰ", "وَمَا لِأَحَدٍ عِنْدَهُ مِنْ نِعْمَةٍ تُجْزَىٰ"], jawabanBenar: "الَّذِي كَذَّبَ وَتَوَلَّىٰ" },
+        { pertanyaan: "Lanjutkan ayat: 'الَّذِي كَذَّبَ وَتَوَلَّىٰ'", opsi: ["وَسَيُجَنَّبُهَا الْأَتْقَى", "الَّذِي يُؤْتِي مَالَهُ يَتَزَكَّىٰ", "وَمَا لِأَحَدٍ عِنْدَهُ مِنْ نِعْمَةٍ تُجْزَىٰ", "إِلَّا ابْتِغَاءَ وَجْهِ رَبِّهِ الْأَعْلَىٰ"], jawabanBenar: "وَسَيُجَنَّبُهَا الْأَتْقَى" },
+        { pertanyaan: "Lanjutkan ayat: 'إِلَّا ابْتِغَاءَ وَجْهِ رَبِّهِ الْأَعْلَىٰ'", opsi: ["وَلَسَوْفَ يَرْضَىٰ", "وَسَيُجَنَّبُهَا الْأَتْقَى", "الَّذِي يُؤْتِي مَالَهُ يَتَزَكَّىٰ", "(Ini adalah akhir surat)"], jawabanBenar: "وَلَسَوْفَ يَرْضَىٰ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَلَلْآخِرَةُ خَيْرٌ لَكَ مِنَ الْأُولَىٰ'", opsi: ["وَلَسَوْفَ يُعْطِيكَ رَبُّكَ فَتَرْضَىٰ", "أَلَمْ يَجِدْكَ يَتِيمًا فَآوَىٰ", "وَوَجَدَكَ ضَالًّا فَهَدَىٰ", "وَوَجَدَكَ عَائِلًا فَأَغْنَىٰ"], jawabanBenar: "وَلَسَوْفَ يُعْطِيكَ رَبُّكَ فَتَرْضَىٰ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَلَسَوْفَ يُعْطِيكَ رَبُّكَ فَتَرْضَىٰ'", opsi: ["أَلَمْ يَجِدْكَ يَتِيمًا فَآوَىٰ", "وَوَجَدَكَ ضَالًّا فَهَدَىٰ", "وَوَجَدَكَ عَائِلًا فَأَغْنَىٰ", "فَأَمَّا الْيَتِيمَ فَلَا تَقْهَرْ"], jawabanBenar: "أَلَمْ يَجِدْكَ يَتِيمًا فَآوَىٰ" },
+        { pertanyaan: "Lanjutkan ayat: 'أَلَمْ يَجِدْكَ يَتِيمًا فَآوَىٰ'", opsi: ["وَوَجَدَكَ ضَالًّا فَهَدَىٰ", "وَوَجَدَكَ عَائِلًا فَأَغْنَىٰ", "فَأَمَّا الْيَتِيمَ فَلَا تَقْهَرْ", "وَأَمَّا السَّائِلَ فَلَا تَنْهَرْ"], jawabanBenar: "وَوَجَدَكَ ضَالًّا فَهَدَىٰ" },
+        { pertanyaan: "Lanjutkan ayat: 'فَأَمَّا الْيَتِيمَ فَلَا تَقْهَرْ'", opsi: ["وَأَمَّا السَّائِلَ فَلَا تَنْهَرْ", "وَأَمَّا بِنِعْمَةِ رَبِّكَ فَحَدِّثْ", "وَوَجَدَكَ ضَالًّا فَهَدَىٰ", "وَوَجَدَكَ عَائِلًا فَأَغْنَىٰ"], jawabanBenar: "وَأَمَّا السَّائِلَ فَلَا تَنْهَرْ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَأَمَّا السَّائِلَ فَلَا تَنْهَرْ'", opsi: ["وَأَمَّا بِنِعْمَةِ رَبِّكَ فَحَدِّثْ", "وَإِلَىٰ رَبِّكَ فَارْغَبْ", "فَإِذَا فَرَغْتَ فَانْصَبْ", "(Ini adalah akhir surat)"], jawabanBenar: "وَأَمَّا بِنِعْمَةِ رَبِّكَ فَحَدِّثْ" },
+        { pertanyaan: "Lanjutkan ayat: 'فَإِذَا فَرَغْتَ فَانْصَبْ'", opsi: ["وَإِلَىٰ رَبِّكَ فَارْغَبْ", "وَأَمَّا بِنِعْمَةِ رَبِّكَ فَحَدِّثْ", "(Ini adalah akhir surat)", "الَّذِي أَنْقَضَ ظَهْرَكَ"], jawabanBenar: "وَإِلَىٰ رَبِّكَ فَارْغَبْ" },
+        { pertanyaan: "Lanjutkan ayat: 'رَسُولٌ مِنَ اللَّهِ يَتْلُو صُحُفًا مُطَهَّرَةً'", opsi: ["فِيهَا كُتُبٌ قَيِّمَةٌ", "وَمَا تَفَرَّقَ الَّذِينَ أُوتُوا الْكِتَابَ", "وَمَا أُمِرُوا إِلَّا لِيَعْبُدُوا اللَّهَ", "إِنَّ الَّذِينَ كَفَرُوا مِنْ أَهْلِ الْكِتَابِ"], jawabanBenar: "فِيهَا كُتُبٌ قَيِّمَةٌ" },
+        { pertanyaan: "Lanjutkan ayat: 'فِيهَا كُتُبٌ قَيِّمَةٌ'", opsi: ["وَمَا تَفَرَّقَ الَّذِينَ أُوتُوا الْكِتَابَ إِلَّا مِنْ بَعْدِ مَا جَاءَتْهُمُ الْبَيِّنَةُ", "وَمَا أُمِرُوا إِلَّا لِيَعْبُدُوا اللَّهَ", "إِنَّ الَّذِينَ كَفَرُوا مِنْ أَهْلِ الْكِتَابِ", "إِنَّ الَّذِينَ آمَنُوا وَعَمِلُوا الصَّالِحَاتِ"], jawabanBenar: "وَمَا تَفَرَّقَ الَّذِينَ أُوتُوا الْكِتَابَ إِلَّا مِنْ بَعْدِ مَا جَاءَتْهُمُ الْبَيِّنَةُ" },
+        { pertanyaan: "Lanjutkan ayat: 'يَوْمَئِذٍ يَصْدُرُ النَّاسُ أَشْتَاتًا لِيُرَوْا أَعْمَالَهُمْ'", opsi: ["فَمَنْ يَعْمَلْ مِثْقَالَ ذَرَّةٍ خَيْرًا يَرَهُ", "وَمَنْ يَعْمَلْ مِثْقَالَ ذَرَّةٍ شَرًّا يَرَهُ", "يَوْمَئِذٍ تُحَدِّثُ أَخْبَارَهَا", "وَقَالَ الْإِنْسَانُ مَا لَهَا"], jawabanBenar: "فَمَنْ يَعْمَلْ مِثْقَالَ ذَرَّةٍ خَيْرًا يَرَهُ" },
+        { pertanyaan: "Lanjutkan ayat: 'فَمَنْ يَعْمَلْ مِثْقَالَ ذَرَّةٍ خَيْرًا يَرَهُ'", opsi: ["وَمَنْ يَعْمَلْ مِثْقَالَ ذَرَّةٍ شَرًّا يَرَهُ", "يَوْمَئِذٍ يَصْدُرُ النَّاسُ أَشْتَاتًا", "إِنَّ الْإِنْسَانَ لِرَبِّهِ لَكَنُودٌ", "وَإِنَّهُ عَلَىٰ ذَٰلِكَ لَشَهِيدٌ"], jawabanBenar: "وَمَنْ يَعْمَلْ مِثْقَالَ ذَرَّةٍ شَرًّا يَرَهُ" },
+        { pertanyaan: "Lanjutkan ayat: 'أَفَلَا يَعْلَمُ إِذَا بُعْثِرَ مَا فِي الْقُبُورِ'", opsi: ["وَحُصِّلَ مَا فِي الصُّدُورِ", "إِنَّ رَبَّهُمْ بِهِمْ يَوْمَئِذٍ لَخَبِيرٌ", "يَوْمَئِذٍ تُحَدِّثُ أَخْبَارَهَا", "يَوْمَئِذٍ يَصْدُرُ النَّاسُ أَشْتَاتًا"], jawabanBenar: "وَحُصِّلَ مَا فِي الصُّدُورِ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَحُصِّلَ مَا فِي الصُّدُورِ'", opsi: ["إِنَّ رَبَّهُمْ بِهِمْ يَوْمَئِذٍ لَخَبِيرٌ", "أَفَلَا يَعْلَمُ إِذَا بُعْثِرَ مَا فِي الْقُبُورِ", "وَإِنَّهُ لِحُبِّ الْخَيْرِ لَشَدِيدٌ", "(Ini adalah akhir surat)"], jawabanBenar: "إِنَّ رَبَّهُمْ بِهِمْ يَوْمَئِذٍ لَخَبِيرٌ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَأَمَّا مَنْ خَفَّتْ مَوَازِينُهُ'", opsi: ["فَأُمُّهُ هَاوِيَةٌ", "وَمَا أَدْرَاكَ مَا هِيَهْ", "نَارٌ حَامِيَةٌ", "فَهُوَ فِي عِيشَةٍ رَاضِيَةٍ"], jawabanBenar: "فَأُمُّهُ هَاوِيَةٌ" },
+        { pertanyaan: "Lanjutkan ayat: 'فَأُمُّهُ هَاوِيَةٌ'", opsi: ["وَمَا أَدْرَاكَ مَا هِيَهْ", "نَارٌ حَامِيَةٌ", "وَأَمَّا مَنْ خَفَّتْ مَوَازِينُهُ", "نَارُ اللَّهِ الْمُوقَدَةُ"], jawabanBenar: "وَمَا أَدْرَاكَ مَا هِيَهْ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَمَا أَدْرَاكَ مَا هِيَهْ'", opsi: ["نَارٌ حَامِيَةٌ", "فَأُمُّهُ هَاوِيَةٌ", "نَارُ اللَّهِ الْمُوقَدَةُ", "سَيَصْلَىٰ نَارًا ذَاتَ لَهَبٍ"], jawabanBenar: "نَارٌ حَامِيَةٌ" },
+        { pertanyaan: "Lanjutkan ayat: 'كَلَّا لَوْ تَعْلَمُونَ عِلْمَ الْيَقِينِ'", opsi: ["لَتَرَوُنَّ الْجَحِيمَ", "ثُمَّ لَتَرَوُنَّهَا عَيْنَ الْيَقِينِ", "ثُمَّ لَتُسْأَلُنَّ يَوْمَئِذٍ عَنِ النَّعِيمِ", "كَلَّا سَوْفَ تَعْلَمُونَ"], jawabanBenar: "لَتَرَوُنَّ الْجَحِيمَ" },
+        { pertanyaan: "Lanjutkan ayat: 'لَتَرَوُنَّ الْجَحِيمَ'", opsi: ["ثُمَّ لَتَرَوُنَّهَا عَيْنَ الْيَقِينِ", "ثُمَّ لَتُسْأَلُنَّ يَوْمَئِذٍ عَنِ النَّعِيمِ", "كَلَّا لَوْ تَعْلَمُونَ عِلْمَ الْيَقِينِ", "حَتَّىٰ زُرْتُمُ الْمَقَابِرَ"], jawabanBenar: "ثُمَّ لَتَرَوُنَّهَا عَيْنَ الْيَقِينِ" },
+        { pertanyaan: "Lanjutkan ayat: 'ثُمَّ لَتَرَوُنَّهَا عَيْنَ الْيَقِينِ'", opsi: ["ثُمَّ لَتُسْأَلُنَّ يَوْمَئِذٍ عَنِ النَّعِيمِ", "لَتَرَوُنَّ الْجَحِيمَ", "كَلَّا لَوْ تَعْلَمُونَ عِلْمَ الْيَقِينِ", "ثُمَّ كَلَّا سَوْفَ تَعْلَمُونَ"], jawabanBenar: "ثُمَّ لَتُسْأَلُنَّ يَوْمَئِذٍ عَنِ النَّعِيمِ" },
+        { pertanyaan: "Lanjutkan ayat: 'إِلَّا الَّذِينَ آمَنُوا وَعَمِلُوا الصَّالِحَاتِ وَتَوَاصَوْا بِالْحَقِّ'", opsi: ["وَتَوَاصَوْا بِالصَّبْرِ", "إِنَّ الْإِنْسَانَ لَفِي خُسْرٍ", "فَلَهُمْ أَجْرٌ غَيْرُ مَمْنُونٍ", "وَيْلٌ لِكُلِّ هُمَزَةٍ لُمَزَةٍ"], jawabanBenar: "وَتَوَاصَوْا بِالصَّبْرِ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَمَا أَدْرَاكَ مَا الْحُطَمَةُ'", opsi: ["نَارُ اللَّهِ الْمُوقَدَةُ", "الَّتِي تَطَّلِعُ عَلَى الْأَفْئِدَةِ", "إِنَّهَا عَلَيْهِمْ مُؤْصَدَةٌ", "فِي عَمَدٍ مُمَدَّدَةٍ"], jawabanBenar: "نَارُ اللَّهِ الْمُوقَدَةُ" },
+        { pertanyaan: "Lanjutkan ayat: 'نَارُ اللَّهِ الْمُوقَدَةُ'", opsi: ["الَّتِي تَطَّلِعُ عَلَى الْأَفْئِدَةِ", "إِنَّهَا عَلَيْهِمْ مُؤْصَدَةٌ", "فِي عَمَدٍ مُمَدَّدَةٍ", "وَمَا أَدْرَاكَ مَا الْحُطَمَةُ"], jawabanBenar: "الَّتِي تَطَّلِعُ عَلَى الْأَفْئِدَةِ" },
+        { pertanyaan: "Lanjutkan ayat: 'الَّتِي تَطَّلِعُ عَلَى الْأَفْئِدَةِ'", opsi: ["إِنَّهَا عَلَيْهِمْ مُؤْصَدَةٌ", "فِي عَمَدٍ مُمَدَّدَةٍ", "نَارُ اللَّهِ الْمُوقَدَةُ", "كَلَّا ۖ لَيُنْبَذَنَّ فِي الْحُطَمَةِ"], jawabanBenar: "إِنَّهَا عَلَيْهِمْ مُؤْصَدَةٌ" },
+        { pertanyaan: "Lanjutkan ayat: 'فَلْيَعْبُدُوا رَبَّ هَٰذَا الْبَيْتِ'", opsi: ["الَّذِي أَطْعَمَهُمْ مِنْ جُوعٍ وَآمَنَهُمْ مِنْ خَوْفٍ", "إِيلَافِهِمْ رِحْلَةَ الشِّتَاءِ وَالصَّيْفِ", "لِإِيلَافِ قُرَيْشٍ", "فَجَعَلَهُمْ كَعَصْفٍ مَأْكُولٍ"], jawabanBenar: "الَّذِي أَطْعَمَهُمْ مِنْ جُوعٍ وَآمَنَهُمْ مِنْ خَوْفٍ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَوَلَدٍ وَمَا وَلَدَ'", opsi: ["لَقَدْ خَلَقْنَا الْإِنْسَانَ فِي كَبَدٍ", "أَيَحْسَبُ أَنْ لَنْ يَقْدِرَ عَلَيْهِ أَحَدٌ", "يَقُولُ أَهْلَكْتُ مَالًا لُبَدًا", "أَيَحْسَبُ أَنْ لَمْ يَرَهُ أَحَدٌ"], jawabanBenar: "لَقَدْ خَلَقْنَا الْإِنْسَانَ فِي كَبَدٍ" }
     ],
     lanjut: [
-        { pertanyaan: "Lanjutkan ayat: 'كَلَّا سَيَعْلَمُونَ ۝ ثُمَّ ...'", opsi: ["كَلَّا سَيَعْلَمُونَ", "أَلَمْ نَجْعَلِ الْأَرْضَ مِهَادًا", "وَالْجِبَالَ أَوْتَادًا", "وَخَلَقْنَاكُمْ أَزْوَاجًا"], jawabanBenar: "كَلَّا سَيَعْلَمُونَ" },
-        { pertanyaan: "Surat An-Naba' membahas tentang...", opsi: ["Berita besar tentang hari kebangkitan", "Kisah Nabi Yusuf", "Peperangan Badar", "Adab bertetangga"], jawabanBenar: "Berita besar tentang hari kebangkitan" },
-        { pertanyaan: "Lanjutkan ayat: 'وَالنَّازِعَاتِ ...'", opsi: ["غَرْقًا", "نَشْطًا", "سَبْحًا", "سَبْقًا"], jawabanBenar: "غَرْقًا" },
-        { pertanyaan: "Lanjutkan ayat: 'عَبَسَ وَ...'", opsi: ["تَوَلَّىٰ", "نَظَرَ", "قَالَ", "سَمِعَ"], jawabanBenar: "تَوَلَّىٰ" },
-        { pertanyaan: "Lanjutkan ayat: 'إِذَا الشَّمْسُ ...'", opsi: ["كُوِّرَتْ", "انفَطَرَتْ", "انشَقَّتْ", "انتَثَرَتْ"], jawabanBenar: "كُوِّرَتْ" },
-        { pertanyaan: "Lanjutkan ayat: 'إِذَا السَّمَاءُ انفَطَرَتْ' adalah awal dari surat...", opsi: ["Al-Infithar", "At-Takwir", "Al-Insyiqaq", "Al-Buruj"], jawabanBenar: "Al-Infithar" },
-        { pertanyaan: "Lanjutkan ayat: 'وَيْلٌ لِّلْـ...'", opsi: ["مُطَفِّفِينَ", "مُكَذِّبِينَ", "هُمَزَةِ", "قَارِعَةِ"], jawabanBenar: "مُطَفِّفِينَ" },
-        { pertanyaan: "Lanjutkan ayat: 'إِذَا السَّمَاءُ انشَقَّتْ' adalah awal dari surat...", opsi: ["Al-Insyiqaq", "Al-Infithar", "At-Takwir", "Al-Buruj"], jawabanBenar: "Al-Insyiqaq" },
-        { pertanyaan: "Lanjutkan ayat: 'وَالسَّمَاءِ ذَاتِ الْـ...'", opsi: ["بُرُوجِ", "طَارِقِ", "فَجْرِ", "قَدْرِ"], jawabanBenar: "بُرُوجِ" },
-        { pertanyaan: "Lanjutkan ayat: 'وَالسَّمَاءِ وَ...'", opsi: ["الطَّارِقِ", "الْبُرُوجِ", "الْفَجْرِ", "اللَّيْلِ"], jawabanBenar: "الطَّارِقِ" },
-        { pertanyaan: "Lanjutkan ayat: 'وَالشَّمْسِ وَ...'", opsi: ["ضُحَاهَا", "لَيْلِهَا", "نُورِهَا", "طُلُوعِهَا"], jawabanBenar: "ضُحَاهَا" },
-        { pertanyaan: "Lanjutkan ayat: 'وَالْفَجْرِ ۝ وَلَيَالٍ ...'", opsi: ["عَشْرٍ", "طَوِيلَةٍ", "مُبَارَكَةٍ", "كَثِيرَةٍ"], jawabanBenar: "عَشْرٍ" },
-        { pertanyaan: "Ayat 'وَهَٰذَا الْبَلَدِ الْأَمِينِ' (negeri yang aman ini) terdapat dalam surat...", opsi: ["At-Tin", "Al-Balad", "Al-Fajr", "Al-Lail"], jawabanBenar: "At-Tin" },
-        { pertanyaan: "Lanjutkan ayat: 'وَاللَّيْلِ إِذَا ...'", opsi: ["يَغْشَىٰ", "سَجَىٰ", "تَجَلَّىٰ", "أَقْبَلَ"], jawabanBenar: "يَغْشَىٰ" },
-        { pertanyaan: "Surat Al-Ghasyiyah membahas tentang...", opsi: ["Hari kiamat yang menyelubungi (dahsyat)", "Kisah Nabi Ibrahim", "Keindahan alam semesta", "Adab berdagang"], jawabanBenar: "Hari kiamat yang menyelubungi (dahsyat)" }
+        { pertanyaan: "Hati-hati tertukar! Lanjutkan ayat: 'فَإِذَا جَاءَتِ الطَّامَّةُ الْكُبْرَىٰ'", opsi: ["يَوْمَ يَتَذَكَّرُ الْإِنْسَانُ مَا سَعَىٰ", "يَوْمَ يَفِرُّ الْمَرْءُ مِنْ أَخِيهِ", "وُجُوهٌ يَوْمَئِذٍ خَاشِعَةٌ", "يَوْمَ يَنْظُرُ الْمَرْءُ مَا قَدَّمَتْ يَدَاهُ"], jawabanBenar: "يَوْمَ يَتَذَكَّرُ الْإِنْسَانُ مَا سَعَىٰ" },
+        { pertanyaan: "Bandingkan dengan yang sebelumnya! Lanjutkan ayat: 'فَإِذَا جَاءَتِ الصَّاخَّةُ'", opsi: ["يَوْمَ يَفِرُّ الْمَرْءُ مِنْ أَخِيهِ", "يَوْمَ يَتَذَكَّرُ الْإِنْسَانُ مَا سَعَىٰ", "لِكُلِّ امْرِئٍ مِنْهُمْ يَوْمَئِذٍ شَأْنٌ يُغْنِيهِ", "يَوْمَ تَرْجُفُ الرَّاجِفَةُ"], jawabanBenar: "يَوْمَ يَفِرُّ الْمَرْءُ مِنْ أَخِيهِ" },
+        { pertanyaan: "Lanjutkan ayat yang diawali 'Kalla' ini: 'كَلَّا ۖ بَلْ ۜ رَانَ عَلَىٰ قُلُوبِهِمْ مَا كَانُوا يَكْسِبُونَ'", opsi: ["كَلَّا إِنَّهُمْ عَنْ رَبِّهِمْ يَوْمَئِذٍ لَمَحْجُوبُونَ", "ثُمَّ إِنَّهُمْ لَصَالُو الْجَحِيمِ", "وَمَا يُكَذِّبُ بِهِ إِلَّا كُلُّ مُعْتَدٍ أَثِيمٍ", "كَلَّا إِنَّ كِتَابَ الْأَبْرَارِ لَفِي عِلِّيِّينَ"], jawabanBenar: "كَلَّا إِنَّهُمْ عَنْ رَبِّهِمْ يَوْمَئِذٍ لَمَحْجُوبُونَ" },
+        { pertanyaan: "Lanjutkan ayat yang cukup panjang ini: 'إِنَّ الَّذِينَ كَفَرُوا مِنْ أَهْلِ الْكِتَابِ وَالْمُشْرِكِينَ فِي نَارِ جَهَنَّمَ خَالِدِينَ فِيهَا ۚ'", opsi: ["أُولَٰئِكَ هُمْ شَرُّ الْبَرِيَّةِ", "أُولَٰئِكَ هُمْ خَيْرُ الْبَرِيَّةِ", "جَزَاؤُهُمْ عِنْدَ رَبِّهِمْ جَنَّاتُ عَدْنٍ", "وَمَا أُمِرُوا إِلَّا لِيَعْبُدُوا اللَّهَ"], jawabanBenar: "أُولَٰئِكَ هُمْ شَرُّ الْبَرِيَّةِ" },
+        { pertanyaan: "Hati-hati tertukar rima 'yah/yat'! Lanjutkan ayat: 'تَصْلَىٰ نَارًا حَامِيَةً'", opsi: ["تُسْقَىٰ مِنْ عَيْنٍ آنِيَةٍ", "لَيْسَ لَهُمْ طَعَامٌ إِلَّا مِنْ ضَرِيعٍ", "لَا يُسْمِنُ وَلَا يُغْنِي مِنْ جُوعٍ", "فِيهَا عَيْنٌ جَارِيَةٌ"], jawabanBenar: "تُسْقَىٰ مِنْ عَيْنٍ آنِيَةٍ" },
+        { pertanyaan: "Perhatikan kata awalnya! Lanjutkan ayat: 'كَلَّا سَوْفَ تَعْلَمُونَ'", opsi: ["ثُمَّ كَلَّا سَوْفَ تَعْلَمُونَ", "كَلَّا لَوْ تَعْلَمُونَ عِلْمَ الْيَقِينِ", "لَتَرَوُنَّ الْجَحِيمَ", "ثُمَّ لَتَرَوُنَّهَا عَيْنَ الْيَقِينِ"], jawabanBenar: "ثُمَّ كَلَّا سَوْفَ تَعْلَمُونَ" },
+        { pertanyaan: "Lanjutkan ayat yang mengulang kata ini: 'كَلَّا ۖ إِذَا دُكَّتِ الْأَرْضُ دَكًّا دَكًّا'", opsi: ["وَجَاءَ رَبُّكَ وَالْمَلَكُ صَفًّا صَفًّا", "وَجِيءَ يَوْمَئِذٍ بِجَهَنَّمَ", "يَقُولُ يَا لَيْتَنِي قَدَّمْتُ لِحَيَاتِي", "يَوْمَئِذٍ يَتَذَكَّرُ الْإِنْسَانُ وَأَنَّىٰ لَهُ الذِّكْرَىٰ"], jawabanBenar: "وَجَاءَ رَبُّكَ وَالْمَلَكُ صَفًّا صَفًّا" },
+        { pertanyaan: "Lanjutkan ayat 'Wa-amma': 'وَأَمَّا مَنْ أُوتِيَ كِتَابَهُ وَرَاءَ ظَهْرِهِ'", opsi: ["فَسَوْفَ يَدْعُو ثُبُورًا", "فَسَوْفَ يُحَاسَبُ حِسَابًا يَسِيرًا", "وَيَنْقَلِبُ إِلَىٰ أَهْلِهِ مَسْرُورًا", "وَيَصْلَىٰ سَعِيرًا"], jawabanBenar: "فَسَوْفَ يَدْعُو ثُبُورًا" },
+        { pertanyaan: "Jangan tertukar dengan ayat surat lain. Lanjutkan ayat: 'يَا أَيُّهَا الْإِنْسَانُ مَا غَرَّكَ بِرَبِّكَ الْكَرِيمِ'", opsi: ["الَّذِي خَلَقَكَ فَسَوَّاكَ فَعَدَلَكَ", "فِي أَيِّ صُورَةٍ مَا شَاءَ رَكَّبَكَ", "لَقَدْ خَلَقْنَا الْإِنْسَانَ فِي أَحْسَنِ تَقْوِيمٍ", "كَلَّا بَلْ تُكَذِّبُونَ بِالدِّينِ"], jawabanBenar: "الَّذِي خَلَقَكَ فَسَوَّاكَ فَعَدَلَكَ" },
+        { pertanyaan: "Ayat ini sering tertukar posisinya! Lanjutkan: 'أَرَأَيْتَ الَّذِي يَنْهَىٰ'", opsi: ["عَبْدًا إِذَا صَلَّىٰ", "أَرَأَيْتَ إِنْ كَانَ عَلَى الْهُدَىٰ", "أَوْ أَمَرَ بِالتَّقْوَىٰ", "أَلَمْ يَعْلَمْ بِأَنَّ اللَّهَ يَرَىٰ"], jawabanBenar: "عَبْدًا إِذَا صَلَّىٰ" },
+        { pertanyaan: "Lanjutkan ayat panjang ini: 'فَكَذَّبُوهُ فَعَقَرُوهَا فَدَمْدَمَ عَلَيْهِمْ رَبُّهُمْ بِذَنْبِهِمْ فَسَوَّاهَا'", opsi: ["وَلَا يَخَافُ عُقْبَاهَا", "إِذِ انْبَعَثَ أَشْقَاهَا", "فَقَالَ لَهُمْ رَسُولُ اللَّهِ نَاقَةَ اللَّهِ وَسُقْيَاهَا", "وَقَدْ خَابَ مَنْ دَسَّاهَا"], jawabanBenar: "وَلَا يَخَافُ عُقْبَاهَا" },
+        { pertanyaan: "Lanjutan 'Fa-amma' yang ini sering tertukar! Lanjutkan: 'فَأَمَّا مَنْ طَغَىٰ'", opsi: ["وَآثَرَ الْحَيَاةَ الدُّنْيَا", "فَإِنَّ الْجَحِيمَ هِيَ الْمَأْوَىٰ", "وَأَمَّا مَنْ خَافَ مَقَامَ رَبِّهِ", "فَإِنَّ الْجَنَّةَ هِيَ الْمَأْوَىٰ"], jawabanBenar: "وَآثَرَ الْحَيَاةَ الدُّنْيَا" },
+        { pertanyaan: "Ingatkah rima surat ini? Lanjutkan ayat: 'وَأَمَّا مَنْ خَافَ مَقَامَ رَبِّهِ وَنَهَى النَّفْسَ عَنِ الْهَوَىٰ'", opsi: ["فَإِنَّ الْجَنَّةَ هِيَ الْمَأْوَىٰ", "فَإِنَّ الْجَحِيمَ هِيَ الْمَأْوَىٰ", "يَسْأَلُونَكَ عَنِ السَّاعَةِ أَيَّانَ مُرْسَاهَا", "فِيمَ أَنْتَ مِنْ ذِكْرَاهَا"], jawabanBenar: "فَإِنَّ الْجَنَّةَ هِيَ الْمَأْوَىٰ" },
+        { pertanyaan: "Lanjutkan ayat jebakan 'Kalla' ini: 'كَلَّا لَئِنْ لَمْ يَنْتَهِ لَنَسْفَعًا بِالنَّاصِيَةِ'", opsi: ["نَاصِيَةٍ كَاذِبَةٍ خَاطِئَةٍ", "فَلْيَدْعُ نَادِيَهُ", "سَنَدْعُ الزَّبَانِيَةَ", "كَلَّا لَا تُطِعْهُ وَاسْجُدْ وَاقْتَرِبْ"], jawabanBenar: "نَاصِيَةٍ كَاذِبَةٍ خَاطِئَةٍ" },
+        { pertanyaan: "Mirip dengan akhir surat lain! Lanjutkan ayat: 'إِلَّا الَّذِينَ آمَنُوا وَعَمِلُوا الصَّالِحَاتِ فَلَهُمْ أَجْرٌ غَيْرُ مَمْنُونٍ'", opsi: ["فَمَا يُكَذِّبُكَ بَعْدُ بِالدِّينِ", "أَلَيْسَ اللَّهُ بِأَحْكَمِ الْحَاكِمِينَ", "ثُمَّ رَدَدْنَاهُ أَسْفَلَ سَافِلِينَ", "وَتَوَاصَوْا بِالْحَقِّ وَتَوَاصَوْا بِالصَّبْرِ"], jawabanBenar: "فَمَا يُكَذِّبُكَ بَعْدُ بِالدِّينِ" },
+        { pertanyaan: "Lanjutkan ayat yang panjang ini: 'وَجِيءَ يَوْمَئِذٍ بِجَهَنَّمَ ۚ يَوْمَئِذٍ يَتَذَكَّرُ الْإِنْسَانُ وَأَنَّىٰ لَهُ الذِّكْرَىٰ'", opsi: ["يَقُولُ يَا لَيْتَنِي قَدَّمْتُ لِحَيَاتِي", "فَيَوْمَئِذٍ لَا يُعَذِّبُ عَذَابَهُ أَحَدٌ", "وَلَا يُوثِقُ وَثَاقَهُ أَحَدٌ", "يَا أَيَّتُهَا النَّفْسُ الْمُطْمَئِنَّةُ"], jawabanBenar: "يَقُولُ يَا لَيْتَنِي قَدَّمْتُ لِحَيَاتِي" },
+        { pertanyaan: "Jangan tertukar posisi 'Wa-Amma' ini! Lanjutkan: 'وَأَمَّا مَنْ بَخِلَ وَاسْتَغْنَىٰ'", opsi: ["وَكَذَّبَ بِالْحُسْنَىٰ", "فَسَنُيَسِّرُهُ لِلْعُسْرَىٰ", "وَمَا يُغْنِي عَنْهُ مَالُهُ إِذَا تَرَدَّىٰ", "وَصَدَّقَ بِالْحُسْنَىٰ"], jawabanBenar: "وَكَذَّبَ بِالْحُسْنَىٰ" },
+        { pertanyaan: "Bandingkan dengan soal sebelumnya! Lanjutkan ayat: 'فَأَمَّا مَنْ أَعْطَىٰ وَاتَّقَىٰ'", opsi: ["وَصَدَّقَ بِالْحُسْنَىٰ", "فَسَنُيَسِّرُهُ لِلْيُسْرَىٰ", "وَأَمَّا مَنْ بَخِلَ وَاسْتَغْنَىٰ", "وَكَذَّبَ بِالْحُسْنَىٰ"], jawabanBenar: "وَصَدَّقَ بِالْحُسْنَىٰ" },
+        { pertanyaan: "Lanjutkan ayat 'Tsumma' ini: 'ثُمَّ إِنَّ عَلَيْنَا حِسَابَهُمْ'", opsi: ["(Ini adalah akhir surat)", "إِنَّ إِلَيْنَا إِيَابَهُمْ", "فَذَكِّرْ إِنَّمَا أَنْتَ مُذَكِّرٌ", "لَسْتَ عَلَيْهِمْ بِمُصَيْطِرٍ"], jawabanBenar: "(Ini adalah akhir surat)" },
+        { pertanyaan: "Lanjutkan ayat sebelum 'Tsumma' tadi: 'إِنَّ إِلَيْنَا إِيَابَهُمْ'", opsi: ["ثُمَّ إِنَّ عَلَيْنَا حِسَابَهُمْ", "فَذَكِّرْ إِنَّمَا أَنْتَ مُذَكِّرٌ", "لَسْتَ عَلَيْهِمْ بِمُصَيْطِرٍ", "إِلَّا مَنْ تَوَلَّىٰ وَكَفَرَ"], jawabanBenar: "ثُمَّ إِنَّ عَلَيْنَا حِسَابَهُمْ" },
+        { pertanyaan: "Sering tertukar karena berima 'aab'! Lanjutkan ayat: 'إِنَّهُمْ كَانُوا لَا يَرْجُونَ حِسَابًا'", opsi: ["وَكَذَّبُوا بِآيَاتِنَا كِذَّابًا", "وَكُلَّ شَيْءٍ أَحْصَيْنَاهُ كِتَابًا", "فَذُوقُوا فَلَنْ نَزِيدَكُمْ إِلَّا عَذَابًا", "لَابِثِينَ فِيهَا أَحْقَابًا"], jawabanBenar: "وَكَذَّبُوا بِآيَاتِنَا كِذَّابًا" },
+        { pertanyaan: "Lanjutkan urutannya! 'وَكَذَّبُوا بِآيَاتِنَا كِذَّابًا'", opsi: ["وَكُلَّ شَيْءٍ أَحْصَيْنَاهُ كِتَابًا", "فَذُوقُوا فَلَنْ نَزِيدَكُمْ إِلَّا عَذَابًا", "إِنَّ لِلْمُتَّقِينَ مَفَازًا", "إِنَّهُمْ كَانُوا لَا يَرْجُونَ حِسَابًا"], jawabanBenar: "وَكُلَّ شَيْءٍ أَحْصَيْنَاهُ كِتَابًا" },
+        { pertanyaan: "Lanjutkan urutannya lagi! 'وَكُلَّ شَيْءٍ أَحْصَيْنَاهُ كِتَابًا'", opsi: ["فَذُوقُوا فَلَنْ نَزِيدَكُمْ إِلَّا عَذَابًا", "إِنَّ لِلْمُتَّقِينَ مَفَازًا", "حَدَائِقَ وَأَعْنَابًا", "وَكَذَّبُوا بِآيَاتِنَا كِذَّابًا"], jawabanBenar: "فَذُوقُوا فَلَنْ نَزِيدَكُمْ إِلَّا عَذَابًا" },
+        { pertanyaan: "Lanjutkan ayat akhir ini: 'يَوْمَ يَنْظُرُ الْمَرْءُ مَا قَدَّمَتْ يَدَاهُ...'", opsi: ["وَيَقُولُ الْكَافِرُ يَا لَيْتَنِي كُنْتُ تُرَابًا", "ذَٰلِكَ الْيَوْمُ الْحَقُّ", "إِلَّا مَنْ أَذِنَ لَهُ الرَّحْمَٰنُ وَقَالَ صَوَابًا", "إِنَّا أَنْذَرْنَاكُمْ عَذَابًا قَرِيبًا"], jawabanBenar: "وَيَقُولُ الْكَافِرُ يَا لَيْتَنِي كُنْتُ تُرَابًا" },
+        { pertanyaan: "Lanjutkan ayat jebakan ini: 'يَوْمَ لَا تَمْلِكُ نَفْسٌ لِنَفْسٍ شَيْئًا ۖ وَالْأَمْرُ يَوْمَئِذٍ لِلَّهِ'", opsi: ["(Ini adalah akhir surat)", "وَيْلٌ لِلْمُطَفِّفِينَ", "وَإِذَا السَّمَاءُ انْفَطَرَتْ", "إِنَّ الْأَبْرَارَ لَفِي نَعِيمٍ"], jawabanBenar: "(Ini adalah akhir surat)" },
+        { pertanyaan: "Lanjutkan ayat jebakan 'Kalla' (Al-Mutaffifin): 'كَلَّا إِنَّ كِتَابَ الْأَبْرَارِ لَفِي عِلِّيِّينَ'", opsi: ["وَمَا أَدْرَاكَ مَا عِلِّيُّونَ", "كِتَابٌ مَرْقُومٌ", "يَشْهَدُهُ الْمُقَرَّبُونَ", "إِنَّ الْأَبْرَارَ لَفِي نَعِيمٍ"], jawabanBenar: "وَمَا أَدْرَاكَ مَا عِلِّيُّونَ" },
+        { pertanyaan: "Lanjutkan urutan rima 'yoon/oon': 'وَمَا أَدْرَاكَ مَا عِلِّيُّونَ'", opsi: ["كِتَابٌ مَرْقُومٌ", "يَشْهَدُهُ الْمُقَرَّبُونَ", "إِنَّ الْأَبْرَارَ لَفِي نَعِيمٍ", "عَلَى الْأَرَائِكِ يَنْظُرُونَ"], jawabanBenar: "كِتَابٌ مَرْقُومٌ" },
+        { pertanyaan: "Lanjutkan urutannya: 'كِتَابٌ مَرْقُومٌ'", opsi: ["يَشْهَدُهُ الْمُقَرَّبُونَ", "إِنَّ الْأَبْرَارَ لَفِي نَعِيمٍ", "عَلَى الْأَرَائِكِ يَنْظُرُونَ", "وَيْلٌ يَوْمَئِذٍ لِلْمُكَذِّبِينَ"], jawabanBenar: "يَشْهَدُهُ الْمُقَرَّبُونَ" },
+        { pertanyaan: "Lanjutkan urutannya: 'يَشْهَدُهُ الْمُقَرَّبُونَ'", opsi: ["إِنَّ الْأَبْرَارَ لَفِي نَعِيمٍ", "عَلَى الْأَرَائِكِ يَنْظُرُونَ", "تَعْرِفُ فِي وُجُوهِهِمْ نَضْرَةَ النَّعِيمِ", "يُسْقَوْنَ مِنْ رَحِيقٍ مَخْتُومٍ"], jawabanBenar: "إِنَّ الْأَبْرَارَ لَفِي نَعِيمٍ" },
+        { pertanyaan: "Hati-hati ayat panjang! Lanjutkan: 'يَوْمَ يَقُومُ الرُّوحُ وَالْمَلَائِكَةُ صَفًّا ۖ لَا يَتَكَلَّمُونَ إِلَّا مَنْ أَذِنَ لَهُ الرَّحْمَٰنُ وَقَالَ صَوَابًا'", opsi: ["ذَٰلِكَ الْيَوْمُ الْحَقُّ ۖ فَمَنْ شَاءَ اتَّخَذَ إِلَىٰ رَبِّهِ مَآبًا", "إِنَّا أَنْذَرْنَاكُمْ عَذَابًا قَرِيبًا", "يَوْمَ يَنْظُرُ الْمَرْءُ مَا قَدَّمَتْ يَدَاهُ", "رَبِّ السَّمَاوَاتِ وَالْأَرْضِ وَمَا بَيْنَهُمَا الرَّحْمَٰنِ"], jawabanBenar: "ذَٰلِكَ الْيَوْمُ الْحَقُّ ۖ فَمَنْ شَاءَ اتَّخَذَ إِلَىٰ رَبِّهِ مَآبًا" },
+        { pertanyaan: "Lanjutkan ayat rima 'qoo' ini: 'فَأَنْبَتْنَا فِيهَا حَبًّا'", opsi: ["وَعِنَبًا وَقَضْبًا", "وَزَيْتُونًا وَنَخْلًا", "وَحَدَائِقَ غُلْبًا", "وَفَاكِهَةً وَأَبًّا"], jawabanBenar: "وَعِنَبًا وَقَضْبًا" },
+        { pertanyaan: "Jangan sampai terbalik! Lanjutkan ayat: 'وَعِنَبًا وَقَضْبًا'", opsi: ["وَزَيْتُونًا وَنَخْلًا", "وَحَدَائِقَ غُلْبًا", "وَفَاكِهَةً وَأَبًّا", "مَتَاعًا لَكُمْ وَلِأَنْعَامِكُمْ"], jawabanBenar: "وَزَيْتُونًا وَنَخْلًا" },
+        { pertanyaan: "Lanjutkan urutannya lagi: 'وَزَيْتُونًا وَنَخْلًا'", opsi: ["وَحَدَائِقَ غُلْبًا", "وَفَاكِهَةً وَأَبًّا", "مَتَاعًا لَكُمْ وَلِأَنْعَامِكُمْ", "فَإِذَا جَاءَتِ الصَّاخَّةُ"], jawabanBenar: "وَحَدَائِقَ غُلْبًا" },
+        { pertanyaan: "Hati-hati ayat yang mirip di dua surat (Al-Fajr & Al-Balad). Lanjutkan ayat: 'وَتُحِبُّونَ الْمَالَ حُبًّا جَمًّا'", opsi: ["كَلَّا ۖ إِذَا دُكَّتِ الْأَرْضُ دَكًّا دَكًّا", "وَتَأْكُلُونَ التُّرَاثَ أَكْلًا لَمًّا", "وَلَا تَحَاضُّونَ عَلَىٰ طَعَامِ الْمِسْكِينِ", "يَقُولُ أَهْلَكْتُ مَالًا لُبَدًا"], jawabanBenar: "كَلَّا ۖ إِذَا دُكَّتِ الْأَرْضُ دَكًّا دَكًّا" },
+        { pertanyaan: "Bandingkan dengan surat sebelumnya. Lanjutkan: 'كَلَّا ۖ بَلْ لَا تُكْرِمُونَ الْيَتِيمَ'", opsi: ["وَلَا تَحَاضُّونَ عَلَىٰ طَعَامِ الْمِسْكِينِ", "وَتَأْكُلُونَ التُّرَاثَ أَكْلًا لَمًّا", "وَتُحِبُّونَ الْمَالَ حُبًّا جَمًّا", "فَأَمَّا الْإِنْسَانُ إِذَا مَا ابْتَلَاهُ رَبُّهُ"], jawabanBenar: "وَلَا تَحَاضُّونَ عَلَىٰ طَعَامِ الْمِسْكِينِ" },
+        { pertanyaan: "Lanjutkan ayat jebakan 'Tsumma' lagi: 'ثُمَّ لَتُسْأَلُنَّ يَوْمَئِذٍ عَنِ النَّعِيمِ'", opsi: ["(Ini adalah akhir surat)", "ثُمَّ كَلَّا سَوْفَ تَعْلَمُونَ", "كَلَّا لَوْ تَعْلَمُونَ عِلْمَ الْيَقِينِ", "لَتَرَوُنَّ الْجَحِيمَ"], jawabanBenar: "(Ini adalah akhir surat)" },
+        { pertanyaan: "Lanjutkan ayat jebakan: 'وَلَمْ يَكُنْ لَهُ كُفُوًا أَحَدٌ'", opsi: ["(Ini adalah akhir surat)", "لَمْ يَلِدْ وَلَمْ يُولَدْ", "اللَّهُ الصَّمَدُ", "مِنْ شَرِّ مَا خَلَقَ"], jawabanBenar: "(Ini adalah akhir surat)" },
+        { pertanyaan: "Lanjutkan ayat rima 'aat': 'وَإِذَا الْمَوْءُودَةُ سُئِلَتْ'", opsi: ["بِأَيِّ ذَنْبٍ قُتِلَتْ", "وَإِذَا الصُّحُفُ نُشِرَتْ", "وَإِذَا السَّمَاءُ كُشِطَتْ", "وَإِذَا الْجَحِيمُ سُعِّرَتْ"], jawabanBenar: "بِأَيِّ ذَنْبٍ قُتِلَتْ" },
+        { pertanyaan: "Lanjutkan urutannya: 'بِأَيِّ ذَنْبٍ قُتِلَتْ'", opsi: ["وَإِذَا الصُّحُفُ نُشِرَتْ", "وَإِذَا السَّمَاءُ كُشِطَتْ", "وَإِذَا الْجَحِيمُ سُعِّرَتْ", "وَإِذَا الْجَنَّةُ أُزْلِفَتْ"], jawabanBenar: "وَإِذَا الصُّحُفُ نُشِرَتْ" },
+        { pertanyaan: "Lanjutkan urutannya: 'وَإِذَا الصُّحُفُ نُشِرَتْ'", opsi: ["وَإِذَا السَّمَاءُ كُشِطَتْ", "وَإِذَا الْجَحِيمُ سُعِّرَتْ", "وَإِذَا الْجَنَّةُ أُزْلِفَتْ", "عَلِمَتْ نَفْسٌ مَا أَحْضَرَتْ"], jawabanBenar: "وَإِذَا السَّمَاءُ كُشِطَتْ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَإِذَا السَّمَاءُ كُشِطَتْ'", opsi: ["وَإِذَا الْجَحِيمُ سُعِّرَتْ", "وَإِذَا الْجَنَّةُ أُزْلِفَتْ", "عَلِمَتْ نَفْسٌ مَا أَحْضَرَتْ", "فَلَا أُقْسِمُ بِالْخُنَّسِ"], jawabanBenar: "وَإِذَا الْجَحِيمُ سُعِّرَتْ" },
+        { pertanyaan: "Lanjutkan ayat panjang: 'جَزَاؤُهُمْ عِنْدَ رَبِّهِمْ جَنَّاتُ عَدْنٍ تَجْرِي مِنْ تَحْتِهَا الْأَنْهَارُ خَالِدِينَ فِيهَا أَبَدًا ۖ'", opsi: ["رَضِيَ اللَّهُ عَنْهُمْ وَرَضُوا عَنْهُ ۚ ذَٰلِكَ لِمَنْ خَشِيَ رَبَّهُ", "أُولَٰئِكَ هُمْ خَيْرُ الْبَرِيَّةِ", "إِنَّ الَّذِينَ آمَنُوا وَعَمِلُوا الصَّالِحَاتِ", "ذَٰلِكَ دِينُ الْقَيِّمَةِ"], jawabanBenar: "رَضِيَ اللَّهُ عَنْهُمْ وَرَضُوا عَنْهُ ۚ ذَٰلِكَ لِمَنْ خَشِيَ رَبَّهُ" },
+        { pertanyaan: "Lanjutkan ayat ini: 'وَمَا أُمِرُوا إِلَّا لِيَعْبُدُوا اللَّهَ مُخْلِصِينَ لَهُ الدِّينَ حُنَفَاءَ'", opsi: ["وَيُقِيمُوا الصَّلَاةَ وَيُؤْتُوا الزَّكَاةَ ۚ وَذَٰلِكَ دِينُ الْقَيِّمَةِ", "إِنَّ الَّذِينَ كَفَرُوا مِنْ أَهْلِ الْكِتَابِ", "فِيهَا كُتُبٌ قَيِّمَةٌ", "إِنَّ الَّذِينَ آمَنُوا وَعَمِلُوا الصَّالِحَاتِ"], jawabanBenar: "وَيُقِيمُوا الصَّلَاةَ وَيُؤْتُوا الزَّكَاةَ ۚ وَذَٰلِكَ دِينُ الْقَيِّمَةِ" }
     ]
 };
 
 const bankSoalJuz29 = {
+    
     dasar: [
-        { pertanyaan: "Surat pertama dalam Juz 29 adalah surat?", opsi: ["Al-Mulk", "Al-Qalam", "Al-Haqqah", "Nuh"], jawabanBenar: "Al-Mulk" },
-        { pertanyaan: "Lanjutkan ayat: 'تَبَارَكَ الَّذِي بِيَدِهِ الْـ...'", opsi: ["مُلْكُ", "خَيْرُ", "أَرْضُ", "مَوْتُ"], jawabanBenar: "مُلْكُ" },
-        { pertanyaan: "Surat Al-Mulk sering disebut sebagai surat...", opsi: ["Al-Munjiyah (penyelamat dari siksa kubur)", "Al-Fatihah kedua", "Penutup Al-Qur'an", "Surat terpanjang"], jawabanBenar: "Al-Munjiyah (penyelamat dari siksa kubur)" },
-        { pertanyaan: "Surat Nuh menceritakan kisah tentang...", opsi: ["Nabi Nuh AS dan kaumnya", "Nabi Musa dan Fir'aun", "Nabi Yusuf dan saudaranya", "Nabi Ibrahim dan berhala"], jawabanBenar: "Nabi Nuh AS dan kaumnya" },
-        { pertanyaan: "Surat Al-Jin membahas tentang...", opsi: ["Golongan jin yang mendengarkan Al-Qur'an", "Kisah Nabi Sulaiman menaklukkan jin", "Peperangan melawan jin", "Sihir dan perdukunan"], jawabanBenar: "Golongan jin yang mendengarkan Al-Qur'an" },
-        { pertanyaan: "Surat Al-Muzzammil artinya...", opsi: ["Orang yang berselimut", "Orang yang berpuasa", "Orang yang bersyukur", "Orang yang berhijrah"], jawabanBenar: "Orang yang berselimut" },
-        { pertanyaan: "Surat Al-Muddatstsir artinya...", opsi: ["Orang yang berkemul/berselimut", "Orang yang bepergian", "Orang yang berdoa", "Orang yang bersedekah"], jawabanBenar: "Orang yang berkemul/berselimut" },
-        { pertanyaan: "Surat Al-Qiyamah membahas tentang...", opsi: ["Peristiwa hari kiamat", "Kisah para nabi", "Adab makan dan minum", "Peperangan Uhud"], jawabanBenar: "Peristiwa hari kiamat" },
-        { pertanyaan: "Surat Al-Insan disebut juga surat...", opsi: ["Ad-Dahr", "Al-Balad", "Al-Fajr", "Al-Lail"], jawabanBenar: "Ad-Dahr" },
-        { pertanyaan: "Surat Al-Mursalat artinya...", opsi: ["Malaikat-malaikat yang diutus / angin yang dikirim", "Bintang-bintang", "Cahaya matahari", "Awan mendung"], jawabanBenar: "Malaikat-malaikat yang diutus / angin yang dikirim" },
-        { pertanyaan: "Surat Al-Qalam disebut juga dengan surat...", opsi: ["Nun", "Ya Sin", "Ar-Rahman", "Al-Fath"], jawabanBenar: "Nun" },
-        { pertanyaan: "Surat Al-Mulk terdiri dari berapa ayat?", opsi: ["30 ayat", "20 ayat", "40 ayat", "52 ayat"], jawabanBenar: "30 ayat" },
-        { pertanyaan: "Surat Nuh terdiri dari berapa ayat?", opsi: ["28 ayat", "18 ayat", "38 ayat", "44 ayat"], jawabanBenar: "28 ayat" },
-        { pertanyaan: "Surat Al-Jin terdiri dari berapa ayat?", opsi: ["28 ayat", "18 ayat", "38 ayat", "20 ayat"], jawabanBenar: "28 ayat" },
-        { pertanyaan: "Surat terakhir dalam Juz 29 adalah...", opsi: ["Al-Mursalat", "An-Naba", "Al-Insan", "Al-Muzzammil"], jawabanBenar: "Al-Mursalat" }
+        { pertanyaan: "Lanjutkan ayat: 'تَبَارَكَ الَّذِي بِيَدِهِ الْمُلْكُ'", opsi: ["وَهُوَ عَلَىٰ كُلِّ شَيْءٍ قَدِيرٌ", "الَّذِي خَلَقَ الْمَوْتَ وَالْحَيَاةَ", "وَهُوَ الْعَزِيزُ الْغَفُورُ", "مَا تَرَىٰ فِي خَلْقِ الرَّحْمَٰنِ مِن تَفَاوُتٍ"], jawabanBenar: "وَهُوَ عَلَىٰ كُلِّ شَيْءٍ قَدِيرٌ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَهُوَ عَلَىٰ كُلِّ شَيْءٍ قَدِيرٌ'", opsi: ["الَّذِي خَلَقَ الْمَوْتَ وَالْحَيَاةَ لِيَبْلُوَكُمْ أَيُّكُمْ أَحْسَنُ عَمَلًا ۚ", "الَّذِي خَلَقَ سَبْعَ سَمَاوَاتٍ طِبَاقًا ۖ", "وَلَقَدْ زَيَّنَّا السَّمَاءَ الدُّنْيَا بِمَصَابِيحَ", "الَّذِي جَعَلَ لَكُمُ الْأَرْضَ ذَلُولًا"], jawabanBenar: "الَّذِي خَلَقَ الْمَوْتَ وَالْحَيَاةَ لِيَبْلُوَكُمْ أَيُّكُمْ أَحْسَنُ عَمَلًا ۚ" },
+        { pertanyaan: "Lanjutkan ayat: 'الَّذِي خَلَقَ الْمَوْتَ وَالْحَيَاةَ لِيَبْلُوَكُمْ أَيُّكُمْ أَحْسَنُ عَمَلًا ۚ'", opsi: ["وَهُوَ الْعَزِيزُ الْغَفُورُ", "الَّذِي خَلَقَ سَبْعَ سَمَاوَاتٍ طِبَاقًا ۖ", "مَا تَرَىٰ فِي خَلْقِ الرَّحْمَٰنِ مِن تَفَاوُتٍ", "هَلْ تَرَىٰ مِن فُطُورٍ"], jawabanBenar: "وَهُوَ الْعَزِيزُ الْغَفُورُ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَهُوَ الْعَزِيزُ الْغَفُورُ'", opsi: ["الَّذِي خَلَقَ سَبْعَ سَمَاوَاتٍ طِبَاقًا ۖ", "مَا تَرَىٰ فِي خَلْقِ الرَّحْمَٰنِ مِن تَفَاوُتٍ", "فَارْجِعِ الْبَصَرَ هَلْ تَرَىٰ مِن فُطُورٍ", "وَلَقَدْ زَيَّنَّا السَّمَاءَ الدُّنْيَا بِمَصَابِيحَ"], jawabanBenar: "الَّذِي خَلَقَ سَبْعَ سَمَاوَاتٍ طِبَاقًا ۖ" },
+        { pertanyaan: "Lanjutkan ayat: 'الَّذِي خَلَقَ سَبْعَ سَمَاوَاتٍ طِبَاقًا ۖ'", opsi: ["مَا تَرَىٰ فِي خَلْقِ الرَّحْمَٰنِ مِن تَفَاوُتٍ ۖ فَارْجِعِ الْبَصَرَ هَلْ تَرَىٰ مِن فُطُورٍ", "ثُمَّ ارْجِعِ الْبَصَرَ كَرَّتَيْنِ", "يَنقَلِبْ إِلَيْكَ الْبَصَرُ خَاسِئًا وَهُوَ حَسِيرٌ", "وَلَقَدْ زَيَّنَّا السَّمَاءَ الدُّنْيَا بِمَصَابِيحَ"], jawabanBenar: "مَا تَرَىٰ فِي خَلْقِ الرَّحْمَٰنِ مِن تَفَاوُتٍ ۖ فَارْجِعِ الْبَصَرَ هَلْ تَرَىٰ مِن فُطُورٍ" },
+        { pertanyaan: "Lanjutkan ayat: 'ثُمَّ ارْجِعِ الْبَصَرَ كَرَّتَيْنِ'", opsi: ["يَنقَلِبْ إِلَيْكَ الْبَصَرُ خَاسِئًا وَهُوَ حَسِيرٌ", "وَلَقَدْ زَيَّنَّا السَّمَاءَ الدُّنْيَا بِمَصَابِيحَ", "وَجَعَلْنَاهَا رُجُومًا لِّلشَّيَاطِينِ ۖ", "وَأَعْتَدْنَا لَهُمْ عَذَابَ السَّعِيرِ"], jawabanBenar: "يَنقَلِبْ إِلَيْكَ الْبَصَرُ خَاسِئًا وَهُوَ حَسِيرٌ" },
+        { pertanyaan: "Lanjutkan ayat: 'ن ۚ وَالْقَلَمِ وَمَا يَسْطُرُونَ'", opsi: ["مَا أَنتَ بِنِعْمَةِ رَبِّكَ بِمَجْنُونٍ", "وَإِنَّ لَكَ لَأَجْرًا غَيْرَ مَمْنُونٍ", "وَإِنَّكَ لَعَلَىٰ خُلُقٍ عَظِيمٍ", "فَسَتُبْصِرُ وَيُبْصِرُونَ"], jawabanBenar: "مَا أَنتَ بِنِعْمَةِ رَبِّكَ بِمَجْنُونٍ" },
+        { pertanyaan: "Lanjutkan ayat: 'مَا أَنتَ بِنِعْمَةِ رَبِّكَ بِمَجْنُونٍ'", opsi: ["وَإِنَّ لَكَ لَأَجْرًا غَيْرَ مَمْنُونٍ", "وَإِنَّكَ لَعَلَىٰ خُلُقٍ عَظِيمٍ", "فَسَتُبْصِرُ وَيُبْصِرُونَ", "بِأَييِّكُمُ الْمَفْتُونُ"], jawabanBenar: "وَإِنَّ لَكَ لَأَجْرًا غَيْرَ مَمْنُونٍ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَإِنَّ لَكَ لَأَجْرًا غَيْرَ مَمْنُونٍ'", opsi: ["وَإِنَّكَ لَعَلَىٰ خُلُقٍ عَظِيمٍ", "فَسَتُبْصِرُ وَيُبْصِرُونَ", "بِأَييِّكُمُ الْمَفْتُونُ", "إِنَّ رَبَّكَ هُوَ أَعْلَمُ بِمَن ضَلَّ عَن سَبِيلِهِ"], jawabanBenar: "وَإِنَّكَ لَعَلَىٰ خُلُقٍ عَظِيمٍ" },
+        { pertanyaan: "Lanjutkan ayat: 'فَسَتُبْصِرُ وَيُبْصِرُونَ'", opsi: ["بِأَييِّكُمُ الْمَفْتُونُ", "إِنَّ رَبَّكَ هُوَ أَعْلَمُ بِمَن ضَلَّ عَن سَبِيلِهِ", "وَهُوَ أَعْلَمُ بِالْمُهْتَدِينَ", "فَلَا تُطِعِ الْمُكَذِّبِينَ"], jawabanBenar: "بِأَييِّكُمُ الْمَفْتُونُ" },
+        { pertanyaan: "Lanjutkan ayat: 'الْحَاقَّةُ'", opsi: ["مَا الْحَاقَّةُ", "وَمَا أَدْرَاكَ مَا الْحَاقَّةُ", "كَذَّبَتْ ثَمُودُ وَعَادٌ بِالْقَارِعَةِ", "فَأَمَّا ثَمُودُ فَأُهْلِكُوا بِالطَّاغِيَةِ"], jawabanBenar: "مَا الْحَاقَّةُ" },
+        { pertanyaan: "Lanjutkan ayat: 'مَا الْحَاقَّةُ'", opsi: ["وَمَا أَدْرَاكَ مَا الْحَاقَّةُ", "كَذَّبَتْ ثَمُودُ وَعَادٌ بِالْقَارِعَةِ", "فَأَمَّا ثَمُودُ فَأُهْلِكُوا بِالطَّاغِيَةِ", "وَأَمَّا عَادٌ فَأُهْلِكُوا بِرِيحٍ صَرْصَرٍ عَاتِيَةٍ"], jawabanBenar: "وَمَا أَدْرَاكَ مَا الْحَاقَّةُ" },
+        { pertanyaan: "Lanjutkan ayat: 'كَذَّبَتْ ثَمُودُ وَعَادٌ بِالْقَارِعَةِ'", opsi: ["فَأَمَّا ثَمُودُ فَأُهْلِكُوا بِالطَّاغِيَةِ", "وَأَمَّا عَادٌ فَأُهْلِكُوا بِرِيحٍ صَرْصَرٍ عَاتِيَةٍ", "سَخَّرَهَا عَلَيْهِمْ سَبْعَ لَيَالٍ وَثَمَانِيَةَ أَيَّامٍ حُسُومًا", "فَتَرَى الْقَوْمَ فِيهَا صَرْعَىٰ كَأَنَّهُمْ أَعْجَازُ نَخْلٍ خَاوِيَةٍ"], jawabanBenar: "فَأَمَّا ثَمُودُ فَأُهْلِكُوا بِالطَّاغِيَةِ" },
+        { pertanyaan: "Lanjutkan ayat: 'سَأَلَ سَائِلٌ بِعَذَابٍ وَاقِعٍ'", opsi: ["لِّلْكَافِرِينَ لَيْسَ لَهُ دَافِعٌ", "مِّنَ اللَّهِ ذِي الْمَعَارِجِ", "تَعْرُجُ الْمَلَائِكَةُ وَالرُّوحُ إِلَيْهِ", "فِي يَوْمٍ كَانَ مِقْدَارُهُ خَمْسِينَ أَلْفَ سَنَةٍ"], jawabanBenar: "لِّلْكَافِرِينَ لَيْسَ لَهُ دَافِعٌ" },
+        { pertanyaan: "Lanjutkan ayat: 'لِّلْكَافِرِينَ لَيْسَ لَهُ دَافِعٌ'", opsi: ["مِّنَ اللَّهِ ذِي الْمَعَارِجِ", "تَعْرُجُ الْمَلَائِكَةُ وَالرُّوحُ إِلَيْهِ", "فِي يَوْمٍ كَانَ مِقْدَارُهُ خَمْسِينَ أَلْفَ سَنَةٍ", "فَاصْبِرْ صَبْرًا جَمِيلًا"], jawabanBenar: "مِّنَ اللَّهِ ذِي الْمَعَارِجِ" },
+        { pertanyaan: "Lanjutkan ayat: 'مِّنَ اللَّهِ ذِي الْمَعَارِجِ'", opsi: ["تَعْرُجُ الْمَلَائِكَةُ وَالرُّوحُ إِلَيْهِ", "فِي يَوْمٍ كَانَ مِقْدَارُهُ خَمْسِينَ أَلْفَ سَنَةٍ", "فَاصْبِرْ صَبْرًا جَمِيلًا", "إِنَّهُمْ يَرَوْنَهُ بَعِيدًا"], jawabanBenar: "تَعْرُجُ الْمَلَائِكَةُ وَالرُّوحُ إِلَيْهِ" },
+        { pertanyaan: "Lanjutkan ayat: 'تَعْرُجُ الْمَلَائِكَةُ وَالرُّوحُ إِلَيْهِ'", opsi: ["فِي يَوْمٍ كَانَ مِقْدَارُهُ خَمْسِينَ أَلْفَ سَنَةٍ", "فَاصْبِرْ صَبْرًا جَمِيلًا", "إِنَّهُمْ يَرَوْنَهُ بَعِيدًا", "وَنَرَاهُ قَرِيبًا"], jawabanBenar: "فِي يَوْمٍ كَانَ مِقْدَارُهُ خَمْسِينَ أَلْفَ سَنَةٍ" },
+        { pertanyaan: "Lanjutkan ayat: 'فَاصْبِرْ صَبْرًا جَمِيلًا'", opsi: ["إِنَّهُمْ يَرَوْنَهُ بَعِيدًا", "وَنَرَاهُ قَرِيبًا", "يَوْمَ تَكُونُ السَّمَاءُ كَالْمُهْلِ", "وَتَكُونُ الْجِبَالُ كَالْعِهْنِ"], jawabanBenar: "إِنَّهُمْ يَرَوْنَهُ بَعِيدًا" },
+        { pertanyaan: "Lanjutkan ayat: 'إِنَّا أَرْسَلْنَا نُوحًا إِلَىٰ قَوْمِهِ أَنْ أَنذِرْ قَوْمَكَ مِن قَبْلِ أَن يَأْتِيَهُمْ عَذَابٌ أَلِيمٌ'", opsi: ["قَالَ يَا قَوْمِ إِنِّي لَكُمْ نَذِيرٌ مُّبِينٌ", "أَنِ اعْبُدُوا اللَّهَ وَاتَّقُوهُ وَأَطِيعُونِ", "يَغْفِرْ لَكُم مِّن ذُنُوبِكُمْ", "وَيُؤَخِّرْكُمْ إِلَىٰ أَجَلٍ مُّسَمًّى ۚ"], jawabanBenar: "قَالَ يَا قَوْمِ إِنِّي لَكُمْ نَذِيرٌ مُّبِينٌ" },
+        { pertanyaan: "Lanjutkan ayat: 'قَالَ يَا قَوْمِ إِنِّي لَكُمْ نَذِيرٌ مُّبِينٌ'", opsi: ["أَنِ اعْبُدُوا اللَّهَ وَاتَّقُوهُ وَأَطِيعُونِ", "يَغْفِرْ لَكُم مِّن ذُنُوبِكُمْ", "وَيُؤَخِّرْكُمْ إِلَىٰ أَجَلٍ مُّسَمًّى ۚ", "إِنَّ أَجَلَ اللَّهِ إِذَا جَاءَ لَا يُؤَخَّرُ ۖ لَوْ كُنتُمْ تَعْلَمُونَ"], jawabanBenar: "أَنِ اعْبُدُوا اللَّهَ وَاتَّقُوهُ وَأَطِيعُونِ" },
+        { pertanyaan: "Lanjutkan ayat: 'أَنِ اعْبُدُوا اللَّهَ وَاتَّقُوهُ وَأَطِيعُونِ'", opsi: ["يَغْفِرْ لَكُم مِّن ذُنُوبِكُمْ وَيُؤَخِّرْكُمْ إِلَىٰ أَجَلٍ مُّسَمًّى ۚ", "إِنَّ أَجَلَ اللَّهِ إِذَا جَاءَ لَا يُؤَخَّرُ ۖ لَوْ كُنتُمْ تَعْلَمُونَ", "قَالَ رَبِّ إِنِّي دَعَوْتُ قَوْمِي لَيْلًا وَنَهَارًا", "فَلَمْ يَزِدْهُمْ دُعَائِي إِلَّا فِرَارًا"], jawabanBenar: "يَغْفِرْ لَكُم مِّن ذُنُوبِكُمْ وَيُؤَخِّرْكُمْ إِلَىٰ أَجَلٍ مُّسَمًّى ۚ" },
+        { pertanyaan: "Lanjutkan ayat: 'قُلْ أُوحِيَ إِلَيَّ أَنَّهُ اسْتَمَعَ نَفَرٌ مِّنَ الْجِنِّ فَقَالُوا إِنَّا سَمِعْنَا قُرْآنًا عَجَبًا'", opsi: ["يَهْدِي إِلَى الرُّشْدِ فَآمَنَّا بِهِ ۖ وَلَن نُّشْرِكَ بِرَبِّنَا أَحَدًا", "وَأَنَّهُ تَعَالَىٰ جَدُّ رَبِّنَا مَا اتَّخَذَ صَاحِبَةً وَلَا وَلَدًا", "وَأَنَّهُ كَانَ يَقُولُ سَفِيهُنَا عَلَى اللَّهِ شَطَطًا", "وَأَنَّا ظَنَنَّا أَن لَّن تَقُولَ الْإِنسُ وَالْجِنُّ عَلَى اللَّهِ كَذِبًا"], jawabanBenar: "يَهْدِي إِلَى الرُّشْدِ فَآمَنَّا بِهِ ۖ وَلَن نُّشْرِكَ بِرَبِّنَا أَحَدًا" },
+        { pertanyaan: "Lanjutkan ayat: 'يَهْدِي إِلَى الرُّشْدِ فَآمَنَّا بِهِ ۖ وَلَن نُّشْرِكَ بِرَبِّنَا أَحَدًا'", opsi: ["وَأَنَّهُ تَعَالَىٰ جَدُّ رَبِّنَا مَا اتَّخَذَ صَاحِبَةً وَلَا وَلَدًا", "وَأَنَّهُ كَانَ يَقُولُ سَفِيهُنَا عَلَى اللَّهِ شَطَطًا", "وَأَنَّا ظَنَنَّا أَن لَّن تَقُولَ الْإِنسُ وَالْجِنُّ عَلَى اللَّهِ كَذِبًا", "وَأَنَّهُ كَانَ رِجَالٌ مِّنَ الْإِنسِ يَعُوذُونَ بِرِجَالٍ مِّنَ الْجِنِّ"], jawabanBenar: "وَأَنَّهُ تَعَالَىٰ جَدُّ رَبِّنَا مَا اتَّخَذَ صَاحِبَةً وَلَا وَلَدًا" },
+        { pertanyaan: "Lanjutkan ayat: 'يَا أَيُّهَا الْمُزَّمِّلُ'", opsi: ["قُمِ اللَّيْلَ إِلَّا قَلِيلًا", "نِّصْفَهُ أَوِ انقُصْ مِنْهُ قَلِيلًا", "أَوْ زِدْ عَلَيْهِ وَرَتِّلِ الْقُرْآنَ تَرْتِيلًا", "إِنَّا سَنُلْقِي عَلَيْكَ قَوْلًا ثَقِيلًا"], jawabanBenar: "قُمِ اللَّيْلَ إِلَّا قَلِيلًا" },
+        { pertanyaan: "Lanjutkan ayat: 'قُمِ اللَّيْلَ إِلَّا قَلِيلًا'", opsi: ["نِّصْفَهُ أَوِ انقُصْ مِنْهُ قَلِيلًا", "أَوْ زِدْ عَلَيْهِ وَرَتِّلِ الْقُرْآنَ تَرْتِيلًا", "إِنَّا سَنُلْقِي عَلَيْكَ قَوْلًا ثَقِيلًا", "إِنَّ نَاشِئَةَ اللَّيْلِ هِيَ أَشَدُّ وَطْئًا وَأَقْوَمُ قِيلًا"], jawabanBenar: "نِّصْفَهُ أَوِ انقُصْ مِنْهُ قَلِيلًا" },
+        { pertanyaan: "Lanjutkan ayat: 'أَوْ زِدْ عَلَيْهِ وَرَتِّلِ الْقُرْآنَ تَرْتِيلًا'", opsi: ["إِنَّا سَنُلْقِي عَلَيْكَ قَوْلًا ثَقِيلًا", "إِنَّ نَاشِئَةَ اللَّيْلِ هِيَ أَشَدُّ وَطْئًا وَأَقْوَمُ قِيلًا", "إِنَّ لَكَ فِي النَّهَارِ سَبْحًا طَوِيلًا", "وَاذْكُرِ اسْمَ رَبِّكَ وَتَبَتَّلْ إِلَيْهِ تَبْتِيلًا"], jawabanBenar: "إِنَّا سَنُلْقِي عَلَيْكَ قَوْلًا ثَقِيلًا" },
+        { pertanyaan: "Lanjutkan ayat: 'يَا أَيُّهَا الْمُدَّثِّرُ'", opsi: ["قُمْ فَأَنذِرْ", "وَرَبَّكَ فَكَبِّرْ", "وَثِيَابَكَ فَطَهِّرْ", "وَالرُّجْزَ فَاهْجُرْ"], jawabanBenar: "قُمْ فَأَنذِرْ" },
+        { pertanyaan: "Lanjutkan ayat: 'قُمْ فَأَنذِرْ'", opsi: ["وَرَبَّكَ فَكَبِّرْ", "وَثِيَابَكَ فَطَهِّرْ", "وَالرُّجْزَ فَاهْجُرْ", "وَلَا تَمْنُن تَسْتَكْثِرُ"], jawabanBenar: "وَرَبَّكَ فَكَبِّرْ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَرَبَّكَ فَكَبِّرْ'", opsi: ["وَثِيَابَكَ فَطَهِّرْ", "وَالرُّجْزَ فَاهْجُرْ", "وَلَا تَمْنُن تَسْتَكْثِرُ", "وَلِرَبِّكَ فَاصْبِرْ"], jawabanBenar: "وَثِيَابَكَ فَطَهِّرْ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَثِيَابَكَ فَطَهِّرْ'", opsi: ["وَالرُّجْزَ فَاهْجُرْ", "وَلَا تَمْنُن تَسْتَكْثِرُ", "وَلِرَبِّكَ فَاصْبِرْ", "فَإِذَا نُقِرَ فِي النَّاقُورِ"], jawabanBenar: "وَالرُّجْزَ فَاهْجُرْ" },
+        { pertanyaan: "Lanjutkan ayat: 'لَا أُقْسِمُ بِيَوْمِ الْقِيَامَةِ'", opsi: ["وَلَا أُقْسِمُ بِالنَّفْسِ اللَّوَّامَةِ", "أَيَحْسَبُ الْإِنسَانُ أَلَّن نَّجْمَعَ عِظَامَهُ", "بَلَىٰ قَادِرِينَ عَلَىٰ أَن نُّسَوِّيَ بَنَانَهُ", "بَلْ يُرِيدُ الْإِنسَانُ لِيَفْجُرَ أَمَامَهُ"], jawabanBenar: "وَلَا أُقْسِمُ بِالنَّفْسِ اللَّوَّامَةِ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَلَا أُقْسِمُ بِالنَّفْسِ اللَّوَّامَةِ'", opsi: ["أَيَحْسَبُ الْإِنسَانُ أَلَّن نَّجْمَعَ عِظَامَهُ", "بَلَىٰ قَادِرِينَ عَلَىٰ أَن نُّسَوِّيَ بَنَانَهُ", "بَلْ يُرِيدُ الْإِنسَانُ لِيَفْجُرَ أَمَامَهُ", "يَسْأَلُ أَيَّانَ يَوْمُ الْقِيَامَةِ"], jawabanBenar: "أَيَحْسَبُ الْإِنسَانُ أَلَّن نَّجْمَعَ عِظَامَهُ" },
+        { pertanyaan: "Lanjutkan ayat: 'أَيَحْسَبُ الْإِنسَانُ أَلَّن نَّجْمَعَ عِظَامَهُ'", opsi: ["بَلَىٰ قَادِرِينَ عَلَىٰ أَن نُّسَوِّيَ بَنَانَهُ", "بَلْ يُرِيدُ الْإِنسَانُ لِيَفْجُرَ أَمَامَهُ", "يَسْأَلُ أَيَّانَ يَوْمُ الْقِيَامَةِ", "فَإِذَا بَرِقَ الْبَصَرُ"], jawabanBenar: "بَلَىٰ قَادِرِينَ عَلَىٰ أَن نُّسَوِّيَ بَنَانَهُ" },
+        { pertanyaan: "Lanjutkan ayat: 'بَلَىٰ قَادِرِينَ عَلَىٰ أَن نُّسَوِّيَ بَنَانَهُ'", opsi: ["بَلْ يُرِيدُ الْإِنسَانُ لِيَفْجُرَ أَمَامَهُ", "يَسْأَلُ أَيَّانَ يَوْمُ الْقِيَامَةِ", "فَإِذَا بَرِقَ الْبَصَرُ", "وَخَسَفَ الْقَمَرُ"], jawabanBenar: "بَلْ يُرِيدُ الْإِنسَانُ لِيَفْجُرَ أَمَامَهُ" },
+        { pertanyaan: "Lanjutkan ayat: 'هَلْ أَتَىٰ عَلَى الْإِنسَانِ حِينٌ مِّنَ الدَّهْرِ لَمْ يَكُن شَيْئًا مَّذْكُورًا'", opsi: ["إِنَّا خَلَقْنَا الْإِنسَانَ مِن نُّطْفَةٍ أَمْشَاجٍ نَّبْتَلِيهِ فَجَعَلْنَاهُ سَمِيعًا بَصِيرًا", "إِنَّا هَدَيْنَاهُ السَّبِيلَ إِمَّا شَاكِرًا وَإِمَّا كَفُورًا", "إِنَّا أَعْتَدْنَا لِلْكَافِرِينَ سَلَاسِلَ وَأَغْلَالًا وَسَعِيرًا", "إِنَّ الْأَبْرَارَ يَشْرَبُونَ مِن كَأْسٍ كَانَ مِزَاجُهَا كَافُورًا"], jawabanBenar: "إِنَّا خَلَقْنَا الْإِنسَانَ مِن نُّطْفَةٍ أَمْشَاجٍ نَّبْتَلِيهِ فَجَعَلْنَاهُ سَمِيعًا بَصِيرًا" },
+        { pertanyaan: "Lanjutkan ayat: 'إِنَّا خَلَقْنَا الْإِنسَانَ مِن نُّطْفَةٍ أَمْشَاجٍ نَّبْتَلِيهِ فَجَعَلْنَاهُ سَمِيعًا بَصِيرًا'", opsi: ["إِنَّا هَدَيْنَاهُ السَّبِيلَ إِمَّا شَاكِرًا وَإِمَّا كَفُورًا", "إِنَّا أَعْتَدْنَا لِلْكَافِرِينَ سَلَاسِلَ وَأَغْلَالًا وَسَعِيرًا", "إِنَّ الْأَبْرَارَ يَشْرَبُونَ مِن كَأْسٍ كَانَ مِزَاجُهَا كَافُورًا", "عَيْنًا يَشْرَبُ بِهَا عِبَادُ اللَّهِ يُفَجِّرُونَهَا تَفْجِيرًا"], jawabanBenar: "إِنَّا هَدَيْنَاهُ السَّبِيلَ إِمَّا شَاكِرًا وَإِمَّا كَفُورًا" },
+        { pertanyaan: "Lanjutkan ayat: 'إِنَّا هَدَيْنَاهُ السَّبِيلَ إِمَّا شَاكِرًا وَإِمَّا كَفُورًا'", opsi: ["إِنَّا أَعْتَدْنَا لِلْكَافِرِينَ سَلَاسِلَ وَأَغْلَالًا وَسَعِيرًا", "إِنَّ الْأَبْرَارَ يَشْرَبُونَ مِن كَأْسٍ كَانَ مِزَاجُهَا كَافُورًا", "عَيْنًا يَشْرَبُ بِهَا عِبَادُ اللَّهِ يُفَجِّرُونَهَا تَفْجِيرًا", "يُوفُونَ بِالنَّذْرِ وَيَخَافُونَ يَوْمًا كَانَ شَرُّهُ مُسْتَطِيرًا"], jawabanBenar: "إِنَّا أَعْتَدْنَا لِلْكَافِرِينَ سَلَاسِلَ وَأَغْلَالًا وَسَعِيرًا" },
+        { pertanyaan: "Lanjutkan ayat: 'وَالْمُرْسَلَاتِ عُرْفًا'", opsi: ["فَالْعَاصِفَاتِ عَصْفًا", "وَالنَّاشِرَاتِ نَشْرًا", "فَالْفَارِقَاتِ فَرْقًا", "فَالْمُلْقِيَاتِ ذِكْرًا"], jawabanBenar: "فَالْعَاصِفَاتِ عَصْفًا" },
+        { pertanyaan: "Lanjutkan ayat: 'فَالْعَاصِفَاتِ عَصْفًا'", opsi: ["وَالنَّاشِرَاتِ نَشْرًا", "فَالْفَارِقَاتِ فَرْقًا", "فَالْمُلْقِيَاتِ ذِكْرًا", "عُذْرًا أَوْ نُذْرًا"], jawabanBenar: "وَالنَّاشِرَاتِ نَشْرًا" },
+        { pertanyaan: "Lanjutkan ayat: 'وَالنَّاشِرَاتِ نَشْرًا'", opsi: ["فَالْفَارِقَاتِ فَرْقًا", "فَالْمُلْقِيَاتِ ذِكْرًا", "عُذْرًا أَوْ نُذْرًا", "إِنَّمَا تُوعَدُونَ لَوَاقِعٌ"], jawabanBenar: "فَالْفَارِقَاتِ فَرْقًا" },
+        { pertanyaan: "Lanjutkan ayat: 'فَالْفَارِقَاتِ فَرْقًا'", opsi: ["فَالْمُلْقِيَاتِ ذِكْرًا", "عُذْرًا أَوْ نُذْرًا", "إِنَّمَا تُوعَدُونَ لَوَاقِعٌ", "فَإِذَا النُّجُومُ طُمِسَتْ"], jawabanBenar: "فَالْمُلْقِيَاتِ ذِكْرًا" },
+        { pertanyaan: "Lanjutkan ayat: 'فَالْمُلْقِيَاتِ ذِكْرًا'", opsi: ["عُذْرًا أَوْ نُذْرًا", "إِنَّمَا تُوعَدُونَ لَوَاقِعٌ", "فَإِذَا النُّجُومُ طُمِسَتْ", "وَإِذَا السَّمَاءُ فُرِجَتْ"], jawabanBenar: "عُذْرًا أَوْ نُذْرًا" },
+        { pertanyaan: "Lanjutkan ayat: 'وَلَقَدْ زَيَّنَّا السَّمَاءَ الدُّنْيَا بِمَصَابِيحَ وَجَعَلْنَاهَا رُجُومًا لِّلشَّيَاطِينِ ۖ'", opsi: ["وَأَعْتَدْنَا لَهُمْ عَذَابَ السَّعِيرِ", "وَلِلَّذِينَ كَفَرُوا بِرَبِّهِمْ عَذَابُ جَهَنَّمَ ۖ", "إِذَا أُلْقُوا فِيهَا سَمِعُوا لَهَا شَهِيقًا وَهِيَ تَفُورُ", "تَكَادُ تَمَيَّزُ مِنَ الْغَيْظِ ۖ"], jawabanBenar: "وَأَعْتَدْنَا لَهُمْ عَذَابَ السَّعِيرِ" },
+        { pertanyaan: "Lanjutkan ayat: 'تَكَادُ تَمَيَّزُ مِنَ الْغَيْظِ ۖ كُلَّمَا أُلْقِيَ فِيهَا فَوْجٌ سَأَلَهُمْ خَزَنَتُهَا'", opsi: ["أَلَمْ يَأْتِكُمْ نَذِيرٌ", "قَالُوا بَلَىٰ قَدْ جَاءَنَا نَذِيرٌ", "فَكَذَّبْنَا وَقُلْنَا مَا نَزَّلَ اللَّهُ مِن شَيْءٍ", "إِنْ أَنتُمْ إِلَّا فِي ضَلَالٍ كَبِيرٍ"], jawabanBenar: "أَلَمْ يَأْتِكُمْ نَذِيرٌ" },
+        { pertanyaan: "Lanjutkan ayat: 'فَلَا تُطِعِ الْمُكَذِّبِينَ'", opsi: ["وَدُّوا لَوْ تُدْهِنُ فَيُدْهِنُونَ", "وَلَا تُطِعْ كُلَّ حَلَّافٍ مَّهِينٍ", "هَمَّازٍ مَّشَّاءٍ بِنَمِيمٍ", "مَّنَّاعٍ لِّلْخَيْرِ مُعْتَدٍ أَثِيمٍ"], jawabanBenar: "وَدُّوا لَوْ تُدْهِنُ فَيُدْهِنُونَ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَدُّوا لَوْ تُدْهِنُ فَيُدْهِنُونَ'", opsi: ["وَلَا تُطِعْ كُلَّ حَلَّافٍ مَّهِينٍ", "هَمَّازٍ مَّشَّاءٍ بِنَمِيمٍ", "مَّنَّاعٍ لِّلْخَيْرِ مُعْتَدٍ أَثِيمٍ", "عُتُلٍّ بَعْدَ ذَٰلِكَ زَنِيمٍ"], jawabanBenar: "وَلَا تُطِعْ كُلَّ حَلَّافٍ مَّهِينٍ" },
+        { pertanyaan: "Lanjutkan ayat: 'يَوْمَ تَكُونُ السَّمَاءُ كَالْمُهْلِ'", opsi: ["وَتَكُونُ الْجِبَالُ كَالْعِهْنِ", "وَلَا يَسْأَلُ حَمِيمٌ حَمِيمًا", "يُبَصَّرُونَهُمْ ۚ يَوَدُّ الْمُجْرِمُ لَوْ يَفْتَدِي مِن عَذَابِ يَوْمِئِذٍ بِبَنِيهِ", "وَصَاحِبَتِهِ وَأَخِيهِ"], jawabanBenar: "وَتَكُونُ الْجِبَالُ كَالْعِهْنِ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَتَكُونُ الْجِبَالُ كَالْعِهْنِ'", opsi: ["وَلَا يَسْأَلُ حَمِيمٌ حَمِيمًا", "يُبَصَّرُونَهُمْ ۚ يَوَدُّ الْمُجْرِمُ لَوْ يَفْتَدِي مِن عَذَابِ يَوْمِئِذٍ بِبَنِيهِ", "وَصَاحِبَتِهِ وَأَخِيهِ", "وَفَصِيلَتِهِ الَّتِي تُؤْوِيهِ"], jawabanBenar: "وَلَا يَسْأَلُ حَمِيمٌ حَمِيمًا" },
+        { pertanyaan: "Lanjutkan ayat: 'إِنَّا سَنُلْقِي عَلَيْكَ قَوْلًا ثَقِيلًا'", opsi: ["إِنَّ نَاشِئَةَ اللَّيْلِ هِيَ أَشَدُّ وَطْئًا وَأَقْوَمُ قِيلًا", "إِنَّ لَكَ فِي النَّهَارِ سَبْحًا طَوِيلًا", "وَاذْكُرِ اسْمَ رَبِّكَ وَتَبَتَّلْ إِلَيْهِ تَبْتِيلًا", "رَّبُّ الْمَشْرِقِ وَالْمَغْرِبِ لَا إِلَٰهَ إِلَّا هُوَ فَاتَّخِذْهُ وَكِيلًا"], jawabanBenar: "إِنَّ نَاشِئَةَ اللَّيْلِ هِيَ أَشَدُّ وَطْئًا وَأَقْوَمُ قِيلًا" },
+        { pertanyaan: "Lanjutkan ayat: 'إِنَّ نَاشِئَةَ اللَّيْلِ هِيَ أَشَدُّ وَطْئًا وَأَقْوَمُ قِيلًا'", opsi: ["إِنَّ لَكَ فِي النَّهَارِ سَبْحًا طَوِيلًا", "وَاذْكُرِ اسْمَ رَبِّكَ وَتَبَتَّلْ إِلَيْهِ تَبْتِيلًا", "رَّبُّ الْمَشْرِقِ وَالْمَغْرِبِ لَا إِلَٰهَ إِلَّا هُوَ فَاتَّخِذْهُ وَكِيلًا", "وَاصْبِرْ عَلَىٰ مَا يَقُولُونَ وَاهْجُرْهُمْ هَجْرًا جَمِيلًا"], jawabanBenar: "إِنَّ لَكَ فِي النَّهَارِ سَبْحًا طَوِيلًا" },
+        { pertanyaan: "Lanjutkan ayat: 'فَإِذَا بَرِقَ الْبَصَرُ'", opsi: ["وَخَسَفَ الْقَمَرُ", "وَجُمِعَ الشَّمْسُ وَالْقَمَرُ", "يَقُولُ الْإِنسَانُ يَوْمَئِذٍ أَيْنَ الْمَفَرُّ", "كَلَّا لَا وَزَرَ"], jawabanBenar: "وَخَسَفَ الْقَمَرُ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَخَسَفَ الْقَمَرُ'", opsi: ["وَجُمِعَ الشَّمْسُ وَالْقَمَرُ", "يَقُولُ الْإِنسَانُ يَوْمَئِذٍ أَيْنَ الْمَفَرُّ", "كَلَّا لَا وَزَرَ", "إِلَىٰ رَبِّكَ يَوْمَئِذٍ الْمُسْتَقَرُّ"], jawabanBenar: "وَجُمِعَ الشَّمْسُ وَالْقَمَرُ" },
+        { pertanyaan: "Lanjutkan ayat: 'عَيْنًا يَشْرَبُ بِهَا عِبَادُ اللَّهِ يُفَجِّرُونَهَا تَفْجِيرًا'", opsi: ["يُوفُونَ بِالنَّذْرِ وَيَخَافُونَ يَوْمًا كَانَ شَرُّهُ مُسْتَطِيرًا", "وَيُطْعِمُونَ الطَّعَامَ عَلَىٰ حُبِّهِ مِسْكِينًا وَيَتِيمًا وَأَسِيرًا", "إِنَّمَا نُطْعِمُكُمْ لِوَجْهِ اللَّهِ لَا نُرِيدُ مِنكُمْ جَزَاءً وَلَا شُكُورًا", "إِنَّا نَخَافُ مِن رَّبِّنَا يَوْمًا عَبُوسًا قَمْطَرِيرًا"], jawabanBenar: "يُوفُونَ بِالنَّذْرِ وَيَخَافُونَ يَوْمًا كَانَ شَرُّهُ مُسْتَطِيرًا" },
+        { pertanyaan: "Lanjutkan ayat: 'يُوفُونَ بِالنَّذْرِ وَيَخَافُونَ يَوْمًا كَانَ شَرُّهُ مُسْتَطِيرًا'", opsi: ["وَيُطْعِمُونَ الطَّعَامَ عَلَىٰ حُبِّهِ مِسْكِينًا وَيَتِيمًا وَأَسِيرًا", "إِنَّمَا نُطْعِمُكُمْ لِوَجْهِ اللَّهِ لَا نُرِيدُ مِنكُمْ جَزَاءً وَلَا شُكُورًا", "إِنَّا نَخَافُ مِن رَّبِّنَا يَوْمًا عَبُوسًا قَمْطَرِيرًا", "فَوَقَاهُمُ اللَّهُ شَرَّ ذَٰلِكَ الْيَوْمِ وَلَقَّاهُمْ نَضْرَةً وَسُرُورًا"], jawabanBenar: "وَيُطْعِمُونَ الطَّعَامَ عَلَىٰ حُبِّهِ مِسْكِينًا وَيَتِيمًا وَأَسِيرًا" },
+        { pertanyaan: "Lanjutkan ayat: 'عُذْرًا أَوْ نُذْرًا'", opsi: ["إِنَّمَا تُوعَدُونَ لَوَاقِعٌ", "فَإِذَا النُّجُومُ طُمِسَتْ", "وَإِذَا السَّمَاءُ فُرِجَتْ", "وَإِذَا الْجِبَالُ نُسِفَتْ"], jawabanBenar: "إِنَّمَا تُوعَدُونَ لَوَاقِعٌ" },
+        { pertanyaan: "Lanjutkan ayat: 'إِنَّمَا تُوعَدُونَ لَوَاقِعٌ'", opsi: ["فَإِذَا النُّجُومُ طُمِسَتْ", "وَإِذَا السَّمَاءُ فُرِجَتْ", "وَإِذَا الْجِبَالُ نُسِفَتْ", "وَإِذَا الرُّسُلُ أُقِّتَتْ"], jawabanBenar: "فَإِذَا النُّجُومُ طُمِسَتْ" },
+        { pertanyaan: "Lanjutkan ayat: 'فَإِذَا النُّجُومُ طُمِسَتْ'", opsi: ["وَإِذَا السَّمَاءُ فُرِجَتْ", "وَإِذَا الْجِبَالُ نُسِفَتْ", "وَإِذَا الرُّسُلُ أُقِّتَتْ", "لِأَيِّ يَوْمٍ أُجِّلَتْ"], jawabanBenar: "وَإِذَا السَّمَاءُ فُرِجَتْ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَإِذَا السَّمَاءُ فُرِجَتْ'", opsi: ["وَإِذَا الْجِبَالُ نُسِفَتْ", "وَإِذَا الرُّسُلُ أُقِّتَتْ", "لِأَيِّ يَوْمٍ أُجِّلَتْ", "لِيَوْمِ الْفَصْلِ"], jawabanBenar: "وَإِذَا الْجِبَالُ نُسِفَتْ" },
+        { pertanyaan: "Lanjutkan ayat: 'يَقُولُ أَهْلَكْتُ مَالًا لُبَدًا'", opsi: ["أَيَحْسَبُ أَن لَّمْ يَرَهُ أَحَدٌ", "أَلَمْ نَجْعَل لَّهُ عَيْنَيْنِ", "وَلِسَانًا وَشَفَتَيْنِ", "وَهَدَيْنَاهُ النَّجْدَيْنِ"], jawabanBenar: "أَيَحْسَبُ أَن لَّمْ يَرَهُ أَحَدٌ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَهَدَيْنَاهُ النَّجْدَيْنِ'", opsi: ["فَلَا اقْتَحَمَ الْعَقَبَةَ", "وَمَا أَدْرَاكَ مَا الْعَقَبَةُ", "فَكُّ رَقَبَةٍ", "أَوْ إِطْعَامٌ فِي يَوْمٍ ذِي مَسْغَبَةٍ"], jawabanBenar: "فَلَا اقْتَحَمَ الْعَقَبَةَ" },
+        { pertanyaan: "Lanjutkan ayat: 'أَلَمْ يَجِدْكَ يَتِيمًا فَآوَىٰ'", opsi: ["وَوَجَدَكَ ضَالًّا فَهَدَىٰ", "وَوَجَدَكَ عَائِلًا فَأَغْنَىٰ", "فَأَمَّا الْيَتِيمَ فَلَا تَقْهَرْ", "وَأَمَّا السَّائِلَ فَلَا تَنْهَرْ"], jawabanBenar: "وَوَجَدَكَ ضَالًّا فَهَدَىٰ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَوَجَدَكَ ضَالًّا فَهَدَىٰ'", opsi: ["وَوَجَدَكَ عَائِلًا فَأَغْنَىٰ", "فَأَمَّا الْيَتِيمَ فَلَا تَقْهَرْ", "وَأَمَّا السَّائِلَ فَلَا تَنْهَرْ", "وَأَمَّا بِنِعْمَةِ رَبِّكَ فَحَدِّثْ"], jawabanBenar: "وَوَجَدَكَ عَائِلًا فَأَغْنَىٰ" },
+        { pertanyaan: "Lanjutkan ayat: 'اقْرَأْ بِاسْمِ رَبِّكَ الَّذِي خَلَقَ'", opsi: ["خَلَقَ الْإِنسَانَ مِنْ عَلَقٍ", "اقْرَأْ وَرَبُّكَ الْأَكْرَمُ", "الَّذِي عَلَّمَ بِالْقَلَمِ", "عَلَّمَ الْإِنسَانَ مَا لَمْ يَعْلَمْ"], jawabanBenar: "خَلَقَ الْإِنسَانَ مِنْ عَلَقٍ" },
+        { pertanyaan: "Lanjutkan ayat: 'إِنَّا أَنزَلْنَاهُ فِي لَيْلَةِ الْقَدْرِ'", opsi: ["وَمَا أَدْرَاكَ مَا لَيْلَةُ الْقَدْرِ", "لَيْلَةُ الْقَدْرِ خَيْرٌ مِّنْ أَلْفِ شَهْرٍ", "تَنَزَّلُ الْمَلَائِكَةُ وَالرُّوحُ فِيهَا بِإِذْنِ رَبِّهِم مِّن كُلِّ أَمْرٍ", "سَلَامٌ هِيَ حَتَّىٰ مَطْلَعِ الْفَجْرِ"], jawabanBenar: "وَمَا أَدْرَاكَ مَا لَيْلَةُ الْقَدْرِ" }
     ],
     menengah: [
-        { pertanyaan: "Lanjutkan ayat: 'نٓ ۚ وَالْقَلَمِ وَمَا ...'", opsi: ["يَسْطُرُونَ", "يَعْلَمُونَ", "يُبْصِرُونَ", "يَكْسِبُونَ"], jawabanBenar: "يَسْطُرُونَ" },
-        { pertanyaan: "Surat Al-Qalam menceritakan tentang...", opsi: ["Pemilik kebun yang sombong (Ashabul Jannah)", "Kisah Nabi Yunus", "Perang Khandaq", "Kisah Ashabul Kahfi"], jawabanBenar: "Pemilik kebun yang sombong (Ashabul Jannah)" },
-        { pertanyaan: "Lanjutkan ayat: 'الْحَاقَّةُ ۝ مَا الْحَاقَّةُ ۝ وَمَا ...'", opsi: ["أَدْرَاكَ مَا الْحَاقَّةُ", "يَوْمَ يَدْعُونَ", "يَوْمَئِذٍ", "فِي جَنَّةٍ عَالِيَةٍ"], jawabanBenar: "أَدْرَاكَ مَا الْحَاقَّةُ" },
-        { pertanyaan: "Surat Al-Ma'arij artinya...", opsi: ["Tempat-tempat naik / tingkatan", "Jalan yang lurus", "Rezeki yang luas", "Kebun yang subur"], jawabanBenar: "Tempat-tempat naik / tingkatan" },
-        { pertanyaan: "Lanjutkan ayat: 'إِنَّا أَرْسَلْنَا نُوحًا إِلَىٰ ...'", opsi: ["قَوْمِهِ", "أَهْلِهِ", "فِرْقَتِهِ", "أُمَّتِهِ"], jawabanBenar: "قَوْمِهِ" },
-        { pertanyaan: "Pada awal surat Al-Jin, jin berkata bahwa Al-Qur'an itu...", opsi: ["Menakjubkan (Qur'anan 'Ajaba)", "Sulit dipahami", "Bertentangan dengan kitab sebelumnya", "Hanya untuk manusia"], jawabanBenar: "Menakjubkan (Qur'anan 'Ajaba)" },
-        { pertanyaan: "Lanjutkan ayat: 'يَا أَيُّهَا الْمُزَّمِّلُ ۝ قُمِ اللَّيْلَ إِلَّا ...'", opsi: ["قَلِيلًا", "كَثِيرًا", "طَوِيلًا", "يَسِيرًا"], jawabanBenar: "قَلِيلًا" },
-        { pertanyaan: "Lanjutkan ayat: 'يَا أَيُّهَا الْمُدَّثِّرُ ۝ قُمْ فَـ...'", opsi: ["أَنذِرْ", "صَلِّ", "اصْبِرْ", "اسْجُدْ"], jawabanBenar: "أَنذِرْ" },
-        { pertanyaan: "Surat Al-Qiyamah bersumpah dengan...", opsi: ["Hari kiamat dan jiwa yang mencela diri sendiri", "Matahari dan bulan", "Langit dan bumi", "Malam dan siang"], jawabanBenar: "Hari kiamat dan jiwa yang mencela diri sendiri" },
-        { pertanyaan: "Surat Al-Insan menjelaskan tentang...", opsi: ["Penciptaan manusia dan balasan bagi orang yang bersabar", "Kisah kaum Tsamud", "Adab berdagang", "Kisah Nabi Zakariya"], jawabanBenar: "Penciptaan manusia dan balasan bagi orang yang bersabar" },
-        { pertanyaan: "Surat Al-Insan (Ad-Dahr) turun berkaitan dengan kisah kedermawanan...", opsi: ["Ali bin Abi Thalib dan keluarganya", "Abu Bakar Ash-Shiddiq", "Utsman bin Affan", "Umar bin Khattab"], jawabanBenar: "Ali bin Abi Thalib dan keluarganya" },
-        { pertanyaan: "Lanjutkan ayat Al-Mulk: 'الَّذِي خَلَقَ الْمَوْتَ وَالْحَيَاةَ لِيَبْلُوَكُمْ أَيُّكُمْ ...'", opsi: ["أَحْسَنُ عَمَلًا", "أَكْثَرُ مَالًا", "أَقْوَىٰ جِسْمًا", "أَطْوَلُ عُمْرًا"], jawabanBenar: "أَحْسَنُ عَمَلًا" },
-        { pertanyaan: "Surat Al-Ma'arij menyebutkan satu hari di akhirat yang kadarnya seperti...", opsi: ["50.000 tahun", "1.000 tahun", "100 tahun", "7.000 tahun"], jawabanBenar: "50.000 tahun" },
-        { pertanyaan: "Lanjutkan ayat Al-Qalam: 'إِنَّ لَكَ لَأَجْرًا غَيْرَ ...'", opsi: ["مَمْنُونٍ", "مَحْدُودٍ", "مَعْدُودٍ", "مَنْقُوصٍ"], jawabanBenar: "مَمْنُونٍ" },
-        { pertanyaan: "Surat Al-Muzzammil berisi perintah utama untuk...", opsi: ["Qiyamul lail (shalat malam)", "Berpuasa penuh setahun", "Berhaji setiap tahun", "Berdakwah ke luar negeri"], jawabanBenar: "Qiyamul lail (shalat malam)" }
+        { pertanyaan: "Lanjutkan ayat: 'إِنَّ الَّذِينَ يَخْشَوْنَ رَبَّهُم بِالْغَيْبِ'", opsi: ["لَهُم مَّغْفِرَةٌ وَأَجْرٌ كَبِيرٌ", "وَأَسِرُّوا قَوْلَكُمْ أَوِ اجْهَرُوا بِهِ ۖ", "إِنَّهُ عَلِيمٌ بِذَاتِ الصُّدُورِ", "أَلَا يَعْلَمُ مَنْ خَلَقَ وَهُوَ اللَّطِيفُ الْخَبِيرُ"], jawabanBenar: "لَهُم مَّغْفِرَةٌ وَأَجْرٌ كَبِيرٌ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَأَسِرُّوا قَوْلَكُمْ أَوِ اجْهَرُوا بِهِ ۖ'", opsi: ["إِنَّهُ عَلِيمٌ بِذَاتِ الصُّدُورِ", "أَلَا يَعْلَمُ مَنْ خَلَقَ وَهُوَ اللَّطِيفُ الْخَبِيرُ", "هُوَ الَّذِي جَعَلَ لَكُمُ الْأَرْضَ ذَلُولًا", "فَامْشُوا فِي مَنَاكِبِهَا وَكُلُوا مِن رِّزْقِهِ ۖ"], jawabanBenar: "إِنَّهُ عَلِيمٌ بِذَاتِ الصُّدُورِ" },
+        { pertanyaan: "Lanjutkan ayat: 'أَلَا يَعْلَمُ مَنْ خَلَقَ'", opsi: ["وَهُوَ اللَّطِيفُ الْخَبِيرُ", "هُوَ الَّذِي جَعَلَ لَكُمُ الْأَرْضَ ذَلُولًا", "أَأَمِنتُم مَّن فِي السَّمَاءِ أَن يَخْسِفَ بِكُمُ الْأَرْضَ", "أَمْ أَمِنتُم مَّن فِي السَّمَاءِ أَن يُرْسِلَ عَلَيْكُمْ حَاصِبًا ۖ"], jawabanBenar: "وَهُوَ اللَّطِيفُ الْخَبِيرُ" },
+        { pertanyaan: "Lanjutkan ayat: 'هُوَ الَّذِي جَعَلَ لَكُمُ الْأَرْضَ ذَلُولًا فَامْشُوا فِي مَنَاكِبِهَا'", opsi: ["وَكُلُوا مِن رِّزْقِهِ ۖ وَإِلَيْهِ النُّشُورُ", "أَأَمِنتُم مَّن فِي السَّمَاءِ أَن يَخْسِفَ بِكُمُ الْأَرْضَ", "فَإِذَا هِيَ تَمُورُ", "أَمْ أَمِنتُم مَّن فِي السَّمَاءِ أَن يُرْسِلَ عَلَيْكُمْ حَاصِبًا ۖ"], jawabanBenar: "وَكُلُوا مِن رِّزْقِهِ ۖ وَإِلَيْهِ النُّشُورُ" },
+        { pertanyaan: "Lanjutkan ayat: 'هَمَّازٍ مَّشَّاءٍ بِنَمِيمٍ'", opsi: ["مَّنَّاعٍ لِّلْخَيْرِ مُعْتَدٍ أَثِيمٍ", "عُتُلٍّ بَعْدَ ذَٰلِكَ زَنِيمٍ", "أَن كَانَ ذَا مَالٍ وَبَنِينَ", "إِذَا تُتْلَىٰ عَلَيْهِ آيَاتُنَا قَالَ أَسَاطِيرُ الْأَوَّلِينَ"], jawabanBenar: "مَّنَّاعٍ لِّلْخَيْرِ مُعْتَدٍ أَثِيمٍ" },
+        { pertanyaan: "Lanjutkan ayat: 'مَّنَّاعٍ لِّلْخَيْرِ مُعْتَدٍ أَثِيمٍ'", opsi: ["عُتُلٍّ بَعْدَ ذَٰلِكَ زَنِيمٍ", "أَن كَانَ ذَا مَالٍ وَبَنِينَ", "إِذَا تُتْلَىٰ عَلَيْهِ آيَاتُنَا قَالَ أَسَاطِيرُ الْأَوَّلِينَ", "سَنَسِمُهُ عَلَى الْخُرْطُومِ"], jawabanBenar: "عُتُلٍّ بَعْدَ ذَٰلِكَ زَنِيمٍ" },
+        { pertanyaan: "Lanjutkan ayat: 'عُتُلٍّ بَعْدَ ذَٰلِكَ زَنِيمٍ'", opsi: ["أَن كَانَ ذَا مَالٍ وَبَنِينَ", "إِذَا تُتْلَىٰ عَلَيْهِ آيَاتُنَا قَالَ أَسَاطِيرُ الْأَوَّلِينَ", "سَنَسِمُهُ عَلَى الْخُرْطُومِ", "إِنَّا بَلَوْنَاهُمْ كَمَا بَلَوْنَا أَصْحَابَ الْجَنَّةِ"], jawabanBenar: "أَن كَانَ ذَا مَالٍ وَبَنِينَ" },
+        { pertanyaan: "Lanjutkan ayat: 'إِنَّا بَلَوْنَاهُمْ كَمَا بَلَوْنَا أَصْحَابَ الْجَنَّةِ إِذْ أَقْسَمُوا لَيَصْرِمُنَّهَا مُصْبِحِينَ'", opsi: ["وَلَا يَسْتَثْنُونَ", "فَطَافَ عَلَيْهَا طَائِفٌ مِّن رَّبِّكَ وَهُمْ نَائِمُونَ", "فَأَصْبَحَتْ كَالصَّرِيمِ", "فَتَنَادَوْا مُصْبِحِينَ"], jawabanBenar: "وَلَا يَسْتَثْنُونَ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَلَا يَسْتَثْنُونَ'", opsi: ["فَطَافَ عَلَيْهَا طَائِفٌ مِّن رَّبِّكَ وَهُمْ نَائِمُونَ", "فَأَصْبَحَتْ كَالصَّرِيمِ", "فَتَنَادَوْا مُصْبِحِينَ", "أَنِ اغْدُوا عَلَىٰ حَرْثِكُمْ إِن كُنتُمْ صَارِمِينَ"], jawabanBenar: "فَطَافَ عَلَيْهَا طَائِفٌ مِّن رَّبِّكَ وَهُمْ نَائِمُونَ" },
+        { pertanyaan: "Lanjutkan ayat: 'فَطَافَ عَلَيْهَا طَائِفٌ مِّن رَّبِّكَ وَهُمْ نَائِمُونَ'", opsi: ["فَأَصْبَحَتْ كَالصَّرِيمِ", "فَتَنَادَوْا مُصْبِحِينَ", "أَنِ اغْدُوا عَلَىٰ حَرْثِكُمْ إِن كُنتُمْ صَارِمِينَ", "فَانطَلَقُوا وَهُمْ يَتَخَافَتُونَ"], jawabanBenar: "فَأَصْبَحَتْ كَالصَّرِيمِ" },
+        { pertanyaan: "Lanjutkan ayat: 'فَأَصْبَحَتْ كَالصَّرِيمِ'", opsi: ["فَتَنَادَوْا مُصْبِحِينَ", "أَنِ اغْدُوا عَلَىٰ حَرْثِكُمْ إِن كُنتُمْ صَارِمِينَ", "فَانطَلَقُوا وَهُمْ يَتَخَافَتُونَ", "أَن لَّا يَدْخُلَنَّهَا الْيَوْمَ عَلَيْكُم مِّسْكِينٌ"], jawabanBenar: "فَتَنَادَوْا مُصْبِحِينَ" },
+        { pertanyaan: "Lanjutkan ayat: 'فَهُوَ فِي عِيشَةٍ رَّاضِيَةٍ'", opsi: ["فِي جَنَّةٍ عَالِيَةٍ", "قُطُوفُهَا دَانِيَةٌ", "كُلُوا وَاشْرَبُوا هَنِيئًا بِمَا أَسْلَفْتُمْ فِي الْأَيَّامِ الْخَالِيَةِ", "وَأَمَّا مَنْ أُوتِيَ كِتَابَهُ بِشِمَالِهِ"], jawabanBenar: "فِي جَنَّةٍ عَالِيَةٍ" },
+        { pertanyaan: "Lanjutkan ayat: 'فِي جَنَّةٍ عَالِيَةٍ'", opsi: ["قُطُوفُهَا دَانِيَةٌ", "كُلُوا وَاشْرَبُوا هَنِيئًا بِمَا أَسْلَفْتُمْ فِي الْأَيَّامِ الْخَالِيَةِ", "وَأَمَّا مَنْ أُوتِيَ كِتَابَهُ بِشِمَالِهِ فَيَقُولُ يَا لَيْتَنِي لَمْ أُوتَ كِتَابِيَهْ", "وَلَمْ أَدْرِ مَا حِسَابِيَهْ"], jawabanBenar: "قُطُوفُهَا دَانِيَةٌ" },
+        { pertanyaan: "Lanjutkan ayat: 'يُبَصَّرُونَهُمْ ۚ يَوَدُّ الْمُجْرِمُ لَوْ يَفْتَدِي مِنْ عَذَابِ يَوْمِئِذٍ بِبَنِيهِ'", opsi: ["وَصَاحِبَتِهِ وَأَخِيهِ", "وَفَصِيلَتِهِ الَّتِي تُؤْوِيهِ", "وَمَن فِي الْأَرْضِ جَمِيعًا ثُمَّ يُنجِيهِ", "كَلَّا ۖ إِنَّهَا لَظَىٰ"], jawabanBenar: "وَصَاحِبَتِهِ وَأَخِيهِ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَصَاحِبَتِهِ وَأَخِيهِ'", opsi: ["وَفَصِيلَتِهِ الَّتِي تُؤْوِيهِ", "وَمَن فِي الْأَرْضِ جَمِيعًا ثُمَّ يُنجِيهِ", "كَلَّا ۖ إِنَّهَا لَظَىٰ", "نَزَّاعَةً لِّلشَّوَىٰ"], jawabanBenar: "وَفَصِيلَتِهِ الَّتِي تُؤْوِيهِ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَفَصِيلَتِهِ الَّتِي تُؤْوِيهِ'", opsi: ["وَمَن فِي الْأَرْضِ جَمِيعًا ثُمَّ يُنجِيهِ", "كَلَّا ۖ إِنَّهَا لَظَىٰ", "نَزَّاعَةً لِّلشَّوَىٰ", "تَدْعُو مَنْ أَدْبَرَ وَتَوَلَّىٰ"], jawabanBenar: "وَمَن فِي الْأَرْضِ جَمِيعًا ثُمَّ يُنجِيهِ" },
+        { pertanyaan: "Lanjutkan ayat: 'فَقُلْتُ اسْتَغْفِرُوا رَبَّكُمْ إِنَّهُ كَانَ غَفَّارًا'", opsi: ["يُرْسِلِ السَّمَاءَ عَلَيْكُم مِّدْرَارًا", "وَيُمْدِدْكُم بِأَمْوَالٍ وَبَنِينَ", "وَيَجْعَل لَّكُمْ جَنَّاتٍ وَيَجْعَل لَّكُمْ أَنْهَارًا", "مَّا لَكُمْ لَا تَرْجُونَ لِلَّهِ وَقَارًا"], jawabanBenar: "يُرْسِلِ السَّمَاءَ عَلَيْكُم مِّدْرَارًا" },
+        { pertanyaan: "Lanjutkan ayat: 'يُرْسِلِ السَّمَاءَ عَلَيْكُم مِّدْرَارًا'", opsi: ["وَيُمْدِدْكُم بِأَمْوَالٍ وَبَنِينَ وَيَجْعَل لَّكُمْ جَنَّاتٍ وَيَجْعَل لَّكُمْ أَنْهَارًا", "مَّا لَكُمْ لَا تَرْجُونَ لِلَّهِ وَقَارًا", "وَقَدْ خَلَقَكُمْ أَطْوَارًا", "أَلَمْ تَرَوْا كَيْفَ خَلَقَ اللَّهُ سَبْعَ سَمَاوَاتٍ طِبَاقًا"], jawabanBenar: "وَيُمْدِدْكُم بِأَمْوَالٍ وَبَنِينَ وَيَجْعَل لَّكُمْ جَنَّاتٍ وَيَجْعَل لَّكُمْ أَنْهَارًا" },
+        { pertanyaan: "Lanjutkan ayat: 'وَأَنَّا مِنَّا الْمُسْلِمُونَ وَمِنَّا الْقَاسِطُونَ ۖ فَمَنْ أَسْلَمَ'", opsi: ["فَأُولَٰئِكَ تَحَرَّوْا رَشَدًا", "وَأَمَّا الْقَاسِطُونَ فَكَانُوا لِجَهَنَّمَ حَطَبًا", "وَأَلَّوِ اسْتَقَامُوا عَلَى الطَّرِيقَةِ لَأَسْقَيْنَاهُم مَّاءً غَدَقًا", "لِّنَفْتِنَهُمْ فِيهِ ۚ"], jawabanBenar: "فَأُولَٰئِكَ تَحَرَّوْا رَشَدًا" },
+        { pertanyaan: "Lanjutkan ayat: 'فَأُولَٰئِكَ تَحَرَّوْا رَشَدًا'", opsi: ["وَأَمَّا الْقَاسِطُونَ فَكَانُوا لِجَهَنَّمَ حَطَبًا", "وَأَلَّوِ اسْتَقَامُوا عَلَى الطَّرِيقَةِ لَأَسْقَيْنَاهُم مَّاءً غَدَقًا", "لِّنَفْتِنَهُمْ فِيهِ ۚ", "وَمَن يُعْرِضْ عَن ذِكْرِ رَبِّهِ يَسْلُكْهُ عَذَابًا صَعَدًا"], jawabanBenar: "وَأَمَّا الْقَاسِطُونَ فَكَانُوا لِجَهَنَّمَ حَطَبًا" },
+        { pertanyaan: "Lanjutkan ayat: 'إِنَّ لَدَيْنَا أَنكَالًا وَجَحِيمًا'", opsi: ["وَطَعَامًا ذَا غُصَّةٍ وَعَذَابًا أَلِيمًا", "يَوْمَ تَرْجُفُ الْأَرْضُ وَالْجِبَالُ وَكَانَتِ الْجِبَالُ كَثِيبًا مَّهِيلًا", "إِنَّا أَرْسَلْنَا إِلَيْكُمْ رَسُولًا شَاهِدًا عَلَيْكُمْ", "كَمَا أَرْسَلْنَا إِلَىٰ فِرْعَوْنَ رَسُولًا"], jawabanBenar: "وَطَعَامًا ذَا غُصَّةٍ وَعَذَابًا أَلِيمًا" },
+        { pertanyaan: "Lanjutkan ayat: 'وَطَعَامًا ذَا غُصَّةٍ وَعَذَابًا أَلِيمًا'", opsi: ["يَوْمَ تَرْجُفُ الْأَرْضُ وَالْجِبَالُ وَكَانَتِ الْجِبَالُ كَثِيبًا مَّهِيلًا", "إِنَّا أَرْسَلْنَا إِلَيْكُمْ رَسُولًا شَاهِدًا عَلَيْكُمْ", "كَمَا أَرْسَلْنَا إِلَىٰ فِرْعَوْنَ رَسُولًا", "فَعَصَىٰ فِرْعَوْنُ الرَّسُولَ فَأَخَذْنَاهُ أَخْذًا وَبِيلًا"], jawabanBenar: "يَوْمَ تَرْجُفُ الْأَرْضُ وَالْجِبَالُ وَكَانَتِ الْجِبَالُ كَثِيبًا مَّهِيلًا" },
+        { pertanyaan: "Lanjutkan ayat: 'سَأُصْلِيهِ سَقَرَ'", opsi: ["وَمَا أَدْرَاكَ مَا سَقَرُ", "لَا تُبْقِي وَلَا تَذَرُ", "لَوَّاحَةٌ لِّلْبَشَرِ", "عَلَيْهَا تِسْعَةَ عَشَرَ"], jawabanBenar: "وَمَا أَدْرَاكَ مَا سَقَرُ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَمَا أَدْرَاكَ مَا سَقَرُ'", opsi: ["لَا تُبْقِي وَلَا تَذَرُ", "لَوَّاحَةٌ لِّلْبَشَرِ", "عَلَيْهَا تِسْعَةَ عَشَرَ", "وَمَا جَعَلْنَا أَصْحَابَ النَّارِ إِلَّا مَلَائِكَةً ۙ"], jawabanBenar: "لَا تُبْقِي وَلَا تَذَرُ" },
+        { pertanyaan: "Lanjutkan ayat: 'لَا تُبْقِي وَلَا تَذَرُ'", opsi: ["لَوَّاحَةٌ لِّلْبَشَرِ", "عَلَيْهَا تِسْعَةَ عَشَرَ", "وَمَا جَعَلْنَا أَصْحَابَ النَّارِ إِلَّا مَلَائِكَةً ۙ", "كَلَّا وَالْقَمَرِ"], jawabanBenar: "لَوَّاحَةٌ لِّلْبَشَرِ" },
+        { pertanyaan: "Lanjutkan ayat: 'وُجُوهٌ يَوْمَئِذٍ نَّاضِرَةٌ'", opsi: ["إِلَىٰ رَبِّهَا نَاظِرَةٌ", "وَوُجُوهٌ يَوْمَئِذٍ بَاسِرَةٌ", "تَظُنُّ أَن يُفْعَلَ بِهَا فَاقِرَةٌ", "كَلَّا إِذَا بَلَغَتِ التَّرَاقِيَ"], jawabanBenar: "إِلَىٰ رَبِّهَا نَاظِرَةٌ" },
+        { pertanyaan: "Lanjutkan ayat: 'إِلَىٰ رَبِّهَا نَاظِرَةٌ'", opsi: ["وَوُجُوهٌ يَوْمَئِذٍ بَاسِرَةٌ", "تَظُنُّ أَن يُفْعَلَ بِهَا فَاقِرَةٌ", "كَلَّا إِذَا بَلَغَتِ التَّرَاقِيَ", "وَقِيلَ مَنْ ۜ رَاقٍ"], jawabanBenar: "وَوُجُوهٌ يَوْمَئِذٍ بَاسِرَةٌ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَوُجُوهٌ يَوْمَئِذٍ بَاسِرَةٌ'", opsi: ["تَظُنُّ أَن يُفْعَلَ بِهَا فَاقِرَةٌ", "كَلَّا إِذَا بَلَغَتِ التَّرَاقِيَ", "وَقِيلَ مَنْ ۜ رَاقٍ", "وَظَنَّ أَنَّهُ الْفِرَاقُ"], jawabanBenar: "تَظُنُّ أَن يُفْعَلَ بِهَا فَاقِرَةٌ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَيُطْعِمُونَ الطَّعَامَ عَلَىٰ حُبِّهِ مِسْكِينًا وَيَتِيمًا وَأَسِيرًا'", opsi: ["إِنَّمَا نُطْعِمُكُمْ لِوَجْهِ اللَّهِ لَا نُرِيدُ مِنكُمْ جَزَاءً وَلَا شُكُورًا", "إِنَّا نَخَافُ مِن رَّبِّنَا يَوْمًا عَبُوسًا قَمْطَرِيرًا", "فَوَقَاهُمُ اللَّهُ شَرَّ ذَٰلِكَ الْيَوْمِ وَلَقَّاهُمْ نَضْرَةً وَسُرُورًا", "وَجَزَاهُم بِمَا صَبَرُوا جَنَّةً وَحَرِيرًا"], jawabanBenar: "إِنَّمَا نُطْعِمُكُمْ لِوَجْهِ اللَّهِ لَا نُرِيدُ مِنكُمْ جَزَاءً وَلَا شُكُورًا" },
+        { pertanyaan: "Lanjutkan ayat: 'إِنَّمَا نُطْعِمُكُمْ لِوَجْهِ اللَّهِ لَا نُرِيدُ مِنكُمْ جَزَاءً وَلَا شُكُورًا'", opsi: ["إِنَّا نَخَافُ مِن رَّبِّنَا يَوْمًا عَبُوسًا قَمْطَرِيرًا", "فَوَقَاهُمُ اللَّهُ شَرَّ ذَٰلِكَ الْيَوْمِ وَلَقَّاهُمْ نَضْرَةً وَسُرُورًا", "وَجَزَاهُم بِمَا صَبَرُوا جَنَّةً وَحَرِيرًا", "مُّتَّكِئِينَ فِيهَا عَلَى الْأَرَائِكِ ۖ"], jawabanBenar: "إِنَّا نَخَافُ مِن رَّبِّنَا يَوْمًا عَبُوسًا قَمْطَرِيرًا" },
+        { pertanyaan: "Lanjutkan ayat: 'إِنَّا نَخَافُ مِن رَّبِّنَا يَوْمًا عَبُوسًا قَمْطَرِيرًا'", opsi: ["فَوَقَاهُمُ اللَّهُ شَرَّ ذَٰلِكَ الْيَوْمِ وَلَقَّاهُمْ نَضْرَةً وَسُرُورًا", "وَجَزَاهُم بِمَا صَبَرُوا جَنَّةً وَحَرِيرًا", "مُّتَّكِئِينَ فِيهَا عَلَى الْأَرَائِكِ ۖ", "لَا يَرَوْنَ فِيهَا شَمْسًا وَلَا زَمْهَرِيرًا"], jawabanBenar: "فَوَقَاهُمُ اللَّهُ شَرَّ ذَٰلِكَ الْيَوْمِ وَلَقَّاهُمْ نَضْرَةً وَسُرُورًا" },
+        { pertanyaan: "Lanjutkan ayat: 'إِنَّ الْمُتَّقِينَ فِي ظِلَالٍ وَعُيُونٍ'", opsi: ["وَفَوَاكِهَ مِمَّا يَشْتَهُونَ", "كُلُوا وَاشْرَبُوا هَنِيئًا بِمَا كُنتُمْ تَعْمَلُونَ", "إِنَّا كَذَٰلِكَ نَجْزِي الْمُحْسِنِينَ", "وَيْلٌ يَوْمَئِذٍ لِّلْمُكَذِّبِينَ"], jawabanBenar: "وَفَوَاكِهَ مِمَّا يَشْتَهُونَ" },
+        { pertanyaan: "Lanjutkan ayat: 'وَفَوَاكِهَ مِمَّا يَشْتَهُونَ'", opsi: ["كُلُوا وَاشْرَبُوا هَنِيئًا بِمَا كُنتُمْ تَعْمَلُونَ", "إِنَّا كَذَٰلِكَ نَجْزِي الْمُحْسِنِينَ", "وَيْلٌ يَوْمَئِذٍ لِّلْمُكَذِّبِينَ", "كُلُوا وَتَمَتَّعُوا قَلِيلًا إِنَّكُم مُّجْرِمُونَ"], jawabanBenar: "كُلُوا وَاشْرَبُوا هَنِيئًا بِمَا كُنتُمْ تَعْمَلُونَ" },
+        { pertanyaan: "Lanjutkan ayat: 'كُلُوا وَاشْرَبُوا هَنِيئًا بِمَا كُنتُمْ تَعْمَلُونَ'", opsi: ["إِنَّا كَذَٰلِكَ نَجْزِي الْمُحْسِنِينَ", "وَيْلٌ يَوْمَئِذٍ لِّلْمُكَذِّبِينَ", "كُلُوا وَتَمَتَّعُوا قَلِيلًا إِنَّكُم مُّجْرِمُونَ", "وَإِذَا قِيلَ لَهُمُ ارْكَعُوا لَا يَرْكَعُونَ"], jawabanBenar: "إِنَّا كَذَٰلِكَ نَجْزِي الْمُحْسِنِينَ" }
     ],
     lanjut: [
-        { pertanyaan: "Lanjutkan ayat: 'الْحَاقَّةُ ۝ مَا الْـ...'", opsi: ["حَاقَّةُ", "قَارِعَةُ", "وَاقِعَةُ", "سَاعَةُ"], jawabanBenar: "حَاقَّةُ" },
-        { pertanyaan: "Surat Al-Ma'arij menjelaskan tentang...", opsi: ["Pertanyaan orang kafir tentang azab dan sifat manusia yang berkeluh kesah", "Kisah Nabi Adam", "Peperangan Tabuk", "Hukum waris"], jawabanBenar: "Pertanyaan orang kafir tentang azab dan sifat manusia yang berkeluh kesah" },
-        { pertanyaan: "Lanjutkan ayat: 'وَالْمُرْسَلَاتِ ...'", opsi: ["عُرْفًا", "نَشْرًا", "ذِكْرًا", "عُذْرًا"], jawabanBenar: "عُرْفًا" },
-        { pertanyaan: "Lanjutkan ayat: 'إِنَّا سَنُلْقِي عَلَيْكَ قَوْلًا ...'", opsi: ["ثَقِيلًا", "كَرِيمًا", "عَظِيمًا", "مُبِينًا"], jawabanBenar: "ثَقِيلًا" },
-        { pertanyaan: "Dalam surat Al-Muddatstsir, Allah bersumpah dengan...", opsi: ["Bulan (وَالْقَمَرِ)", "Matahari", "Bintang", "Awan"], jawabanBenar: "Bulan (وَالْقَمَرِ)" },
-        { pertanyaan: "Surat Al-Qiyamah menjelaskan secara rinci tentang...", opsi: ["Tanda-tanda dan proses terjadinya hari kiamat", "Adab berpakaian", "Kisah Nabi Ayyub", "Aturan zakat"], jawabanBenar: "Tanda-tanda dan proses terjadinya hari kiamat" },
-        { pertanyaan: "Lanjutkan ayat: 'هَلْ أَتَىٰ عَلَى الْإِنسَانِ حِينٌ مِّنَ ...'", opsi: ["الدَّهْرِ لَمْ يَكُن شَيْئًا مَّذْكُورًا", "الدُّنْيَا وَمَا فِيهَا", "الذِّكْرِ وَالْقُرْآنِ", "الدَّعْوَةِ وَالْخَيْرِ"], jawabanBenar: "الدَّهْرِ لَمْ يَكُن شَيْئًا مَّذْكُورًا" },
-        { pertanyaan: "Surat Al-Mursalat berulang kali menyebutkan ayat peringatan 'وَيْلٌ يَوْمَئِذٍ لِّلْمُكَذِّبِينَ' yang ditujukan bagi...", opsi: ["Orang-orang yang mendustakan (kebenaran)", "Orang yang bersedekah", "Orang yang berpuasa", "Orang yang berhaji"], jawabanBenar: "Orang-orang yang mendustakan (kebenaran)" },
-        { pertanyaan: "Ayat 'وَيْلٌ يَوْمَئِذٍ لِّلْمُكَذِّبِينَ' dalam surat Al-Mursalat diulang sebanyak...", opsi: ["10 kali", "5 kali", "7 kali", "3 kali"], jawabanBenar: "10 kali" },
-        { pertanyaan: "Di akhir surat Nuh, Nabi Nuh AS berdoa memohon ampunan untuk...", opsi: ["Dirinya, kedua orang tuanya, dan orang-orang beriman", "Seluruh kaumnya tanpa terkecuali", "Anaknya yang durhaka", "Para pembesar kaumnya"], jawabanBenar: "Dirinya, kedua orang tuanya, dan orang-orang beriman" },
-        { pertanyaan: "Pertanyaan orang kafir 'يَسْأَلُ أَيَّانَ يَوْمُ الْقِيَامَةِ' (kapan hari kiamat) terdapat dalam surat...", opsi: ["Al-Qiyamah", "Al-Ma'arij", "Al-Haqqah", "Al-Mulk"], jawabanBenar: "Al-Qiyamah" },
-        { pertanyaan: "Lanjutkan ayat Al-Ma'arij: 'سَأَلَ سَائِلٌ بِعَذَابٍ ...'", opsi: ["وَاقِعٍ", "أَلِيمٍ", "شَدِيدٍ", "عَظِيمٍ"], jawabanBenar: "وَاقِعٍ" },
-        { pertanyaan: "Lanjutkan ayat Nuh: 'إِنَّا أَرْسَلْنَا نُوحًا إِلَىٰ قَوْمِهِ أَنْ ...'", opsi: ["أَنذِرْ قَوْمَكَ", "بَشِّرْ قَوْمَكَ", "عَلِّمْ قَوْمَكَ", "قُدْ قَوْمَكَ"], jawabanBenar: "أَنذِرْ قَوْمَكَ" },
-        { pertanyaan: "Lanjutkan ayat Al-Jin: 'قُلْ أُوحِيَ إِلَيَّ أَنَّهُ اسْتَمَعَ نَفَرٌ مِّنَ ...'", opsi: ["الْجِنِّ", "الْمَلَائِكَةِ", "الْإِنسِ", "الشَّيَاطِينِ"], jawabanBenar: "الْجِنِّ" },
-        { pertanyaan: "Lanjutkan ayat Al-Insan: 'إِنَّا نَحْنُ نَزَّلْنَا عَلَيْكَ ...'", opsi: ["الْقُرْآنَ تَنزِيلًا", "الْكِتَابَ تَفْصِيلًا", "الْفُرْقَانَ تَبْيَانًا", "الذِّكْرَ تَذْكِيرًا"], jawabanBenar: "الْقُرْآنَ تَنزِيلًا" }
+        { pertanyaan: "Ayat ini punya akhiran yang menjebak. Lanjutkan ayat: 'فَمَن يَأْتِيكُم بِمَاءٍ مَّعِينٍ'", opsi: ["(Ini adalah akhir surat)", "مِن مَّاءٍ مَّهِينٍ", "فَجَعَلْنَاهُ فِي قَرَارٍ مَّكِينٍ", "أَلَمْ نَخْلُقكُّم مِّن مَّاءٍ مَّهِينٍ"], jawabanBenar: "(Ini adalah akhir surat)" },
+        { pertanyaan: "Perhatikan kata 'Wa-amma'. Lanjutkan ayat: 'وَأَمَّا مَنْ أُوتِيَ كِتَابَهُ بِشِمَالِهِ فَيَقُولُ يَا لَيْتَنِي لَمْ أُوتَ كِتَابِيَهْ'", opsi: ["وَلَمْ أَدْرِ مَا حِسَابِيَهْ", "يَا لَيْتَهَا كَانَتِ الْقَاضِيَةَ", "مَا أَغْنَىٰ عَنِّي مَالِيَهْ ۜ", "هَلَكَ عَنِّي سُلْطَانِيَهْ"], jawabanBenar: "وَلَمْ أَدْرِ مَا حِسَابِيَهْ" },
+        { pertanyaan: "Lanjutkan urutannya: 'وَلَمْ أَدْرِ مَا حِسَابِيَهْ'", opsi: ["يَا لَيْتَهَا كَانَتِ الْقَاضِيَةَ", "مَا أَغْنَىٰ عَنِّي مَالِيَهْ ۜ", "هَلَكَ عَنِّي سُلْطَانِيَهْ", "خُذُوهُ فَغُلُّوهُ"], jawabanBenar: "يَا لَيْتَهَا كَانَتِ الْقَاضِيَةَ" },
+        { pertanyaan: "Lanjutkan urutannya: 'يَا لَيْتَهَا كَانَتِ الْقَاضِيَةَ'", opsi: ["مَا أَغْنَىٰ عَنِّي مَالِيَهْ ۜ", "هَلَكَ عَنِّي سُلْطَانِيَهْ", "خُذُوهُ فَغُلُّوهُ", "ثُمَّ الْجَحِيمَ صَلُّوهُ"], jawabanBenar: "مَا أَغْنَىٰ عَنِّي مَالِيَهْ ۜ" },
+        { pertanyaan: "Lanjutkan urutannya: 'مَا أَغْنَىٰ عَنِّي مَالِيَهْ ۜ'", opsi: ["هَلَكَ عَنِّي سُلْطَانِيَهْ", "خُذُوهُ فَغُلُّوهُ", "ثُمَّ الْجَحِيمَ صَلُّوهُ", "ثُمَّ فِي سِلْسِلَةٍ ذَرْعُهَا سَبْعُونَ ذِرَاعًا فَاسْلُكُوهُ"], jawabanBenar: "هَلَكَ عَنِّي سُلْطَانِيَهْ" },
+        { pertanyaan: "Lanjutkan urutannya! 'هَلَكَ عَنِّي سُلْطَانِيَهْ'", opsi: ["خُذُوهُ فَغُلُّوهُ", "ثُمَّ الْجَحِيمَ صَلُّوهُ", "ثُمَّ فِي سِلْسِلَةٍ ذَرْعُهَا سَبْعُونَ ذِرَاعًا فَاسْلُكُوهُ", "إِنَّهُ كَانَ لَا يُؤْمِنُ بِاللَّهِ الْعَظِيمِ"], jawabanBenar: "خُذُوهُ فَغُلُّوهُ" },
+        { pertanyaan: "Hati-hati rima 'Tsumma' ini! Lanjutkan: 'خُذُوهُ فَغُلُّوهُ'", opsi: ["ثُمَّ الْجَحِيمَ صَلُّوهُ", "ثُمَّ فِي سِلْسِلَةٍ ذَرْعُهَا سَبْعُونَ ذِرَاعًا فَاسْلُكُوهُ", "إِنَّهُ كَانَ لَا يُؤْمِنُ بِاللَّهِ الْعَظِيمِ", "وَلَا يَحُضُّ عَلَىٰ طَعَامِ الْمِسْكِينِ"], jawabanBenar: "ثُمَّ الْجَحِيمَ صَلُّوهُ" },
+        { pertanyaan: "Lanjutkan rima 'Tsumma' lagi: 'ثُمَّ الْجَحِيمَ صَلُّوهُ'", opsi: ["ثُمَّ فِي سِلْسِلَةٍ ذَرْعُهَا سَبْعُونَ ذِرَاعًا فَاسْلُكُوهُ", "إِنَّهُ كَانَ لَا يُؤْمِنُ بِاللَّهِ الْعَظِيمِ", "وَلَا يَحُضُّ عَلَىٰ طَعَامِ الْمِسْكِينِ", "فَلَيْسَ لَهُ الْيَوْمَ هَاهُنَا حَمِيمٌ"], jawabanBenar: "ثُمَّ فِي سِلْسِلَةٍ ذَرْعُهَا سَبْعُونَ ذِرَاعًا فَاسْلُكُوهُ" },
+        { pertanyaan: "Ayat ini punya rima 'Kalla' yang bisa tertukar. Lanjutkan: 'كَلَّا ۖ إِنَّهَا لَظَىٰ'", opsi: ["نَزَّاعَةً لِّلشَّوَىٰ", "تَدْعُو مَنْ أَدْبَرَ وَتَوَلَّىٰ", "وَجَمَعَ فَأَوْعَىٰ ۙ", "إِنَّ الْإِنسَانَ خُلِقَ هَلُوعًا"], jawabanBenar: "نَزَّاعَةً لِّلشَّوَىٰ" },
+        { pertanyaan: "Lanjutkan urutannya: 'نَزَّاعَةً لِّلشَّوَىٰ'", opsi: ["تَدْعُو مَنْ أَدْبَرَ وَتَوَلَّىٰ", "وَجَمَعَ فَأَوْعَىٰ ۙ", "إِنَّ الْإِنسَانَ خُلِقَ هَلُوعًا", "إِذَا مَسَّهُ الشَّرُّ جَزُوعًا"], jawabanBenar: "تَدْعُو مَنْ أَدْبَرَ وَتَوَلَّىٰ" },
+        { pertanyaan: "Lanjutkan ayat jebakan 'Kalla' di surat yang lain: 'كَلَّا ۖ بَل لَّا يَخَافُونَ الْآخِرَةَ'", opsi: ["كَلَّا إِنَّهُ تَذْكِرَةٌ", "فَمَن شَاءَ ذَكَرَهُ", "وَمَا يَذْكُرُونَ إِلَّا أَن يَشَاءَ اللَّهُ", "هُوَ أَهْلُ التَّقْوَىٰ وَأَهْلُ الْمَغْفِرَةِ"], jawabanBenar: "كَلَّا إِنَّهُ تَذْكِرَةٌ" },
+        { pertanyaan: "Lanjutkan urutannya: 'كَلَّا إِنَّهُ تَذْكِرَةٌ'", opsi: ["فَمَن شَاءَ ذَكَرَهُ", "وَمَا يَذْكُرُونَ إِلَّا أَن يَشَاءَ اللَّهُ", "هُوَ أَهْلُ التَّقْوَىٰ وَأَهْلُ الْمَغْفِرَةِ", "كَلَّا بَلْ تُحِبُّونَ الْعَاجِلَةَ"], jawabanBenar: "فَمَن شَاءَ ذَكَرَهُ" },
+        { pertanyaan: "Jangan tertukar dengan ayat surat Al-Insan! Lanjutkan ini: 'فَمَن شَاءَ ذَكَرَهُ'", opsi: ["وَمَا يَذْكُرُونَ إِلَّا أَن يَشَاءَ اللَّهُ ۚ هُوَ أَهْلُ التَّقْوَىٰ وَأَهْلُ الْمَغْفِرَةِ", "وَمَا تَشَاءُونَ إِلَّا أَن يَشَاءَ اللَّهُ ۚ إِنَّ اللَّهَ كَانَ عَلِيمًا حَكِيمًا", "إِنَّ هَٰذِهِ تَذْكِرَةٌ ۖ فَمَن شَاءَ اتَّخَذَ إِلَىٰ رَبِّهِ سَبِيلًا", "فَمَن شَاءَ اتَّخَذَ إِلَىٰ رَبِّهِ سَبِيلًا"], jawabanBenar: "وَمَا يَذْكُرُونَ إِلَّا أَن يَشَاءَ اللَّهُ ۚ هُوَ أَهْلُ التَّقْوَىٰ وَأَهْلُ الْمَغْفِرَةِ" },
+        { pertanyaan: "Nah, sekarang lanjutkan ayat ini: 'إِنَّ هَٰذِهِ تَذْكِرَةٌ ۖ فَمَن شَاءَ اتَّخَذَ إِلَىٰ رَبِّهِ سَبِيلًا'", opsi: ["وَمَا تَشَاءُونَ إِلَّا أَن يَشَاءَ اللَّهُ ۚ إِنَّ اللَّهَ كَانَ عَلِيمًا حَكِيمًا", "وَمَا يَذْكُرُونَ إِلَّا أَن يَشَاءَ اللَّهُ ۚ هُوَ أَهْلُ التَّقْوَىٰ وَأَهْلُ الْمَغْفِرَةِ", "يُدْخِلُ مَن يَشَاءُ فِي رَحْمَتِهِ ۚ وَالظَّالِمِينَ أَعَدَّ لَهُمْ عَذَابًا أَلِيمًا", "إِنَّ اللَّهَ غَفُورٌ رَّحِيمٌ"], jawabanBenar: "وَمَا تَشَاءُونَ إِلَّا أَن يَشَاءَ اللَّهُ ۚ إِنَّ اللَّهَ كَانَ عَلِيمًا حَكِيمًا" },
+        { pertanyaan: "Lanjutkan ayat jebakan 'Kalla' lagi: 'كَلَّا لَا وَزَرَ'", opsi: ["إِلَىٰ رَبِّكَ يَوْمَئِذٍ الْمُسْتَقَرُّ", "يُنَبَّأُ الْإِنسَانُ يَوْمَئِذٍ بِمَا قَدَّمَ وَأَخَّرَ", "بَلِ الْإِنسَانُ عَلَىٰ نَفْسِهِ بَصِيرَةٌ", "وَلَوْ أَلْقَىٰ مَعَاذِيرَهُ"], jawabanBenar: "إِلَىٰ رَبِّكَ يَوْمَئِذٍ الْمُسْتَقَرُّ" },
+        { pertanyaan: "Lanjutkan ayat 'Kalla' berurutan ini: 'كَلَّا إِذَا بَلَغَتِ التَّرَاقِيَ'", opsi: ["وَقِيلَ مَنْ ۜ رَاقٍ", "وَظَنَّ أَنَّهُ الْفِرَاقُ", "وَالْتَفَّتِ السَّاقُ بِالسَّاقِ", "إِلَىٰ رَبِّكَ يَوْمَئِذٍ الْمَسَاقُ"], jawabanBenar: "وَقِيلَ مَنْ ۜ رَاقٍ" },
+        { pertanyaan: "Lanjutkan urutannya: 'وَقِيلَ مَنْ ۜ رَاقٍ'", opsi: ["وَظَنَّ أَنَّهُ الْفِرَاقُ", "وَالْتَفَّتِ السَّاقُ بِالسَّاقِ", "إِلَىٰ رَبِّكَ يَوْمَئِذٍ الْمَسَاقُ", "فَلَا صَدَّقَ وَلَا صَلَّىٰ"], jawabanBenar: "وَظَنَّ أَنَّهُ الْفِرَاقُ" },
+        { pertanyaan: "Lanjutkan urutannya: 'وَظَنَّ أَنَّهُ الْفِرَاقُ'", opsi: ["وَالْتَفَّتِ السَّاقُ بِالسَّاقِ", "إِلَىٰ رَبِّكَ يَوْمَئِذٍ الْمَسَاقُ", "فَلَا صَدَّقَ وَلَا صَلَّىٰ", "وَلَٰكِن كَذَّبَ وَتَوَلَّىٰ"], jawabanBenar: "وَالْتَفَّتِ السَّاقُ بِالسَّاقِ" },
+        { pertanyaan: "Lanjutkan urutannya: 'وَالْتَفَّتِ السَّاقُ بِالسَّاقِ'", opsi: ["إِلَىٰ رَبِّكَ يَوْمَئِذٍ الْمَسَاقُ", "فَلَا صَدَّقَ وَلَا صَلَّىٰ", "وَلَٰكِن كَذَّبَ وَتَوَلَّىٰ", "ثُمَّ ذَهَبَ إِلَىٰ أَهْلِهِ يَتَمَطَّىٰ"], jawabanBenar: "إِلَىٰ رَبِّكَ يَوْمَئِذٍ الْمَسَاقُ" },
+        { pertanyaan: "Hati-hati rima yang mirip di surat lain! Lanjutkan: 'أَلَمْ نَخْلُقكُّم مِّن مَّاءٍ مَّهِينٍ'", opsi: ["فَجَعَلْنَاهُ فِي قَرَارٍ مَّكِينٍ", "فَجَعَلْنَاهُ سَمِيعًا بَصِيرًا", "إِلَىٰ قَدَرٍ مَّعْلُومٍ", "فَقَدَرْنَا فَنِعْمَ الْقَادِرُونَ"], jawabanBenar: "فَجَعَلْنَاهُ فِي قَرَارٍ مَّكِينٍ" },
+        { pertanyaan: "Bandingkan dengan surat sebelumnya! Lanjutkan: 'إِنَّا خَلَقْنَا الْإِنسَانَ مِن نُّطْفَةٍ أَمْشَاجٍ نَّبْتَلِيهِ...'", opsi: ["فَجَعَلْنَاهُ سَمِيعًا بَصِيرًا", "فَجَعَلْنَاهُ فِي قَرَارٍ مَّكِينٍ", "إِنَّا هَدَيْنَاهُ السَّبِيلَ إِمَّا شَاكِرًا وَإِمَّا كَفُورًا", "أَلَمْ نَخْلُقكُّم مِّن مَّاءٍ مَّهِينٍ"], jawabanBenar: "فَجَعَلْنَاهُ سَمِيعًا بَصِيرًا" },
+        { pertanyaan: "Lanjutkan ayat rima 'Tsumma' ini: 'أَوْلَىٰ لَكَ فَأَوْلَىٰ'", opsi: ["ثُمَّ أَوْلَىٰ لَكَ فَأَوْلَىٰ", "أَيَحْسَبُ الْإِنسَانُ أَن يُتْرَكَ سُدًى", "أَلَمْ يَكُ نُطْفَةً مِّن مَّنِيٍّ يُمْنَىٰ", "ثُمَّ كَانَ عَلَقَةً فَخَلَقَ فَسَوَّىٰ"], jawabanBenar: "ثُمَّ أَوْلَىٰ لَكَ فَأَوْلَىٰ" },
+        { pertanyaan: "Perhatikan rima 'Tsumma' lagi. Lanjutkan: 'ثُمَّ إِنَّكُمْ أَيُّهَا الضَّالُّونَ الْمُكَذِّبُونَ'", opsi: ["(Ini adalah ayat dari Juz 27 - Al-Waqiah, bukan Juz 29, abaikan)", "لَآكِلُونَ مِن شَجَرٍ مِّن زَقُّومٍ", "فَمَالِئُونَ مِنْهَا الْبُطُونَ", "فَشَارِبُونَ عَلَيْهِ مِنَ الْحَمِيمِ"], jawabanBenar: "لَآكِلُونَ مِن شَجَرٍ مِّن زَقُّومٍ" },
+        { pertanyaan: "Lanjutkan ayat jebakan di surat ini: 'انطَلِقُوا إِلَىٰ مَا كُنتُم بِهِ تُكَذِّبُونَ'", opsi: ["انطَلِقُوا إِلَىٰ ظِلٍّ ذِي ثَلَاثِ شُعَبٍ", "لَّا ظَلِيلٍ وَلَا يُغْنِي مِنَ اللَّهَبِ", "إِنَّهَا تَرْمِي بِشَرَرٍ كَالْقَصْرِ", "كَأَنَّهُ جِمَالَتٌ صُفْرٌ"], jawabanBenar: "انطَلِقُوا إِلَىٰ ظِلٍّ ذِي ثَلَاثِ شُعَبٍ" },
+        { pertanyaan: "Lanjutkan urutannya: 'انطَلِقُوا إِلَىٰ ظِلٍّ ذِي ثَلَاثِ شُعَبٍ'", opsi: ["لَّا ظَلِيلٍ وَلَا يُغْنِي مِنَ اللَّهَبِ", "إِنَّهَا تَرْمِي بِشَرَرٍ كَالْقَصْرِ", "كَأَنَّهُ جِمَالَتٌ صُفْرٌ", "وَيْلٌ يَوْمَئِذٍ لِّلْمُكَذِّبِينَ"], jawabanBenar: "لَّا ظَلِيلٍ وَلَا يُغْنِي مِنَ اللَّهَبِ" },
+        { pertanyaan: "Hati-hati akhirannya: 'وَمَا هُوَ إِلَّا ذِكْرٌ لِّلْعَالَمِينَ'", opsi: ["(Ini adalah akhir surat Al-Qalam)", "إِنْ هُوَ إِلَّا ذِكْرٌ لِّلْعَالَمِينَ", "لِمَن شَاءَ مِنكُمْ أَن يَسْتَقِيمَ", "وَمَا تَشَاءُونَ إِلَّا أَن يَشَاءَ اللَّهُ"], jawabanBenar: "(Ini adalah akhir surat Al-Qalam)" },
+        { pertanyaan: "Lanjutkan ayat ini: 'وَأَنَّهُ لَمَّا قَامَ عَبْدُ اللَّهِ يَدْعُوهُ كَادُوا يَكُونُونَ عَلَيْهِ لِبَدًا'", opsi: ["قُلْ إِنَّمَا أَدْعُو رَبِّي وَلَا أُشْرِكُ بِهِ أَحَدًا", "قُلْ إِنِّي لَا أَمْلِكُ لَكُمْ ضَرًّا وَلَا رَشَدًا", "قُلْ إِنِّي لَن يُجِيرَنِي مِنَ اللَّهِ أَحَدٌ", "وَلَنْ أَجِدَ مِن دُونِهِ مُلْتَحَدًا"], jawabanBenar: "قُلْ إِنَّمَا أَدْعُو رَبِّي وَلَا أُشْرِكُ بِهِ أَحَدًا" },
+        { pertanyaan: "Lanjutkan ayat rima ini: 'فَإِذَا نُقِرَ فِي النَّاقُورِ'", opsi: ["فَذَٰلِكَ يَوْمَئِذٍ يَوْمٌ عَسِيرٌ", "عَلَى الْكَافِرِينَ غَيْرُ يَسِيرٍ", "ذَرْنِي وَمَنْ خَلَقْتُ وَحِيدًا", "وَجَعَلْتُ لَهُ مَالًا مَّمْدُودًا"], jawabanBenar: "فَذَٰلِكَ يَوْمَئِذٍ يَوْمٌ عَسِيرٌ" },
+        { pertanyaan: "Lanjutkan urutannya: 'فَذَٰلِكَ يَوْمَئِذٍ يَوْمٌ عَسِيرٌ'", opsi: ["عَلَى الْكَافِرِينَ غَيْرُ يَسِيرٍ", "ذَرْنِي وَمَنْ خَلَقْتُ وَحِيدًا", "وَجَعَلْتُ لَهُ مَالًا مَّمْدُودًا", "وَبَنِينَ شُهُودًا"], jawabanBenar: "عَلَى الْكَافِرِينَ غَيْرُ يَسِيرٍ" },
+        { pertanyaan: "Lanjutkan ayat yang diakhiri dengan pertanyaan ini: 'فَبِأَيِّ حَدِيثٍ بَعْدَهُ يُؤْمِنُونَ'", opsi: ["(Ini adalah akhir surat)", "وَيْلٌ يَوْمَئِذٍ لِّلْمُكَذِّبِينَ", "إِنَّمَا تُوعَدُونَ لَوَاقِعٌ", "وَإِذَا قِيلَ لَهُمُ ارْكَعُوا لَا يَرْكَعُونَ"], jawabanBenar: "(Ini adalah akhir surat)" }
     ]
 };
 
@@ -259,17 +648,21 @@ const bankSoalJuz29 = {
 // proses simpan ke Firestore.
 // ==========================================
 window.kirimBackupKeSheet = function(data) {
-    if (!URL_BACKUP_SHEET || URL_BACKUP_SHEET.indexOf("GANTI_DENGAN_URL") !== -1) {
-        // Belum dikonfigurasi, lewati saja tanpa error
-        return;
+    try {
+        // typeof aman dipakai walau variabelnya belum pernah dideklarasikan
+        const url = (typeof URL_BACKUP_SHEET !== 'undefined') ? URL_BACKUP_SHEET : "";
+        if (!url || url.indexOf("GANTI_DENGAN_URL") !== -1) return; // belum dikonfigurasi
+        fetch(url, {
+            method: 'POST',
+            mode: 'no-cors',
+            body: JSON.stringify(data)
+        }).catch((err) => {
+            console.error("Gagal mengirim backup ke Google Sheets:", err);
+        });
+    } catch (err) {
+        // Backup tidak boleh sampai menggagalkan penyimpanan utama
+        console.error("Backup Google Sheets dilewati:", err);
     }
-    fetch(URL_BACKUP_SHEET, {
-        method: 'POST',
-        mode: 'no-cors',
-        body: JSON.stringify(data)
-    }).catch((err) => {
-        console.error("Gagal mengirim backup ke Google Sheets:", err);
-    });
 };
 
 // ==========================================
@@ -292,8 +685,31 @@ function ambilSejumlahSoal(arr, n) {
     return hasil.slice(0, n);
 }
 
-function bobotTingkatUntukLevel(level) {
-    const t = Math.max(0, Math.min(1, (level - 1) / 49)); // 0 di level 1, 1 di level 50
+// ==========================================
+// JUMLAH LEVEL MAKSIMAL PER JENIS KUIS
+// Bank soal Tajwid, Makharijul, dan Juz 30 cukup banyak variasinya
+// sehingga bisa memakai 50 level penuh. Bank soal Juz 29 baru berisi
+// soal sambung-ayat yang sudah diverifikasi ketat (lebih sedikit demi
+// menjaga keakuratan kutipan ayat), jadi levelnya dibuat lebih pendek
+// (1-25) agar tidak mengulang-ulang soal yang sama secara berlebihan
+// di level tinggi. PERBAIKAN: sebelumnya digit "50" ditulis tetap di
+// beberapa tempat (grid level, judul modal) padahal jumlah level per
+// jenis kuis bisa berbeda-beda — sekarang semuanya mengikuti nilai di
+// bawah ini.
+// ==========================================
+const MAKS_LEVEL_PER_JENIS = {
+    tajwid: 50,
+    makharijul: 50,
+    juz30: 50,
+    juz29: 25
+};
+function getMaksLevel(jenis) {
+    return MAKS_LEVEL_PER_JENIS[jenis] || 50;
+}
+
+function bobotTingkatUntukLevel(level, maksLevel) {
+    maksLevel = maksLevel || 50;
+    const t = Math.max(0, Math.min(1, (level - 1) / Math.max(1, maksLevel - 1))); // 0 di level 1, 1 di level maksimal
     let dasar, lanjut;
     if (t <= 0.5) {
         const tt = t / 0.5;
@@ -333,8 +749,8 @@ function hitungJumlahPerTingkat(bobot) {
     return hitung;
 }
 
-window.generateSoalUntukLevel = function(bank, level) {
-    const bobot = bobotTingkatUntukLevel(level);
+window.generateSoalUntukLevel = function(bank, level, maksLevel) {
+    const bobot = bobotTingkatUntukLevel(level, maksLevel);
     const jumlah = hitungJumlahPerTingkat(bobot);
     let soal = [];
     soal = soal.concat(ambilSejumlahSoal(bank.dasar, jumlah.dasar));
@@ -359,30 +775,107 @@ window.pilihLevel = function(jenis) {
         return;
     }
 
-    let namaKuis = "";
-    if(jenis === 'tajwid') namaKuis = "Kuis Hukum Tajwid";
-    if(jenis === 'makharijul') namaKuis = "Kuis Makharijul Huruf";
-    if(jenis === 'juz30') namaKuis = "Hafalan Juz 30";
-    if(jenis === 'juz29') namaKuis = "Hafalan Juz 29";
+    window.kembaliKeGridLevel(); // selalu mulai dari tampilan grid level
 
-    document.getElementById('judulModalLevel').innerText = "Pilih Level (1-50)\n" + namaKuis;
+    const nama = ambilNamaSantriAktif();
+    const sudahSiap = statusMuatLatihan === 'siap' && namaCacheLatihan === nama;
+    if (!sudahSiap && nama && nama !== "-") {
+        muatDataLatihan(nama).then(() => {
+            const grid = document.getElementById('panelGridLevel');
+            if (tempKuisPilihan === jenis && grid && !grid.classList.contains('hidden')) {
+                window.renderGridLevel();
+            }
+        });
+    }
+};
+
+window.kembaliKeGridLevel = function() {
+    const panelGrid = document.getElementById('panelGridLevel');
+    const panelDetail = document.getElementById('panelDetailLevel');
+    if (panelGrid) panelGrid.classList.remove('hidden');
+    if (panelDetail) panelDetail.classList.add('hidden');
+
+    const simbol = document.getElementById('simbolModalLevel');
+    if (simbol) simbol.innerText = 'psychology';
+
+    // Jumlah level mengikuti jenis kuisnya (lihat MAKS_LEVEL_PER_JENIS)
+    const maksLevel = getMaksLevel(tempKuisPilihan);
+    document.getElementById('judulModalLevel').innerText =
+        "Pilih Level (1-" + maksLevel + ")\n" + (NAMA_KUIS[tempKuisPilihan] || "");
 
     window.renderGridLevel();
 };
 
 window.renderGridLevel = function() {
     const grid = document.getElementById('gridLevelKuis');
+    const ringkasan = document.getElementById('ringkasanLevel');
     if (!grid) return;
     grid.innerHTML = '';
-    for (let i = 1; i <= 50; i++) {
+
+    const pesanGrid = (html) => {
+        grid.innerHTML = '<div class="col-span-5 py-6 text-xs font-semibold text-slate-400">' + html + '</div>';
+    };
+
+    const nama = ambilNamaSantriAktif();
+    if (!nama || nama === "-") {
+        if (ringkasan) ringkasan.textContent = "";
+        pesanGrid("Pilih santri terlebih dahulu agar progres level bisa tersimpan.");
+        return;
+    }
+    if (statusMuatLatihan === 'memuat' || namaCacheLatihan !== nama) {
+        if (ringkasan) ringkasan.textContent = "";
+        pesanGrid('<span class="animate-pulse text-blue-500 font-bold">Memuat progres level...</span>');
+        return;
+    }
+    if (statusMuatLatihan === 'gagal') {
+        if (ringkasan) ringkasan.textContent = "";
+        pesanGrid('<span class="text-rose-500 font-bold">Gagal memuat progres.</span><br>' +
+            '<button type="button" id="tombolUlangMuatLevel" class="mt-3 px-4 py-2 text-xs font-bold bg-blue-600 text-white rounded-lg active:scale-95">Coba lagi</button>');
+        const tb = document.getElementById('tombolUlangMuatLevel');
+        if (tb) tb.onclick = () => {
+            muatDataLatihan(nama, true).then(() => window.renderGridLevel());
+            window.renderGridLevel();
+        };
+        return;
+    }
+
+    const maksLevel = getMaksLevel(tempKuisPilihan);
+    const peta = petaProgress(tempKuisPilihan);
+
+    let jumlahLulus = 0;
+    let levelSaatIni = null; // level terbuka pertama yang belum lulus
+    for (let i = 1; i <= maksLevel; i++) {
+        const info = peta[i];
+        if (info && info.lulus) jumlahLulus++;
+        else if (levelTerbuka(peta, i) && levelSaatIni === null) levelSaatIni = i;
+    }
+    if (ringkasan) ringkasan.textContent = jumlahLulus + " / " + maksLevel + " level lulus";
+
+    for (let i = 1; i <= maksLevel; i++) {
+        const info = peta[i];
+        const terbuka = levelTerbuka(peta, i);
         const btn = document.createElement('button');
-        let warna = "bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200";
-        if (i > 33) warna = "bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200";
-        else if (i > 16) warna = "bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200";
         btn.type = "button";
-        btn.className = "aspect-square flex items-center justify-center text-xs sm:text-sm font-bold rounded-lg border transition-all active:scale-95 " + warna;
-        btn.innerText = i;
-        btn.onclick = () => window.mulaiKuisDariLevel(i);
+
+        let warna, sub = "";
+        if (!terbuka) {
+            warna = "bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200";
+            sub = '<span class="material-symbols-outlined text-[13px] leading-none mt-0.5">lock</span>';
+        } else if (info && info.lulus) {
+            warna = "bg-emerald-500 text-white border-emerald-600 hover:bg-emerald-600";
+            sub = '<span class="text-[9px] font-bold leading-none mt-0.5">' + info.terbaik + '</span>';
+        } else if (info) {
+            warna = "bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100";
+            sub = '<span class="text-[9px] font-bold leading-none mt-0.5">' + info.terbaik + '</span>';
+        } else {
+            warna = "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100";
+        }
+        if (i === levelSaatIni) warna += " ring-2 ring-blue-500 ring-offset-1";
+
+        btn.className = "aspect-square flex flex-col items-center justify-center text-xs sm:text-sm font-bold rounded-lg border transition-all active:scale-95 " + warna;
+        btn.innerHTML = '<span class="leading-none">' + i + '</span>' + sub;
+        btn.setAttribute('aria-label', "Level " + i + (terbuka ? "" : " (terkunci)"));
+        btn.onclick = () => window.tampilkanDetailLevel(i);
         grid.appendChild(btn);
     }
 };
@@ -391,7 +884,96 @@ window.tutupModalLevel = function() {
     document.getElementById('modalPilihLevel').classList.add('hidden');
 };
 
+// Popup detail level: nilai terbaik + riwayat pengerjaan level tersebut
+window.tampilkanDetailLevel = function(level) {
+    const jenis = tempKuisPilihan;
+    const maksLevel = getMaksLevel(jenis);
+    const peta = petaProgress(jenis);
+    const info = peta[level];
+    const terbuka = levelTerbuka(peta, level);
+
+    document.getElementById('panelGridLevel').classList.add('hidden');
+    document.getElementById('panelDetailLevel').classList.remove('hidden');
+    document.getElementById('judulModalLevel').innerText = "Level " + level + "\n" + (NAMA_KUIS[jenis] || "");
+    document.getElementById('simbolModalLevel').innerText = terbuka ? 'psychology' : 'lock';
+
+    const badge = document.getElementById('badgeTingkatLevel');
+    const tingkat = namaTingkatLevel(level, maksLevel);
+    const warnaTingkat = tingkat === "Lanjut" ? "bg-rose-50 text-rose-600 border-rose-100"
+        : (tingkat === "Menengah" ? "bg-amber-50 text-amber-600 border-amber-100" : "bg-emerald-50 text-emerald-600 border-emerald-100");
+    badge.className = "text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border mb-4 " + warnaTingkat;
+    badge.textContent = "Tingkat " + tingkat;
+
+    const boxRingkasan = document.getElementById('ringkasanDetailLevel');
+    const boxRiwayat = document.getElementById('riwayatDetailLevel');
+    const tombolMulai = document.getElementById('tombolMulaiLevel');
+
+    if (!terbuka) {
+        boxRingkasan.innerHTML = '';
+        boxRingkasan.classList.add('hidden');
+        boxRiwayat.innerHTML =
+            '<div class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs font-semibold text-slate-500 text-center">' +
+            'Level ini masih terkunci. Selesaikan <b>Level ' + (level - 1) + '</b> dengan maksimal ' + MAKS_SALAH_LULUS +
+            ' salah untuk membukanya.</div>';
+        tombolMulai.classList.add('hidden');
+        return;
+    }
+
+    boxRingkasan.classList.remove('hidden');
+    tombolMulai.classList.remove('hidden');
+
+    const kotak = (label, nilai, kelas) =>
+        '<div class="rounded-2xl border py-3 flex flex-col items-center ' + kelas + '">' +
+        '<span class="text-lg font-extrabold leading-tight">' + nilai + '</span>' +
+        '<span class="text-[10px] font-bold uppercase tracking-wide opacity-80">' + label + '</span></div>';
+
+    const status = info ? (info.lulus ? "Lulus" : "Belum") : "Baru";
+    const kelasStatus = info ? (info.lulus ? "bg-emerald-50 border-emerald-100 text-emerald-700" : "bg-rose-50 border-rose-100 text-rose-700")
+        : "bg-slate-50 border-slate-200 text-slate-500";
+    boxRingkasan.innerHTML =
+        kotak("Nilai Terbaik", info ? info.terbaik : "-", "bg-blue-50 border-blue-100 text-blue-700") +
+        kotak("Percobaan", info ? info.percobaan.length : 0, "bg-slate-50 border-slate-200 text-slate-700") +
+        kotak("Status", status, kelasStatus);
+
+    if (!info) {
+        boxRiwayat.innerHTML = '<p class="text-xs text-slate-400 font-medium text-center py-4">Belum pernah dikerjakan.<br>Syarat lulus: salah maksimal ' + MAKS_SALAH_LULUS + '.</p>';
+    } else {
+        let idxTerbaik = -1;
+        info.percobaan.forEach((rec, idx) => {
+            if ((rec.skor || 0) === info.terbaik && idxTerbaik === -1) idxTerbaik = idx;
+        });
+        let html = '<p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Riwayat pengerjaan</p>';
+        info.percobaan.forEach((rec, idx) => {
+            const ms = waktuRekam(rec);
+            const tgl = ms ? new Date(ms).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : "-";
+            const jam = ms ? new Date(ms).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : "";
+            const skor = rec.skor || 0;
+            let warnaSkor = "text-emerald-600 bg-emerald-50 border-emerald-100";
+            if (skor < 70) warnaSkor = "text-amber-600 bg-amber-50 border-amber-100";
+            if (skor < 50) warnaSkor = "text-rose-600 bg-rose-50 border-rose-100";
+            const benarSalah = (rec.benar !== undefined && rec.salah !== undefined)
+                ? '<span class="ml-2 text-slate-400">✓ ' + rec.benar + '  ✗ ' + rec.salah + '</span>' : "";
+            const tagTerbaik = idx === idxTerbaik
+                ? '<span class="ml-2 text-[9px] font-bold text-blue-600 bg-blue-50 border border-blue-100 rounded px-1.5 py-0.5">TERBAIK</span>' : "";
+            html += '<div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">' +
+                '<div class="flex flex-col text-left"><span class="text-xs font-bold text-slate-700">' + tgl + ' ' + jam + tagTerbaik + '</span>' +
+                '<span class="text-[10px] font-semibold text-slate-400 mt-0.5">' + (apakahLulus(rec) ? "Lulus" : "Belum lulus") + benarSalah + '</span></div>' +
+                '<div class="px-3 py-1.5 rounded-lg border font-extrabold text-sm ' + warnaSkor + '">' + skor + '</div></div>';
+        });
+        boxRiwayat.innerHTML = html;
+    }
+
+    tombolMulai.textContent = !info ? "Mulai Level" : (info.lulus ? "Perbaiki Nilai" : "Coba Lagi");
+    tombolMulai.onclick = () => window.mulaiKuisDariLevel(level);
+};
+
 window.mulaiKuisDariLevel = function(level) {
+    // Pengaman: level yang masih terkunci tidak boleh dimulai
+    if (!levelTerbuka(petaProgress(tempKuisPilihan), level)) {
+        window.tampilkanDetailLevel(level);
+        return;
+    }
+
     window.tutupModalLevel();
     jenisKuisSaatIni = tempKuisPilihan;
     levelKuisSaatIni = level;
@@ -402,7 +984,7 @@ window.mulaiKuisDariLevel = function(level) {
     if(jenisKuisSaatIni === 'juz30') sumberBankSoal = bankSoalJuz30;
     if(jenisKuisSaatIni === 'juz29') sumberBankSoal = bankSoalJuz29;
 
-    kuisAktif = window.generateSoalUntukLevel(sumberBankSoal, level);
+    kuisAktif = window.generateSoalUntukLevel(sumberBankSoal, level, getMaksLevel(jenisKuisSaatIni));
 
     if (!kuisAktif || kuisAktif.length === 0) {
         alert("Mohon maaf, soal untuk level ini belum tersedia.");
@@ -413,6 +995,8 @@ window.mulaiKuisDariLevel = function(level) {
     skorKuis = 0;
     jawabanBenarTotal = 0;
     jawabanSalahTotal = 0;
+    sesiKuis++;
+    soalSudahDijawab = false;
 
     // [PERBAIKAN ANTI-FREEZE]: Gunakan replaceState agar tidak menumpuk history modal
     // Sehingga saat kuis selesai, history.back() langsung menuju ke menu Latihan
@@ -430,6 +1014,7 @@ window.mulaiKuisDariLevel = function(level) {
 
 window.renderSoal = function() {
     const soal = kuisAktif[indexSoalSaatIni];
+    soalSudahDijawab = false;
 
     document.getElementById('indikatorSoal').innerText = `Soal ${indexSoalSaatIni + 1} / ${kuisAktif.length}`;
     document.getElementById('skorSementara').innerHTML = `Skor: ${Math.round(skorKuis)} <span class="text-emerald-500 ml-2">✓ ${jawabanBenarTotal}</span> <span class="text-rose-500 ml-1">✗ ${jawabanSalahTotal}</span>`;
@@ -447,33 +1032,109 @@ window.renderSoal = function() {
         btn.onclick = () => window.cekJawaban(pilihan, soal.jawabanBenar, btn);
         containerOpsi.appendChild(btn);
     });
+
+    mulaiTimerSoal(getWaktuPerSoal(jenisKuisSaatIni) * 1000);
 };
 
-window.cekJawaban = function(jawabanDipilih, jawabanBenar, elemenTombol) {
+// ==========================================
+// TIMER PER SOAL
+// Berbasis timestamp (bukan hitungan interval) supaya tetap akurat
+// walau browser menahan timer. Otomatis berhenti jika halaman kuis
+// ditinggalkan, dan di-pause saat tab/aplikasi disembunyikan.
+// ==========================================
+function hentikanTimerSoal() {
+    if (timerSoalId) { clearInterval(timerSoalId); timerSoalId = null; }
+    sisaWaktuTersimpan = null;
+}
+
+function gambarTimer(sisaMs, totalMs) {
+    const bar = document.getElementById('barTimerSoal');
+    const teks = document.getElementById('teksTimerSoal');
+    if (!bar || !teks) return;
+    const detik = Math.max(0, Math.ceil(sisaMs / 1000));
+    const rasio = Math.max(0, Math.min(1, sisaMs / totalMs));
+    let warna = "bg-emerald-500";
+    if (rasio <= 0.5) warna = "bg-amber-500";
+    if (rasio <= 0.25) warna = "bg-rose-500";
+    bar.className = "h-full rounded-full transition-[width] duration-100 ease-linear " + warna;
+    bar.style.width = (rasio * 100) + "%";
+    teks.textContent = detik + " dtk";
+    teks.className = "text-xs font-extrabold tabular-nums " + (rasio <= 0.25 ? "text-rose-600" : "text-slate-500");
+}
+
+function jalankanInterval(totalMs, sesi) {
+    if (timerSoalId) clearInterval(timerSoalId);
+    timerSoalId = setInterval(() => {
+        const areaKuis = document.getElementById('subPageAreaKuis');
+        // Kuis ditinggalkan (tombol Back, ganti halaman) -> hentikan diam-diam
+        if (sesi !== sesiKuis || !areaKuis || areaKuis.classList.contains('hidden')) {
+            hentikanTimerSoal();
+            return;
+        }
+        const sisa = batasWaktuSoal - Date.now();
+        gambarTimer(sisa, totalMs);
+        if (sisa <= 0) {
+            hentikanTimerSoal();
+            window.waktuHabis();
+        }
+    }, 100);
+}
+
+function mulaiTimerSoal(totalMs) {
+    hentikanTimerSoal();
+    batasWaktuSoal = Date.now() + totalMs;
+    window.__totalMsSoal = totalMs;
+    gambarTimer(totalMs, totalMs);
+    jalankanInterval(totalMs, sesiKuis);
+}
+
+document.addEventListener('visibilitychange', function() {
+    const areaKuis = document.getElementById('subPageAreaKuis');
+    const kuisBerjalan = areaKuis && !areaKuis.classList.contains('hidden') && !soalSudahDijawab && kuisAktif.length > 0;
+    if (document.hidden) {
+        if (timerSoalId && kuisBerjalan) {
+            sisaWaktuTersimpan = Math.max(0, batasWaktuSoal - Date.now());
+            clearInterval(timerSoalId);
+            timerSoalId = null;
+        }
+    } else if (sisaWaktuTersimpan !== null && kuisBerjalan) {
+        batasWaktuSoal = Date.now() + sisaWaktuTersimpan;
+        sisaWaktuTersimpan = null;
+        jalankanInterval(window.__totalMsSoal, sesiKuis);
+    }
+});
+
+// Proses satu soal selesai (dijawab atau waktu habis) lalu lanjut
+function selesaikanSoal(jawabanDipilih, jawabanBenar, elemenTombol) {
+    if (soalSudahDijawab) return;
+    soalSudahDijawab = true;
+    hentikanTimerSoal();
+    const sesi = sesiKuis;
+
     const semuaTombol = document.getElementById('opsiJawaban').querySelectorAll('button');
     semuaTombol.forEach(btn => btn.disabled = true); // Kunci agar tak diklik ganda
 
     const bobotPerSoal = 100 / kuisAktif.length;
+    const tandai = (btn, kelasBaru) => {
+        btn.classList.remove('bg-slate-50', 'text-slate-700', 'border-slate-200');
+        kelasBaru.forEach(k => btn.classList.add(k));
+    };
+    const tandaiBenar = () => semuaTombol.forEach(btn => {
+        if (btn.innerText === jawabanBenar) tandai(btn, ['bg-emerald-100', 'border-emerald-500', 'text-emerald-700']);
+    });
 
-    if (jawabanDipilih === jawabanBenar) {
+    if (elemenTombol && jawabanDipilih === jawabanBenar) {
         skorKuis += bobotPerSoal;
         jawabanBenarTotal++;
-        elemenTombol.classList.remove('bg-slate-50', 'text-slate-700', 'border-slate-200');
-        elemenTombol.classList.add('bg-emerald-100', 'border-emerald-500', 'text-emerald-700');
+        tandai(elemenTombol, ['bg-emerald-100', 'border-emerald-500', 'text-emerald-700']);
     } else {
         jawabanSalahTotal++;
-        elemenTombol.classList.remove('bg-slate-50', 'text-slate-700', 'border-slate-200');
-        elemenTombol.classList.add('bg-rose-100', 'border-rose-500', 'text-rose-700');
-
-        semuaTombol.forEach(btn => {
-            if (btn.innerText === jawabanBenar) {
-                btn.classList.remove('bg-slate-50', 'text-slate-700', 'border-slate-200');
-                btn.classList.add('bg-emerald-100', 'border-emerald-500', 'text-emerald-700');
-            }
-        });
+        if (elemenTombol) tandai(elemenTombol, ['bg-rose-100', 'border-rose-500', 'text-rose-700']);
+        tandaiBenar();
     }
 
     setTimeout(() => {
+        if (sesi !== sesiKuis) return; // kuis sudah ditinggalkan / diganti kuis baru
         indexSoalSaatIni++;
         if (indexSoalSaatIni < kuisAktif.length) {
             window.renderSoal();
@@ -481,72 +1142,124 @@ window.cekJawaban = function(jawabanDipilih, jawabanBenar, elemenTombol) {
             window.akhiriKuis();
         }
     }, 1500);
+}
+
+window.cekJawaban = function(jawabanDipilih, jawabanBenar, elemenTombol) {
+    selesaikanSoal(jawabanDipilih, jawabanBenar, elemenTombol);
 };
 
-window.akhiriKuis = function() {
-    // PERBAIKAN: jangan pakai .innerText di sini. Elemen #namaSantri ada di
-    // dalam #viewDashboard, yang sedang disembunyikan (display:none) selagi
-    // kita berada di halaman Latihan. .innerText SELALU mengembalikan ""
-    // untuk elemen yang tersembunyi, sehingga namaAnak selalu kosong dan
-    // fungsi ini berhenti (return) sebelum sempat menyimpan riwayat ke
-    // Firestore. Ambil nama dari variabel global santriAktif dulu (tidak
-    // bergantung pada tampilan/visibility), baru fallback ke textContent
-    // (yang tetap terbaca walau elemen tersembunyi, beda dengan innerText).
-    const elemenNamaSantri = document.getElementById('namaSantri');
-    const namaAnak = (window.santriAktif && window.santriAktif.nama)
-        ? window.santriAktif.nama
-        : (elemenNamaSantri ? elemenNamaSantri.textContent.replace('!', '').trim() : '');
+// Waktu habis: dihitung salah, jawaban benar ditampilkan
+window.waktuHabis = function() {
+    const soal = kuisAktif[indexSoalSaatIni];
+    if (!soal) return;
+    const teks = document.getElementById('teksTimerSoal');
+    if (teks) { teks.textContent = "Waktu habis"; teks.className = "text-xs font-extrabold text-rose-600"; }
+    selesaikanSoal(null, soal.jawabanBenar, null);
+};
 
-    skorKuis = Math.round(skorKuis);
-    if(skorKuis > 100) skorKuis = 100;
+// Simpan satu hasil kuis: cache lokal dulu (level berikutnya langsung terbuka),
+// lalu Firestore. Mengembalikan Promise.
+function simpanHasilKuis(namaAnak, jenis, level) {
+    const labelKuis = LABEL_JENIS[jenis] || "";
+    const db = firebase.firestore();
+    const ref = db.collection("latihan_santri").doc(); // id dibuat lebih dulu agar bisa dilacak
 
-    // Tampilkan popup hasil kuis bertema (menggantikan alert bawaan browser)
-    window.tampilkanHasilKuis({
-        level: levelKuisSaatIni,
-        skor: skorKuis,
-        benar: jawabanBenarTotal,
-        salah: jawabanSalahTotal
-    });
-
-    if (!namaAnak || namaAnak === "-" || namaAnak === "") {
-        return;
-    }
-
-    let labelKuis = "";
-    if(jenisKuisSaatIni === 'tajwid') labelKuis = "Hukum Tajwid";
-    if(jenisKuisSaatIni === 'makharijul') labelKuis = "Makharijul Huruf";
-    if(jenisKuisSaatIni === 'juz30') labelKuis = "Juz 30";
-    if(jenisKuisSaatIni === 'juz29') labelKuis = "Juz 29";
-
-    const dataUntukBackup = {
+    const dataSimpan = {
         nama: namaAnak,
         jenisKuis: labelKuis,
-        level: formatLabelLevel(levelKuisSaatIni),
+        level: level,
         skor: skorKuis,
         benar: jawabanBenarTotal,
         salah: jawabanSalahTotal
     };
 
-    // Kirim salinan data ke Google Sheets (backup), berjalan paralel
-    window.kirimBackupKeSheet(dataUntukBackup);
+    const catatanLokal = Object.assign({}, dataSimpan, { waktu: null, _waktuLokal: Date.now(), _id: ref.id });
+    rekamanTertunda.push(catatanLokal);
+    if (namaCacheLatihan === namaAnak) {
+        dataLatihanCache.push(catatanLokal);
+        perbaruiProgressMenu();
+    }
 
-    const db = firebase.firestore();
+    // Backup ke Google Sheets (paralel, tidak boleh menghalangi simpan utama)
+    window.kirimBackupKeSheet(Object.assign({}, dataSimpan, { level: formatLabelLevel(level) }));
 
-    // Simpan ke database berjalan secara Background
-    db.collection("latihan_santri").add({
-        nama: namaAnak,
-        jenisKuis: labelKuis,
-        level: levelKuisSaatIni,
+    const hapusTertunda = () => {
+        const i = rekamanTertunda.indexOf(catatanLokal);
+        if (i !== -1) rekamanTertunda.splice(i, 1);
+    };
+
+    return ref.set(Object.assign({}, dataSimpan, {
+        waktu: firebase.firestore.FieldValue.serverTimestamp()
+    })).then(() => {
+        hapusTertunda();
+        // Pastikan catatan tetap ada di cache walau ada muat-ulang yang menimpanya
+        if (namaCacheLatihan === namaAnak && !dataLatihanCache.some((r) => r._id === ref.id)) {
+            dataLatihanCache.push(catatanLokal);
+            perbaruiProgressMenu();
+        }
+    }).catch((error) => {
+        console.error("Gagal menyimpan nilai kuis:", error);
+        hapusTertunda();
+        const idx = dataLatihanCache.indexOf(catatanLokal);
+        if (idx !== -1) dataLatihanCache.splice(idx, 1);
+        perbaruiProgressMenu();
+        alert("Nilai gagal disimpan ke server. Periksa koneksi internet lalu coba lagi.\n\n(" + (error && error.code ? error.code : "error") + ")");
+    });
+}
+
+window.akhiriKuis = function() {
+    const namaAnak = ambilNamaSantriAktif();
+
+    skorKuis = Math.round(skorKuis);
+    if (skorKuis > 100) skorKuis = 100;
+
+    const jenis = jenisKuisSaatIni;
+    const level = levelKuisSaatIni;
+    const maksLevel = getMaksLevel(jenis);
+    const lulus = jawabanSalahTotal <= MAKS_SALAH_LULUS;
+
+    // Status SEBELUM percobaan ini dicatat (untuk info "level terbuka" & "nilai terbaik baru")
+    const petaSebelum = petaProgress(jenis);
+    const terbaikSebelumnya = petaSebelum[level] ? petaSebelum[level].terbaik : null;
+    const punyaBerikutnya = level < maksLevel;
+    const berikutnyaSudahTerbuka = punyaBerikutnya ? levelTerbuka(petaSebelum, level + 1) : false;
+
+    const infoHasil = {
+        level: level,
         skor: skorKuis,
         benar: jawabanBenarTotal,
         salah: jawabanSalahTotal,
-        waktu: firebase.firestore.FieldValue.serverTimestamp()
-    }).then(() => {
-        // Refresh tabel riwayat
-        window.loadRiwayatLatihan(namaAnak);
-    }).catch((error) => {
-        console.error("Gagal menyimpan nilai kuis:", error);
-    });
+        lulus: lulus,
+        punyaBerikutnya: punyaBerikutnya,
+        barusajaTerbuka: lulus && punyaBerikutnya && !berikutnyaSudahTerbuka,
+        terbaikSebelumnya: terbaikSebelumnya
+    };
+
+    // 1) SIMPAN DULU. Sebelumnya popup & backup dijalankan lebih dulu, sehingga
+    //    error sekecil apa pun di sana membuat penyimpanan tidak pernah dijalankan.
+    const namaValid = namaAnak && namaAnak !== "-";
+    if (namaValid) {
+        try {
+            simpanHasilKuis(namaAnak, jenis, level);
+        } catch (err) {
+            console.error("Gagal memulai penyimpanan nilai:", err);
+            alert("Nilai gagal disimpan: " + err.message);
+        }
+    }
+
+    // 2) Tampilkan popup hasil
+    try {
+        window.tampilkanHasilKuis(infoHasil);
+    } catch (err) {
+        console.error("Gagal menampilkan hasil kuis:", err);
+        alert("Kuis selesai! Skor: " + infoHasil.skor);
+        window.kembaliKeMenuLatihan();
+    }
+
+    // 3) Beri tahu jika nilai tidak bisa disimpan karena santri tidak terbaca
+    if (!namaValid) {
+        setTimeout(() => alert("Nilai TIDAK tersimpan karena data santri tidak terbaca. Silakan pilih santri / login ulang, lalu ulangi kuis."), 300);
+    }
 };
 
 // ==========================================
@@ -568,15 +1281,18 @@ window.tampilkanHasilKuis = function(hasil) {
         warnaIkon = "bg-rose-50 text-rose-500";
         iconName = "sentiment_dissatisfied";
         pesanMotivasi = "Jangan menyerah, ayo coba lagi ya!";
-    } else if (hasil.skor < 70) {
+    } else if (!hasil.lulus) {
         warnaIkon = "bg-amber-50 text-amber-500";
         iconName = "sentiment_neutral";
-        pesanMotivasi = "Sudah bagus, terus semangat berlatih!";
+        pesanMotivasi = "Sedikit lagi! Pelajari lagi lalu coba lagi ya.";
     }
 
     const ikonEl = document.getElementById('ikonHasilKuis');
     ikonEl.className = `w-20 h-20 rounded-full flex items-center justify-center mb-4 shadow-inner ${warnaIkon}`;
     document.getElementById('simbolHasilKuis').innerText = iconName;
+
+    const judulEl = document.getElementById('judulHasilKuis');
+    if (judulEl) judulEl.innerText = hasil.lulus ? "Alhamdulillah, Lulus!" : "Belum Lulus";
 
     document.getElementById('pesanMotivasiHasilKuis').innerText = pesanMotivasi;
     document.getElementById('levelHasilKuis').innerText = formatLabelLevel(hasil.level);
@@ -584,91 +1300,61 @@ window.tampilkanHasilKuis = function(hasil) {
     document.getElementById('benarHasilKuis').innerText = hasil.benar;
     document.getElementById('salahHasilKuis').innerText = hasil.salah;
 
+    // Kotak status kelulusan + info level berikutnya / nilai terbaik
+    const box = document.getElementById('statusLulusHasilKuis');
+    if (box) {
+        const baris = [];
+        let kelas;
+        if (hasil.lulus) {
+            kelas = "bg-emerald-50 border-emerald-200 text-emerald-700";
+            baris.push('<p class="font-extrabold">LULUS (salah ' + hasil.salah + ', maks. ' + MAKS_SALAH_LULUS + ')</p>');
+            if (hasil.punyaBerikutnya) {
+                baris.push('<p class="font-semibold mt-1">' + (hasil.barusajaTerbuka
+                    ? 'Level ' + (hasil.level + 1) + ' sekarang terbuka!'
+                    : 'Level ' + (hasil.level + 1) + ' sudah terbuka.') + '</p>');
+            } else {
+                baris.push('<p class="font-semibold mt-1">Semua level pada kuis ini sudah diselesaikan.</p>');
+            }
+        } else {
+            kelas = "bg-rose-50 border-rose-200 text-rose-700";
+            baris.push('<p class="font-extrabold">BELUM LULUS (salah ' + hasil.salah + ')</p>');
+            baris.push('<p class="font-semibold mt-1">Butuh maksimal ' + MAKS_SALAH_LULUS + ' salah untuk lanjut ke level berikutnya.</p>');
+        }
+        if (hasil.terbaikSebelumnya !== null && hasil.terbaikSebelumnya !== undefined) {
+            baris.push('<p class="font-semibold mt-1">' + (hasil.skor > hasil.terbaikSebelumnya
+                ? 'Nilai terbaik baru! Sebelumnya ' + hasil.terbaikSebelumnya + '.'
+                : 'Nilai terbaikmu tetap ' + hasil.terbaikSebelumnya + '.') + '</p>');
+        }
+        box.className = "w-full rounded-2xl border px-4 py-3 mb-5 text-xs text-center " + kelas;
+        box.innerHTML = baris.join('');
+    }
+
     modal.classList.remove('hidden');
 };
 
 window.tutupHasilKuis = function() {
     const modal = document.getElementById('modalHasilKuis');
     if (modal) modal.classList.add('hidden');
-    window.kembaliKeMenuLatihan();
+    window.kembaliKeMenuLatihan(true); // kembali ke menu lalu buka lagi daftar level
 };
 
-window.kembaliKeMenuLatihan = function() {
+window.kembaliKeMenuLatihan = function(bukaDaftarLevel) {
+    if (bukaDaftarLevel === true) {
+        const jenis = jenisKuisSaatIni;
+        // Tunggu popstate selesai (flag isPopStateRunning di index-logic.js reset setelah 100ms)
+        window.addEventListener('popstate', function() {
+            setTimeout(() => window.pilihLevel(jenis), 250);
+        }, { once: true });
+    }
     history.back();
 };
 
+// Dipertahankan agar pemanggil lama tetap jalan: memuat ulang data
+// latihan santri (dipakai untuk progres level & riwayat di popup level).
 window.loadRiwayatLatihan = function(namaAnak) {
-    document.getElementById('namaSantriLatihan').innerText = namaAnak;
-    const containerRiwayat = document.getElementById('containerRiwayatLatihan');
-
-    if (!namaAnak || namaAnak === "-") {
-        containerRiwayat.innerHTML = '<p class="text-xs text-slate-400 text-center py-4">Silakan pilih santri terlebih dahulu.</p>';
-        return;
-    }
-
-    containerRiwayat.innerHTML = '<p class="text-xs text-blue-500 font-bold text-center py-4 animate-pulse">Memuat data dari server...</p>';
-
-    const db = firebase.firestore();
-
-    // Catatan: sengaja TIDAK memakai .orderBy() di query Firestore agar tidak
-    // membutuhkan composite index (yang harus dibuat manual di Firebase Console).
-    // Pengurutan & pembatasan 10 data terbaru dilakukan di sisi browser (JS).
-    db.collection("latihan_santri")
-      .where("nama", "==", namaAnak)
-      .get()
-      .then((querySnapshot) => {
-          containerRiwayat.innerHTML = '';
-
-          if (querySnapshot.empty) {
-              containerRiwayat.innerHTML = '<p class="text-xs text-slate-400 font-medium text-center py-4">Belum ada riwayat kuis.</p>';
-              return;
-          }
-
-          let daftarRiwayat = [];
-          querySnapshot.forEach((doc) => {
-              daftarRiwayat.push(doc.data());
-          });
-
-          // Urutkan dari yang paling baru, lalu ambil 10 teratas
-          daftarRiwayat.sort((a, b) => {
-              const waktuA = (a.waktu && typeof a.waktu.toMillis === 'function') ? a.waktu.toMillis() : 0;
-              const waktuB = (b.waktu && typeof b.waktu.toMillis === 'function') ? b.waktu.toMillis() : 0;
-              return waktuB - waktuA;
-          });
-          daftarRiwayat = daftarRiwayat.slice(0, 10);
-
-          daftarRiwayat.forEach((data) => {
-              const tanggalText = (data.waktu && typeof data.waktu.toDate === 'function') ? data.waktu.toDate().toLocaleDateString('id-ID', {day: 'numeric', month: 'short', year: 'numeric'}) : "Baru saja";
-
-              let warnaSkor = "text-emerald-600 bg-emerald-50 border-emerald-100";
-              if (data.skor < 70) warnaSkor = "text-amber-600 bg-amber-50 border-amber-100";
-              if (data.skor < 50) warnaSkor = "text-rose-600 bg-rose-50 border-rose-100";
-
-              let infoTambahan = "";
-              if(data.benar !== undefined && data.salah !== undefined) {
-                  infoTambahan = `<span class="text-[9px] text-slate-400 ml-2">✓ ${data.benar}  ✗ ${data.salah}</span>`;
-              }
-
-              let labelLevel = data.level ? `<span class="text-[10px] font-bold text-slate-400 ml-1">(${formatLabelLevel(data.level)})</span>` : "";
-
-              const itemRiwayat = `
-                  <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                      <div class="flex flex-col">
-                          <span class="text-sm font-bold text-slate-700">${data.jenisKuis} ${labelLevel}</span>
-                          <span class="text-[10px] font-semibold text-slate-400 mt-0.5">${tanggalText} ${infoTambahan}</span>
-                      </div>
-                      <div class="px-3 py-1.5 rounded-lg border font-extrabold text-sm ${warnaSkor}">
-                          ${data.skor}
-                      </div>
-                  </div>
-              `;
-              containerRiwayat.innerHTML += itemRiwayat;
-          });
-      })
-      .catch((error) => {
-          console.error("Gagal memuat riwayat:", error);
-          containerRiwayat.innerHTML = '<p class="text-xs text-rose-500 font-medium text-center py-4">Gagal memuat riwayat: ' + error.message + '</p>';
-      });
+    const elNama = document.getElementById('namaSantriLatihan');
+    if (elNama) elNama.innerText = namaAnak || "";
+    return muatDataLatihan(namaAnak, true);
 };
 
 const oldNavigateTo = window.navigateTo;
@@ -678,13 +1364,7 @@ window.navigateTo = function(viewId) {
     }
 
     if (viewId === 'viewLatihan') {
-        // PERBAIKAN: sama seperti di akhiriKuis(), hindari .innerText karena
-        // #namaSantri berada di #viewDashboard yang sudah disembunyikan di
-        // titik ini (oldNavigateTo di atas sudah menyembunyikannya).
-        const elemenNamaSantri = document.getElementById('namaSantri');
-        const namaAnak = (window.santriAktif && window.santriAktif.nama)
-            ? window.santriAktif.nama
-            : (elemenNamaSantri ? elemenNamaSantri.textContent.replace('!', '').trim() : '');
+        const namaAnak = ambilNamaSantriAktif();
         window.loadRiwayatLatihan(namaAnak);
 
         document.getElementById('subPageAreaKuis').classList.add('hidden');
