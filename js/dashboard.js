@@ -2,7 +2,14 @@
 // 8. STATISTIK DASHBOARD
 // ==========================================
 function updateLiveDashboardStats() {
-    if (!santriAktif) return;
+    if (!santriAktif) {
+        const set = (id, t) => { const e = document.getElementById(id); if (e) e.innerText = t; };
+        set("totalSelesaiAyat", "0");
+        ["totalSelesaiUmmi", "totalLulusHijaiyah", "totalFasihTajwid"].forEach(id => set(id, "0"));
+        ["statCircleHafalan", "statCircleUmmi", "statCircleHijaiyah", "statCircleTajwid"].forEach(id => set(id, "Belum ada"));
+        if (typeof renderProgressChart === "function") renderProgressChart();
+        return;
+    }
 
     let hSelesai = 0;
     if (typeof databaseJuz !== 'undefined') {
@@ -175,7 +182,26 @@ function updateLiveDashboardStats() {
 // ==========================================================
 let myProgressChart = null, myUmmiChart = null, myHijaiyahChart = null, myTajwidChart = null; 
 
+// Tampilkan pesan kosong (bukan garis datar di 0) bila belum ada riwayat
+function toggleEmptyChart(kosong) {
+    ['progressChart','ummiChart','hijaiyahChart','tajwidChart'].forEach(id => {
+        const canvas = document.getElementById(id);
+        if (!canvas || !canvas.parentElement) return;
+        const parent = canvas.parentElement;
+        parent.querySelector('.chart-empty')?.remove();
+        canvas.classList.toggle('hidden', kosong);
+        if (kosong) {
+            parent.classList.add('relative');
+            const el = document.createElement('div');
+            el.className = 'chart-empty absolute inset-0 flex flex-col items-center justify-center text-center px-4';
+            el.innerHTML = '<span class="material-symbols-outlined text-3xl text-slate-300 mb-1">show_chart</span><p class="text-xs font-semibold text-slate-400">Belum ada riwayat perkembangan</p><p class="text-[11px] text-slate-400 mt-0.5">Grafik muncul setelah ada penilaian tersimpan</p>';
+            parent.appendChild(el);
+        }
+    });
+}
+
 function renderProgressChart() {
+    let kosong = false;
     let labelsTanggal = [];
     let dHafalan = [], cHafalan = [];
     let dUmmi = [], cUmmi = [];
@@ -206,6 +232,7 @@ function renderProgressChart() {
             dTajwid.push(item.skorTajwid || 0);   cTajwid.push(item.capaianTajwid || '-');
         });
     } else {
+        kosong = true;
         labelsTanggal = ['Belum ada'];
         dHafalan = [0]; cHafalan = ['-'];
         dUmmi = [0]; cUmmi = ['-'];
@@ -321,6 +348,7 @@ function renderProgressChart() {
     // ==========================================================
     // 3. RENDER 4 GRAFIK (BARIS INI YANG SEBELUMNYA TERHAPUS)
     // ==========================================================
+    toggleEmptyChart(kosong);
     myProgressChart = buatGrafik(myProgressChart, 'progressChart', labelsTanggal, dHafalan, cHafalan, '#9333ea', 'rgba(147, 51, 234, ', 'Ayat'); 
     myUmmiChart     = buatGrafik(myUmmiChart, 'ummiChart', labelsTanggal, dUmmi, cUmmi, '#2563eb', 'rgba(37, 99, 235, ', 'Hal'); 
     myHijaiyahChart = buatGrafik(myHijaiyahChart, 'hijaiyahChart', labelsTanggal, dHijaiyah, cHijaiyah, '#16a34a', 'rgba(22, 163, 74, ', 'Huruf'); 

@@ -1,0 +1,9 @@
+{
+  "name": "hasnan-private-app",
+  "private": true,
+  "scripts": {
+    "build:css": "tailwindcss -i ./src/input.css -o ./css/tailwind.css --minify",
+    "watch:css": "tailwindcss -i ./src/input.css -o ./css/tailwind.css --watch"
+  },
+  "devDependencies": { "tailwindcss": "^3.4.17" }
+}

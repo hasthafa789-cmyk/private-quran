@@ -236,43 +236,87 @@ window.renderRiwayatAbsensi = function() {
         return;
     }
 
-    let html = '';
-    for (let i = targetSantri.absensi.length - 1; i >= 0; i--) {
-        let item = targetSantri.absensi[i];
-        let btnHapus = (currentRole === "admin" || currentRole === "guru") 
-            ? `<button onclick="hapusDataAbsen('${targetSantri.nama}', ${i})" class="w-8 h-8 rounded-xl bg-rose-50 text-rose-500 flex items-center justify-center hover:bg-rose-100 transition active:scale-90 flex-shrink-0" title="Hapus"><span class="material-symbols-outlined text-sm">delete</span></button>` 
-            : '';
-        
-        html += `
-        <div class="flex items-center justify-between p-3.5 bg-slate-50 border border-slate-100 rounded-2xl mb-2 hover:border-blue-200 hover:shadow-sm transition-all group">
-            <div class="flex items-center gap-3 w-full overflow-hidden">
-                <div class="w-9 h-9 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                    <span class="material-symbols-outlined text-base">check_circle</span>
+    const BULAN = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+    const HARI = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+    const esc = (typeof escapeHtml === 'function') ? escapeHtml : (x => String(x));
+    const bisaHapus = (currentRole === "admin" || currentRole === "guru");
+
+    // Parse "28/9/2026, 07.45.12" (format bisa beda per perangkat) -> tanggal + jam
+    const daftar = targetSantri.absensi.map((item, idx) => {
+        const w = String(item.waktu || '');
+        const tgl = w.split(',')[0].split(' ')[0].trim();
+        const jam = w.replace(tgl, '').replace(/^[,\s]+/, '').replace(/\./g, ':').slice(0, 5);
+        const m = tgl.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+        return { idx, jam, d: m ? new Date(+m[3], +m[2] - 1, +m[1]) : null };
+    }).reverse(); // terbaru di atas
+
+    // Kelompokkan per bulan
+    const grup = []; const peta = {};
+    daftar.forEach(a => {
+        const key = a.d ? `${a.d.getFullYear()}-${a.d.getMonth()}` : 'lain';
+        if (!peta[key]) { peta[key] = { judul: a.d ? `${BULAN[a.d.getMonth()]} ${a.d.getFullYear()}` : 'Lainnya', items: [] }; grup.push(peta[key]); }
+        peta[key].items.push(a);
+    });
+
+    const sekarang = new Date();
+    const bulanIni = daftar.filter(a => a.d && a.d.getMonth() === sekarang.getMonth() && a.d.getFullYear() === sekarang.getFullYear()).length;
+
+    let html = `
+    <div class="flex items-center justify-between gap-3 mb-4 p-3.5 bg-blue-50 border border-blue-100 rounded-2xl">
+        <p class="text-sm font-extrabold text-slate-800 truncate">${esc(targetSantri.nama)}</p>
+        <div class="flex gap-2 flex-shrink-0 text-center">
+            <div><p class="text-lg font-extrabold text-blue-700 leading-none">${daftar.length}</p><p class="text-[11px] font-semibold text-slate-500">Total hadir</p></div>
+            <div class="pl-2 border-l border-blue-200"><p class="text-lg font-extrabold text-blue-700 leading-none">${bulanIni}</p><p class="text-[11px] font-semibold text-slate-500">Bulan ini</p></div>
+        </div>
+    </div>`;
+
+    grup.forEach(g => {
+        html += `<h4 class="sticky top-0 bg-white/95 backdrop-blur py-1.5 mb-1.5 text-xs font-extrabold text-slate-500 uppercase tracking-wide">${g.judul} · ${g.items.length} hadir</h4>`;
+        g.items.forEach(a => {
+            const label = a.d ? `${HARI[a.d.getDay()]}, ${a.d.getDate()} ${BULAN[a.d.getMonth()].slice(0, 3)}` : 'Tanggal tidak dikenal';
+            const btn = bisaHapus
+                ? `<button type="button" data-hapus="${a.idx}" data-nama="${esc(targetSantri.nama)}" aria-label="Hapus absen ${label}" class="w-11 h-11 rounded-xl bg-rose-50 text-rose-500 flex items-center justify-center hover:bg-rose-100 transition active:scale-90 flex-shrink-0"><span class="material-symbols-outlined text-lg">delete</span></button>`
+                : '';
+            html += `
+            <div class="flex items-center justify-between gap-3 p-3 bg-slate-50 border border-slate-100 rounded-2xl mb-2">
+                <div class="flex items-center gap-3 min-w-0">
+                    <span class="material-symbols-outlined text-emerald-500 flex-shrink-0">check_circle</span>
+                    <p class="text-sm font-bold text-slate-800 truncate">${label}</p>
                 </div>
-                <div class="truncate pr-2">
-                    <p class="text-sm font-extrabold text-slate-800 truncate">${targetSantri.nama}</p>
-                    <div class="flex items-center gap-2 mt-0.5">
-                        <span class="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100 shadow-sm">${item.waktu}</span>
-                    </div>
+                <div class="flex items-center gap-2 flex-shrink-0">
+                    <span class="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">${a.jam || '-'}</span>
+                    ${btn}
                 </div>
-            </div>
-            ${btnHapus}
-        </div>`;
-    }
+            </div>`;
+        });
+    });
     container.innerHTML = html;
+
+    if (!container.dataset.bound) {
+        container.dataset.bound = "1";
+        container.addEventListener('click', e => {
+            const b = e.target.closest('[data-hapus]');
+            if (b) window.hapusDataAbsen(b.dataset.nama, parseInt(b.dataset.hapus, 10));
+        });
+    }
 };
 
-window.hapusDataAbsen = function(namaPemilik, indexAsli) {
-    if (confirm("Yakin ingin menghapus riwayat absen ini?")) {
-        let target = dataSantri.find(s => s.nama === namaPemilik);
-        if (target && target.absensi) {
-            target.absensi.splice(indexAsli, 1);
-            db.collection("database_hafalan").doc(target.nama).set({ absensi: target.absensi }, { merge: true })
-            .then(() => {
-                if (window.santriAktif && window.santriAktif.nama === target.nama) window.santriAktif = target; 
-                window.renderRiwayatAbsensi();
-            }).catch(e => alert("Gagal menghapus data di Cloud."));
-        }
+window.hapusDataAbsen = async function(namaPemilik, indexAsli) {
+    const yakin = await tampilkanKonfirmasi("Hapus riwayat absen ini?", { ya: "Hapus", bahaya: true });
+    if (!yakin) return;
+    const target = dataSantri.find(s => s.nama === namaPemilik);
+    if (!target || !target.absensi) return;
+    const cadangan = target.absensi.slice();
+    target.absensi.splice(indexAsli, 1);
+    try {
+        await db.collection("database_hafalan").doc(target.nama).set({ absensi: target.absensi }, { merge: true });
+        if (window.santriAktif && window.santriAktif.nama === target.nama) window.santriAktif = target;
+        window.renderRiwayatAbsensi();
+        showToast("Riwayat absen dihapus", "sukses");
+    } catch (e) {
+        target.absensi = cadangan; // kembalikan jika gagal
+        window.renderRiwayatAbsensi();
+        showToast("Gagal menghapus data di Cloud", "error");
     }
 };
 
