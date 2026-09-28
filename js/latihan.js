@@ -22,6 +22,164 @@ let jenisKuisSaatIni = "";
 let levelKuisSaatIni = 1;
 let tempKuisPilihan = "";
 
+// ==========================================
+// ATURAN KUNCI LEVEL
+// Level 1 selalu terbuka. Level N+1 baru terbuka jika Level N sudah
+// LULUS (jumlah salah <= MAKS_SALAH_LULUS dari 10 soal) minimal sekali.
+// Ubah angka di bawah jika aturan kelulusan ingin diganti.
+// ==========================================
+const MAKS_SALAH_LULUS = 3;
+
+// ==========================================
+// BATAS WAKTU PER SOAL (detik)
+// Habis waktu = soal dihitung SALAH, jawaban benar ditampilkan,
+// lalu otomatis lanjut ke soal berikutnya. Ubah angkanya sesuai kebutuhan.
+// ==========================================
+const WAKTU_PER_SOAL = {
+    tajwid: 15,
+    makharijul: 15,
+    juz30: 15,   // sambung ayat: teks lebih panjang, waktu lebih longgar
+    juz29: 15
+};
+function getWaktuPerSoal(jenis) {
+    return WAKTU_PER_SOAL[jenis] || 20;
+}
+
+let sesiKuis = 0;            // naik tiap kuis dimulai; membatalkan callback kuis lama
+let soalSudahDijawab = false;
+let timerSoalId = null;
+let batasWaktuSoal = 0;      // timestamp (ms) kapan waktu soal habis
+let sisaWaktuTersimpan = null; // dipakai saat pause (tab disembunyikan)
+
+const DAFTAR_JENIS = ['tajwid', 'makharijul', 'juz30', 'juz29'];
+const NAMA_KUIS = {
+    tajwid: "Kuis Hukum Tajwid",
+    makharijul: "Kuis Makharijul Huruf",
+    juz30: "Hafalan Juz 30",
+    juz29: "Hafalan Juz 29"
+};
+// Label ini sama persis dengan yang disimpan di Firestore (field jenisKuis)
+const LABEL_JENIS = {
+    tajwid: "Hukum Tajwid",
+    makharijul: "Makharijul Huruf",
+    juz30: "Juz 30",
+    juz29: "Juz 29"
+};
+
+// Cache seluruh percobaan santri aktif (dibaca sekali dari Firestore,
+// lalu diperbarui lokal setiap selesai kuis)
+let dataLatihanCache = [];
+let namaCacheLatihan = "";
+let statusMuatLatihan = "belum"; // belum | memuat | siap | gagal
+
+function ambilNamaSantriAktif() {
+    // Jangan pakai .innerText: #namaSantri ada di view yang tersembunyi
+    const elemenNamaSantri = document.getElementById('namaSantri');
+    return (window.santriAktif && window.santriAktif.nama)
+        ? window.santriAktif.nama
+        : (elemenNamaSantri ? elemenNamaSantri.textContent.replace('!', '').trim() : '');
+}
+
+function kunciJenisDariLabel(label) {
+    for (let i = 0; i < DAFTAR_JENIS.length; i++) {
+        if (LABEL_JENIS[DAFTAR_JENIS[i]] === label) return DAFTAR_JENIS[i];
+    }
+    return null;
+}
+
+function angkaLevel(level) {
+    if (typeof level === 'number') return level;
+    const a = parseInt(String(level || "").replace(/[^0-9]/g, ""), 10);
+    return isNaN(a) ? null : a;
+}
+
+function waktuRekam(rec) {
+    if (rec.waktu && typeof rec.waktu.toMillis === 'function') return rec.waktu.toMillis();
+    if (rec._waktuLokal) return rec._waktuLokal;
+    return 0;
+}
+
+function apakahLulus(rec) {
+    if (typeof rec.salah === 'number') return rec.salah <= MAKS_SALAH_LULUS;
+    // data lama tanpa jumlah salah: 10 soal, jadi skor >= 70 setara salah <= 3
+    return (rec.skor || 0) >= 100 - MAKS_SALAH_LULUS * 10;
+}
+
+// Peta progres per level untuk satu jenis kuis:
+// { [level]: { percobaan: [...terbaru dulu], terbaik: skor tertinggi, lulus: bool } }
+function petaProgress(jenis) {
+    const peta = {};
+    dataLatihanCache.forEach((rec) => {
+        if (kunciJenisDariLabel(rec.jenisKuis) !== jenis) return;
+        const lv = angkaLevel(rec.level);
+        if (!lv) return;
+        if (!peta[lv]) peta[lv] = { percobaan: [], terbaik: 0, lulus: false };
+        peta[lv].percobaan.push(rec);
+        if ((rec.skor || 0) > peta[lv].terbaik) peta[lv].terbaik = rec.skor || 0;
+        if (apakahLulus(rec)) peta[lv].lulus = true;
+    });
+    Object.keys(peta).forEach((lv) => {
+        peta[lv].percobaan.sort((a, b) => waktuRekam(b) - waktuRekam(a));
+    });
+    return peta;
+}
+
+function levelTerbuka(peta, level) {
+    return level === 1 || !!(peta[level - 1] && peta[level - 1].lulus);
+}
+
+function namaTingkatLevel(level, maksLevel) {
+    if (level > maksLevel * 0.66) return "Lanjut";
+    if (level > maksLevel * 0.33) return "Menengah";
+    return "Dasar";
+}
+
+function perbaruiProgressMenu() {
+    DAFTAR_JENIS.forEach((jenis) => {
+        const el = document.getElementById('progresLatihan-' + jenis);
+        if (!el) return;
+        if (statusMuatLatihan !== 'siap') { el.textContent = ""; return; }
+        const peta = petaProgress(jenis);
+        const maks = getMaksLevel(jenis);
+        let lulus = 0;
+        for (let i = 1; i <= maks; i++) { if (peta[i] && peta[i].lulus) lulus++; }
+        el.textContent = lulus + " / " + maks + " level lulus";
+    });
+}
+
+function muatDataLatihan(namaAnak, paksa) {
+    if (!namaAnak || namaAnak === "-") {
+        dataLatihanCache = [];
+        namaCacheLatihan = "";
+        statusMuatLatihan = "belum";
+        perbaruiProgressMenu();
+        return Promise.resolve();
+    }
+    if (!paksa && statusMuatLatihan === 'siap' && namaCacheLatihan === namaAnak) {
+        return Promise.resolve();
+    }
+    if (namaCacheLatihan !== namaAnak) dataLatihanCache = [];
+    namaCacheLatihan = namaAnak;
+    statusMuatLatihan = "memuat";
+
+    // Tanpa .orderBy() agar tidak butuh composite index; pengurutan di sisi JS.
+    return firebase.firestore().collection("latihan_santri")
+        .where("nama", "==", namaAnak)
+        .get()
+        .then((snap) => {
+            if (namaCacheLatihan !== namaAnak) return; // santri sudah berganti
+            const arr = [];
+            snap.forEach((doc) => arr.push(doc.data()));
+            dataLatihanCache = arr;
+            statusMuatLatihan = "siap";
+            perbaruiProgressMenu();
+        })
+        .catch((err) => {
+            console.error("Gagal memuat data latihan:", err);
+            if (namaCacheLatihan === namaAnak) statusMuatLatihan = "gagal";
+        });
+}
+
 // Format level (angka 1-50, atau data lama "level1/2/3") jadi label "Level N"
 function formatLabelLevel(level) {
     if (typeof level === 'number') return "Level " + level;
@@ -362,34 +520,107 @@ window.pilihLevel = function(jenis) {
         return;
     }
 
-    let namaKuis = "";
-    if(jenis === 'tajwid') namaKuis = "Kuis Hukum Tajwid";
-    if(jenis === 'makharijul') namaKuis = "Kuis Makharijul Huruf";
-    if(jenis === 'juz30') namaKuis = "Hafalan Juz 30";
-    if(jenis === 'juz29') namaKuis = "Hafalan Juz 29";
+    window.kembaliKeGridLevel(); // selalu mulai dari tampilan grid level
 
-    // PERBAIKAN: jumlah level mengikuti jenis kuisnya (lihat MAKS_LEVEL_PER_JENIS),
-    // tidak lagi ditulis tetap "1-50" untuk semua jenis kuis.
-    const maksLevel = getMaksLevel(jenis);
-    document.getElementById('judulModalLevel').innerText = "Pilih Level (1-" + maksLevel + ")\n" + namaKuis;
+    const nama = ambilNamaSantriAktif();
+    const sudahSiap = statusMuatLatihan === 'siap' && namaCacheLatihan === nama;
+    if (!sudahSiap && nama && nama !== "-") {
+        muatDataLatihan(nama).then(() => {
+            const grid = document.getElementById('panelGridLevel');
+            if (tempKuisPilihan === jenis && grid && !grid.classList.contains('hidden')) {
+                window.renderGridLevel();
+            }
+        });
+    }
+};
+
+window.kembaliKeGridLevel = function() {
+    const panelGrid = document.getElementById('panelGridLevel');
+    const panelDetail = document.getElementById('panelDetailLevel');
+    if (panelGrid) panelGrid.classList.remove('hidden');
+    if (panelDetail) panelDetail.classList.add('hidden');
+
+    const simbol = document.getElementById('simbolModalLevel');
+    if (simbol) simbol.innerText = 'psychology';
+
+    // Jumlah level mengikuti jenis kuisnya (lihat MAKS_LEVEL_PER_JENIS)
+    const maksLevel = getMaksLevel(tempKuisPilihan);
+    document.getElementById('judulModalLevel').innerText =
+        "Pilih Level (1-" + maksLevel + ")\n" + (NAMA_KUIS[tempKuisPilihan] || "");
 
     window.renderGridLevel();
 };
 
 window.renderGridLevel = function() {
     const grid = document.getElementById('gridLevelKuis');
+    const ringkasan = document.getElementById('ringkasanLevel');
     if (!grid) return;
     grid.innerHTML = '';
+
+    const pesanGrid = (html) => {
+        grid.innerHTML = '<div class="col-span-5 py-6 text-xs font-semibold text-slate-400">' + html + '</div>';
+    };
+
+    const nama = ambilNamaSantriAktif();
+    if (!nama || nama === "-") {
+        if (ringkasan) ringkasan.textContent = "";
+        pesanGrid("Pilih santri terlebih dahulu agar progres level bisa tersimpan.");
+        return;
+    }
+    if (statusMuatLatihan === 'memuat' || namaCacheLatihan !== nama) {
+        if (ringkasan) ringkasan.textContent = "";
+        pesanGrid('<span class="animate-pulse text-blue-500 font-bold">Memuat progres level...</span>');
+        return;
+    }
+    if (statusMuatLatihan === 'gagal') {
+        if (ringkasan) ringkasan.textContent = "";
+        pesanGrid('<span class="text-rose-500 font-bold">Gagal memuat progres.</span><br>' +
+            '<button type="button" id="tombolUlangMuatLevel" class="mt-3 px-4 py-2 text-xs font-bold bg-blue-600 text-white rounded-lg active:scale-95">Coba lagi</button>');
+        const tb = document.getElementById('tombolUlangMuatLevel');
+        if (tb) tb.onclick = () => {
+            muatDataLatihan(nama, true).then(() => window.renderGridLevel());
+            window.renderGridLevel();
+        };
+        return;
+    }
+
     const maksLevel = getMaksLevel(tempKuisPilihan);
+    const peta = petaProgress(tempKuisPilihan);
+
+    let jumlahLulus = 0;
+    let levelSaatIni = null; // level terbuka pertama yang belum lulus
     for (let i = 1; i <= maksLevel; i++) {
+        const info = peta[i];
+        if (info && info.lulus) jumlahLulus++;
+        else if (levelTerbuka(peta, i) && levelSaatIni === null) levelSaatIni = i;
+    }
+    if (ringkasan) ringkasan.textContent = jumlahLulus + " / " + maksLevel + " level lulus";
+
+    for (let i = 1; i <= maksLevel; i++) {
+        const info = peta[i];
+        const terbuka = levelTerbuka(peta, i);
         const btn = document.createElement('button');
-        let warna = "bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200";
-        if (i > maksLevel * 0.66) warna = "bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200";
-        else if (i > maksLevel * 0.33) warna = "bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200";
         btn.type = "button";
-        btn.className = "aspect-square flex items-center justify-center text-xs sm:text-sm font-bold rounded-lg border transition-all active:scale-95 " + warna;
-        btn.innerText = i;
-        btn.onclick = () => window.mulaiKuisDariLevel(i);
+
+        let warna, sub = "";
+        if (!terbuka) {
+            warna = "bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200";
+            sub = '<span class="material-symbols-outlined text-[13px] leading-none mt-0.5">lock</span>';
+        } else if (info && info.lulus) {
+            warna = "bg-emerald-500 text-white border-emerald-600 hover:bg-emerald-600";
+            sub = '<span class="text-[9px] font-bold leading-none mt-0.5">' + info.terbaik + '</span>';
+        } else if (info) {
+            warna = "bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100";
+            sub = '<span class="text-[9px] font-bold leading-none mt-0.5">' + info.terbaik + '</span>';
+        } else {
+            warna = "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100";
+        }
+        if (i === levelSaatIni) warna += " ring-2 ring-blue-500 ring-offset-1";
+
+        btn.className = "aspect-square flex flex-col items-center justify-center text-xs sm:text-sm font-bold rounded-lg border transition-all active:scale-95 " + warna;
+        btn.innerHTML = '<span class="leading-none">' + i + '</span>' + sub;
+        btn.setAttribute('aria-label', "Level " + i + (terbuka ? "" : " (terkunci)"));
+        btn.onclick = () => window.tampilkanDetailLevel(i);
         grid.appendChild(btn);
     }
 };
@@ -398,7 +629,96 @@ window.tutupModalLevel = function() {
     document.getElementById('modalPilihLevel').classList.add('hidden');
 };
 
+// Popup detail level: nilai terbaik + riwayat pengerjaan level tersebut
+window.tampilkanDetailLevel = function(level) {
+    const jenis = tempKuisPilihan;
+    const maksLevel = getMaksLevel(jenis);
+    const peta = petaProgress(jenis);
+    const info = peta[level];
+    const terbuka = levelTerbuka(peta, level);
+
+    document.getElementById('panelGridLevel').classList.add('hidden');
+    document.getElementById('panelDetailLevel').classList.remove('hidden');
+    document.getElementById('judulModalLevel').innerText = "Level " + level + "\n" + (NAMA_KUIS[jenis] || "");
+    document.getElementById('simbolModalLevel').innerText = terbuka ? 'psychology' : 'lock';
+
+    const badge = document.getElementById('badgeTingkatLevel');
+    const tingkat = namaTingkatLevel(level, maksLevel);
+    const warnaTingkat = tingkat === "Lanjut" ? "bg-rose-50 text-rose-600 border-rose-100"
+        : (tingkat === "Menengah" ? "bg-amber-50 text-amber-600 border-amber-100" : "bg-emerald-50 text-emerald-600 border-emerald-100");
+    badge.className = "text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border mb-4 " + warnaTingkat;
+    badge.textContent = "Tingkat " + tingkat;
+
+    const boxRingkasan = document.getElementById('ringkasanDetailLevel');
+    const boxRiwayat = document.getElementById('riwayatDetailLevel');
+    const tombolMulai = document.getElementById('tombolMulaiLevel');
+
+    if (!terbuka) {
+        boxRingkasan.innerHTML = '';
+        boxRingkasan.classList.add('hidden');
+        boxRiwayat.innerHTML =
+            '<div class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs font-semibold text-slate-500 text-center">' +
+            'Level ini masih terkunci. Selesaikan <b>Level ' + (level - 1) + '</b> dengan maksimal ' + MAKS_SALAH_LULUS +
+            ' salah untuk membukanya.</div>';
+        tombolMulai.classList.add('hidden');
+        return;
+    }
+
+    boxRingkasan.classList.remove('hidden');
+    tombolMulai.classList.remove('hidden');
+
+    const kotak = (label, nilai, kelas) =>
+        '<div class="rounded-2xl border py-3 flex flex-col items-center ' + kelas + '">' +
+        '<span class="text-lg font-extrabold leading-tight">' + nilai + '</span>' +
+        '<span class="text-[10px] font-bold uppercase tracking-wide opacity-80">' + label + '</span></div>';
+
+    const status = info ? (info.lulus ? "Lulus" : "Belum") : "Baru";
+    const kelasStatus = info ? (info.lulus ? "bg-emerald-50 border-emerald-100 text-emerald-700" : "bg-rose-50 border-rose-100 text-rose-700")
+        : "bg-slate-50 border-slate-200 text-slate-500";
+    boxRingkasan.innerHTML =
+        kotak("Nilai Terbaik", info ? info.terbaik : "-", "bg-blue-50 border-blue-100 text-blue-700") +
+        kotak("Percobaan", info ? info.percobaan.length : 0, "bg-slate-50 border-slate-200 text-slate-700") +
+        kotak("Status", status, kelasStatus);
+
+    if (!info) {
+        boxRiwayat.innerHTML = '<p class="text-xs text-slate-400 font-medium text-center py-4">Belum pernah dikerjakan.<br>Syarat lulus: salah maksimal ' + MAKS_SALAH_LULUS + '.</p>';
+    } else {
+        let idxTerbaik = -1;
+        info.percobaan.forEach((rec, idx) => {
+            if ((rec.skor || 0) === info.terbaik && idxTerbaik === -1) idxTerbaik = idx;
+        });
+        let html = '<p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Riwayat pengerjaan</p>';
+        info.percobaan.forEach((rec, idx) => {
+            const ms = waktuRekam(rec);
+            const tgl = ms ? new Date(ms).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : "-";
+            const jam = ms ? new Date(ms).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : "";
+            const skor = rec.skor || 0;
+            let warnaSkor = "text-emerald-600 bg-emerald-50 border-emerald-100";
+            if (skor < 70) warnaSkor = "text-amber-600 bg-amber-50 border-amber-100";
+            if (skor < 50) warnaSkor = "text-rose-600 bg-rose-50 border-rose-100";
+            const benarSalah = (rec.benar !== undefined && rec.salah !== undefined)
+                ? '<span class="ml-2 text-slate-400">✓ ' + rec.benar + '  ✗ ' + rec.salah + '</span>' : "";
+            const tagTerbaik = idx === idxTerbaik
+                ? '<span class="ml-2 text-[9px] font-bold text-blue-600 bg-blue-50 border border-blue-100 rounded px-1.5 py-0.5">TERBAIK</span>' : "";
+            html += '<div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">' +
+                '<div class="flex flex-col text-left"><span class="text-xs font-bold text-slate-700">' + tgl + ' ' + jam + tagTerbaik + '</span>' +
+                '<span class="text-[10px] font-semibold text-slate-400 mt-0.5">' + (apakahLulus(rec) ? "Lulus" : "Belum lulus") + benarSalah + '</span></div>' +
+                '<div class="px-3 py-1.5 rounded-lg border font-extrabold text-sm ' + warnaSkor + '">' + skor + '</div></div>';
+        });
+        boxRiwayat.innerHTML = html;
+    }
+
+    tombolMulai.textContent = !info ? "Mulai Level" : (info.lulus ? "Perbaiki Nilai" : "Coba Lagi");
+    tombolMulai.onclick = () => window.mulaiKuisDariLevel(level);
+};
+
 window.mulaiKuisDariLevel = function(level) {
+    // Pengaman: level yang masih terkunci tidak boleh dimulai
+    if (!levelTerbuka(petaProgress(tempKuisPilihan), level)) {
+        window.tampilkanDetailLevel(level);
+        return;
+    }
+
     window.tutupModalLevel();
     jenisKuisSaatIni = tempKuisPilihan;
     levelKuisSaatIni = level;
@@ -420,6 +740,8 @@ window.mulaiKuisDariLevel = function(level) {
     skorKuis = 0;
     jawabanBenarTotal = 0;
     jawabanSalahTotal = 0;
+    sesiKuis++;
+    soalSudahDijawab = false;
 
     // [PERBAIKAN ANTI-FREEZE]: Gunakan replaceState agar tidak menumpuk history modal
     // Sehingga saat kuis selesai, history.back() langsung menuju ke menu Latihan
@@ -437,6 +759,7 @@ window.mulaiKuisDariLevel = function(level) {
 
 window.renderSoal = function() {
     const soal = kuisAktif[indexSoalSaatIni];
+    soalSudahDijawab = false;
 
     document.getElementById('indikatorSoal').innerText = `Soal ${indexSoalSaatIni + 1} / ${kuisAktif.length}`;
     document.getElementById('skorSementara').innerHTML = `Skor: ${Math.round(skorKuis)} <span class="text-emerald-500 ml-2">✓ ${jawabanBenarTotal}</span> <span class="text-rose-500 ml-1">✗ ${jawabanSalahTotal}</span>`;
@@ -454,33 +777,109 @@ window.renderSoal = function() {
         btn.onclick = () => window.cekJawaban(pilihan, soal.jawabanBenar, btn);
         containerOpsi.appendChild(btn);
     });
+
+    mulaiTimerSoal(getWaktuPerSoal(jenisKuisSaatIni) * 1000);
 };
 
-window.cekJawaban = function(jawabanDipilih, jawabanBenar, elemenTombol) {
+// ==========================================
+// TIMER PER SOAL
+// Berbasis timestamp (bukan hitungan interval) supaya tetap akurat
+// walau browser menahan timer. Otomatis berhenti jika halaman kuis
+// ditinggalkan, dan di-pause saat tab/aplikasi disembunyikan.
+// ==========================================
+function hentikanTimerSoal() {
+    if (timerSoalId) { clearInterval(timerSoalId); timerSoalId = null; }
+    sisaWaktuTersimpan = null;
+}
+
+function gambarTimer(sisaMs, totalMs) {
+    const bar = document.getElementById('barTimerSoal');
+    const teks = document.getElementById('teksTimerSoal');
+    if (!bar || !teks) return;
+    const detik = Math.max(0, Math.ceil(sisaMs / 1000));
+    const rasio = Math.max(0, Math.min(1, sisaMs / totalMs));
+    let warna = "bg-emerald-500";
+    if (rasio <= 0.5) warna = "bg-amber-500";
+    if (rasio <= 0.25) warna = "bg-rose-500";
+    bar.className = "h-full rounded-full transition-[width] duration-100 ease-linear " + warna;
+    bar.style.width = (rasio * 100) + "%";
+    teks.textContent = detik + " dtk";
+    teks.className = "text-xs font-extrabold tabular-nums " + (rasio <= 0.25 ? "text-rose-600" : "text-slate-500");
+}
+
+function jalankanInterval(totalMs, sesi) {
+    if (timerSoalId) clearInterval(timerSoalId);
+    timerSoalId = setInterval(() => {
+        const areaKuis = document.getElementById('subPageAreaKuis');
+        // Kuis ditinggalkan (tombol Back, ganti halaman) -> hentikan diam-diam
+        if (sesi !== sesiKuis || !areaKuis || areaKuis.classList.contains('hidden')) {
+            hentikanTimerSoal();
+            return;
+        }
+        const sisa = batasWaktuSoal - Date.now();
+        gambarTimer(sisa, totalMs);
+        if (sisa <= 0) {
+            hentikanTimerSoal();
+            window.waktuHabis();
+        }
+    }, 100);
+}
+
+function mulaiTimerSoal(totalMs) {
+    hentikanTimerSoal();
+    batasWaktuSoal = Date.now() + totalMs;
+    window.__totalMsSoal = totalMs;
+    gambarTimer(totalMs, totalMs);
+    jalankanInterval(totalMs, sesiKuis);
+}
+
+document.addEventListener('visibilitychange', function() {
+    const areaKuis = document.getElementById('subPageAreaKuis');
+    const kuisBerjalan = areaKuis && !areaKuis.classList.contains('hidden') && !soalSudahDijawab && kuisAktif.length > 0;
+    if (document.hidden) {
+        if (timerSoalId && kuisBerjalan) {
+            sisaWaktuTersimpan = Math.max(0, batasWaktuSoal - Date.now());
+            clearInterval(timerSoalId);
+            timerSoalId = null;
+        }
+    } else if (sisaWaktuTersimpan !== null && kuisBerjalan) {
+        batasWaktuSoal = Date.now() + sisaWaktuTersimpan;
+        sisaWaktuTersimpan = null;
+        jalankanInterval(window.__totalMsSoal, sesiKuis);
+    }
+});
+
+// Proses satu soal selesai (dijawab atau waktu habis) lalu lanjut
+function selesaikanSoal(jawabanDipilih, jawabanBenar, elemenTombol) {
+    if (soalSudahDijawab) return;
+    soalSudahDijawab = true;
+    hentikanTimerSoal();
+    const sesi = sesiKuis;
+
     const semuaTombol = document.getElementById('opsiJawaban').querySelectorAll('button');
     semuaTombol.forEach(btn => btn.disabled = true); // Kunci agar tak diklik ganda
 
     const bobotPerSoal = 100 / kuisAktif.length;
+    const tandai = (btn, kelasBaru) => {
+        btn.classList.remove('bg-slate-50', 'text-slate-700', 'border-slate-200');
+        kelasBaru.forEach(k => btn.classList.add(k));
+    };
+    const tandaiBenar = () => semuaTombol.forEach(btn => {
+        if (btn.innerText === jawabanBenar) tandai(btn, ['bg-emerald-100', 'border-emerald-500', 'text-emerald-700']);
+    });
 
-    if (jawabanDipilih === jawabanBenar) {
+    if (elemenTombol && jawabanDipilih === jawabanBenar) {
         skorKuis += bobotPerSoal;
         jawabanBenarTotal++;
-        elemenTombol.classList.remove('bg-slate-50', 'text-slate-700', 'border-slate-200');
-        elemenTombol.classList.add('bg-emerald-100', 'border-emerald-500', 'text-emerald-700');
+        tandai(elemenTombol, ['bg-emerald-100', 'border-emerald-500', 'text-emerald-700']);
     } else {
         jawabanSalahTotal++;
-        elemenTombol.classList.remove('bg-slate-50', 'text-slate-700', 'border-slate-200');
-        elemenTombol.classList.add('bg-rose-100', 'border-rose-500', 'text-rose-700');
-
-        semuaTombol.forEach(btn => {
-            if (btn.innerText === jawabanBenar) {
-                btn.classList.remove('bg-slate-50', 'text-slate-700', 'border-slate-200');
-                btn.classList.add('bg-emerald-100', 'border-emerald-500', 'text-emerald-700');
-            }
-        });
+        if (elemenTombol) tandai(elemenTombol, ['bg-rose-100', 'border-rose-500', 'text-rose-700']);
+        tandaiBenar();
     }
 
     setTimeout(() => {
+        if (sesi !== sesiKuis) return; // kuis sudah ditinggalkan / diganti kuis baru
         indexSoalSaatIni++;
         if (indexSoalSaatIni < kuisAktif.length) {
             window.renderSoal();
@@ -488,47 +887,60 @@ window.cekJawaban = function(jawabanDipilih, jawabanBenar, elemenTombol) {
             window.akhiriKuis();
         }
     }, 1500);
+}
+
+window.cekJawaban = function(jawabanDipilih, jawabanBenar, elemenTombol) {
+    selesaikanSoal(jawabanDipilih, jawabanBenar, elemenTombol);
+};
+
+// Waktu habis: dihitung salah, jawaban benar ditampilkan
+window.waktuHabis = function() {
+    const soal = kuisAktif[indexSoalSaatIni];
+    if (!soal) return;
+    const teks = document.getElementById('teksTimerSoal');
+    if (teks) { teks.textContent = "Waktu habis"; teks.className = "text-xs font-extrabold text-rose-600"; }
+    selesaikanSoal(null, soal.jawabanBenar, null);
 };
 
 window.akhiriKuis = function() {
-    // PERBAIKAN: jangan pakai .innerText di sini. Elemen #namaSantri ada di
-    // dalam #viewDashboard, yang sedang disembunyikan (display:none) selagi
-    // kita berada di halaman Latihan. .innerText SELALU mengembalikan ""
-    // untuk elemen yang tersembunyi, sehingga namaAnak selalu kosong dan
-    // fungsi ini berhenti (return) sebelum sempat menyimpan riwayat ke
-    // Firestore. Ambil nama dari variabel global santriAktif dulu (tidak
-    // bergantung pada tampilan/visibility), baru fallback ke textContent
-    // (yang tetap terbaca walau elemen tersembunyi, beda dengan innerText).
-    const elemenNamaSantri = document.getElementById('namaSantri');
-    const namaAnak = (window.santriAktif && window.santriAktif.nama)
-        ? window.santriAktif.nama
-        : (elemenNamaSantri ? elemenNamaSantri.textContent.replace('!', '').trim() : '');
+    const namaAnak = ambilNamaSantriAktif();
 
     skorKuis = Math.round(skorKuis);
     if(skorKuis > 100) skorKuis = 100;
 
-    // Tampilkan popup hasil kuis bertema (menggantikan alert bawaan browser)
+    const jenis = jenisKuisSaatIni;
+    const level = levelKuisSaatIni;
+    const maksLevel = getMaksLevel(jenis);
+    const lulus = jawabanSalahTotal <= MAKS_SALAH_LULUS;
+
+    // Status SEBELUM percobaan ini dicatat (untuk info "level terbuka" & "nilai terbaik baru")
+    const petaSebelum = petaProgress(jenis);
+    const terbaikSebelumnya = petaSebelum[level] ? petaSebelum[level].terbaik : null;
+    const punyaBerikutnya = level < maksLevel;
+    const berikutnyaSudahTerbuka = punyaBerikutnya ? levelTerbuka(petaSebelum, level + 1) : false;
+
+    // Tampilkan popup hasil kuis bertema
     window.tampilkanHasilKuis({
-        level: levelKuisSaatIni,
+        level: level,
         skor: skorKuis,
         benar: jawabanBenarTotal,
-        salah: jawabanSalahTotal
+        salah: jawabanSalahTotal,
+        lulus: lulus,
+        punyaBerikutnya: punyaBerikutnya,
+        barusajaTerbuka: lulus && punyaBerikutnya && !berikutnyaSudahTerbuka,
+        terbaikSebelumnya: terbaikSebelumnya
     });
 
     if (!namaAnak || namaAnak === "-" || namaAnak === "") {
         return;
     }
 
-    let labelKuis = "";
-    if(jenisKuisSaatIni === 'tajwid') labelKuis = "Hukum Tajwid";
-    if(jenisKuisSaatIni === 'makharijul') labelKuis = "Makharijul Huruf";
-    if(jenisKuisSaatIni === 'juz30') labelKuis = "Juz 30";
-    if(jenisKuisSaatIni === 'juz29') labelKuis = "Juz 29";
+    const labelKuis = LABEL_JENIS[jenis] || "";
 
     const dataUntukBackup = {
         nama: namaAnak,
         jenisKuis: labelKuis,
-        level: formatLabelLevel(levelKuisSaatIni),
+        level: formatLabelLevel(level),
         skor: skorKuis,
         benar: jawabanBenarTotal,
         salah: jawabanSalahTotal
@@ -537,22 +949,40 @@ window.akhiriKuis = function() {
     // Kirim salinan data ke Google Sheets (backup), berjalan paralel
     window.kirimBackupKeSheet(dataUntukBackup);
 
+    // Catat ke cache lokal dulu supaya level berikutnya langsung terbuka
+    const catatanLokal = {
+        nama: namaAnak,
+        jenisKuis: labelKuis,
+        level: level,
+        skor: skorKuis,
+        benar: jawabanBenarTotal,
+        salah: jawabanSalahTotal,
+        waktu: null,
+        _waktuLokal: Date.now()
+    };
+    if (namaCacheLatihan === namaAnak) {
+        dataLatihanCache.push(catatanLokal);
+        perbaruiProgressMenu();
+    }
+
     const db = firebase.firestore();
 
     // Simpan ke database berjalan secara Background
     db.collection("latihan_santri").add({
         nama: namaAnak,
         jenisKuis: labelKuis,
-        level: levelKuisSaatIni,
+        level: level,
         skor: skorKuis,
         benar: jawabanBenarTotal,
         salah: jawabanSalahTotal,
         waktu: firebase.firestore.FieldValue.serverTimestamp()
-    }).then(() => {
-        // Refresh tabel riwayat
-        window.loadRiwayatLatihan(namaAnak);
     }).catch((error) => {
         console.error("Gagal menyimpan nilai kuis:", error);
+        // Batalkan catatan lokal agar progres tidak berbeda dengan server
+        const idx = dataLatihanCache.indexOf(catatanLokal);
+        if (idx !== -1) dataLatihanCache.splice(idx, 1);
+        perbaruiProgressMenu();
+        alert("Nilai gagal disimpan ke server. Periksa koneksi internet lalu coba lagi.");
     });
 };
 
@@ -575,15 +1005,18 @@ window.tampilkanHasilKuis = function(hasil) {
         warnaIkon = "bg-rose-50 text-rose-500";
         iconName = "sentiment_dissatisfied";
         pesanMotivasi = "Jangan menyerah, ayo coba lagi ya!";
-    } else if (hasil.skor < 70) {
+    } else if (!hasil.lulus) {
         warnaIkon = "bg-amber-50 text-amber-500";
         iconName = "sentiment_neutral";
-        pesanMotivasi = "Sudah bagus, terus semangat berlatih!";
+        pesanMotivasi = "Sedikit lagi! Pelajari lagi lalu coba lagi ya.";
     }
 
     const ikonEl = document.getElementById('ikonHasilKuis');
     ikonEl.className = `w-20 h-20 rounded-full flex items-center justify-center mb-4 shadow-inner ${warnaIkon}`;
     document.getElementById('simbolHasilKuis').innerText = iconName;
+
+    const judulEl = document.getElementById('judulHasilKuis');
+    if (judulEl) judulEl.innerText = hasil.lulus ? "Alhamdulillah, Lulus!" : "Belum Lulus";
 
     document.getElementById('pesanMotivasiHasilKuis').innerText = pesanMotivasi;
     document.getElementById('levelHasilKuis').innerText = formatLabelLevel(hasil.level);
@@ -591,91 +1024,61 @@ window.tampilkanHasilKuis = function(hasil) {
     document.getElementById('benarHasilKuis').innerText = hasil.benar;
     document.getElementById('salahHasilKuis').innerText = hasil.salah;
 
+    // Kotak status kelulusan + info level berikutnya / nilai terbaik
+    const box = document.getElementById('statusLulusHasilKuis');
+    if (box) {
+        const baris = [];
+        let kelas;
+        if (hasil.lulus) {
+            kelas = "bg-emerald-50 border-emerald-200 text-emerald-700";
+            baris.push('<p class="font-extrabold">LULUS (salah ' + hasil.salah + ', maks. ' + MAKS_SALAH_LULUS + ')</p>');
+            if (hasil.punyaBerikutnya) {
+                baris.push('<p class="font-semibold mt-1">' + (hasil.barusajaTerbuka
+                    ? 'Level ' + (hasil.level + 1) + ' sekarang terbuka!'
+                    : 'Level ' + (hasil.level + 1) + ' sudah terbuka.') + '</p>');
+            } else {
+                baris.push('<p class="font-semibold mt-1">Semua level pada kuis ini sudah diselesaikan.</p>');
+            }
+        } else {
+            kelas = "bg-rose-50 border-rose-200 text-rose-700";
+            baris.push('<p class="font-extrabold">BELUM LULUS (salah ' + hasil.salah + ')</p>');
+            baris.push('<p class="font-semibold mt-1">Butuh maksimal ' + MAKS_SALAH_LULUS + ' salah untuk lanjut ke level berikutnya.</p>');
+        }
+        if (hasil.terbaikSebelumnya !== null && hasil.terbaikSebelumnya !== undefined) {
+            baris.push('<p class="font-semibold mt-1">' + (hasil.skor > hasil.terbaikSebelumnya
+                ? 'Nilai terbaik baru! Sebelumnya ' + hasil.terbaikSebelumnya + '.'
+                : 'Nilai terbaikmu tetap ' + hasil.terbaikSebelumnya + '.') + '</p>');
+        }
+        box.className = "w-full rounded-2xl border px-4 py-3 mb-5 text-xs text-center " + kelas;
+        box.innerHTML = baris.join('');
+    }
+
     modal.classList.remove('hidden');
 };
 
 window.tutupHasilKuis = function() {
     const modal = document.getElementById('modalHasilKuis');
     if (modal) modal.classList.add('hidden');
-    window.kembaliKeMenuLatihan();
+    window.kembaliKeMenuLatihan(true); // kembali ke menu lalu buka lagi daftar level
 };
 
-window.kembaliKeMenuLatihan = function() {
+window.kembaliKeMenuLatihan = function(bukaDaftarLevel) {
+    if (bukaDaftarLevel === true) {
+        const jenis = jenisKuisSaatIni;
+        // Tunggu popstate selesai (flag isPopStateRunning di index-logic.js reset setelah 100ms)
+        window.addEventListener('popstate', function() {
+            setTimeout(() => window.pilihLevel(jenis), 250);
+        }, { once: true });
+    }
     history.back();
 };
 
+// Dipertahankan agar pemanggil lama tetap jalan: memuat ulang data
+// latihan santri (dipakai untuk progres level & riwayat di popup level).
 window.loadRiwayatLatihan = function(namaAnak) {
-    document.getElementById('namaSantriLatihan').innerText = namaAnak;
-    const containerRiwayat = document.getElementById('containerRiwayatLatihan');
-
-    if (!namaAnak || namaAnak === "-") {
-        containerRiwayat.innerHTML = '<p class="text-xs text-slate-400 text-center py-4">Silakan pilih santri terlebih dahulu.</p>';
-        return;
-    }
-
-    containerRiwayat.innerHTML = '<p class="text-xs text-blue-500 font-bold text-center py-4 animate-pulse">Memuat data dari server...</p>';
-
-    const db = firebase.firestore();
-
-    // Catatan: sengaja TIDAK memakai .orderBy() di query Firestore agar tidak
-    // membutuhkan composite index (yang harus dibuat manual di Firebase Console).
-    // Pengurutan & pembatasan 10 data terbaru dilakukan di sisi browser (JS).
-    db.collection("latihan_santri")
-      .where("nama", "==", namaAnak)
-      .get()
-      .then((querySnapshot) => {
-          containerRiwayat.innerHTML = '';
-
-          if (querySnapshot.empty) {
-              containerRiwayat.innerHTML = '<p class="text-xs text-slate-400 font-medium text-center py-4">Belum ada riwayat kuis.</p>';
-              return;
-          }
-
-          let daftarRiwayat = [];
-          querySnapshot.forEach((doc) => {
-              daftarRiwayat.push(doc.data());
-          });
-
-          // Urutkan dari yang paling baru, lalu ambil 10 teratas
-          daftarRiwayat.sort((a, b) => {
-              const waktuA = (a.waktu && typeof a.waktu.toMillis === 'function') ? a.waktu.toMillis() : 0;
-              const waktuB = (b.waktu && typeof b.waktu.toMillis === 'function') ? b.waktu.toMillis() : 0;
-              return waktuB - waktuA;
-          });
-          daftarRiwayat = daftarRiwayat.slice(0, 10);
-
-          daftarRiwayat.forEach((data) => {
-              const tanggalText = (data.waktu && typeof data.waktu.toDate === 'function') ? data.waktu.toDate().toLocaleDateString('id-ID', {day: 'numeric', month: 'short', year: 'numeric'}) : "Baru saja";
-
-              let warnaSkor = "text-emerald-600 bg-emerald-50 border-emerald-100";
-              if (data.skor < 70) warnaSkor = "text-amber-600 bg-amber-50 border-amber-100";
-              if (data.skor < 50) warnaSkor = "text-rose-600 bg-rose-50 border-rose-100";
-
-              let infoTambahan = "";
-              if(data.benar !== undefined && data.salah !== undefined) {
-                  infoTambahan = `<span class="text-[9px] text-slate-400 ml-2">✓ ${data.benar}  ✗ ${data.salah}</span>`;
-              }
-
-              let labelLevel = data.level ? `<span class="text-[10px] font-bold text-slate-400 ml-1">(${formatLabelLevel(data.level)})</span>` : "";
-
-              const itemRiwayat = `
-                  <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                      <div class="flex flex-col">
-                          <span class="text-sm font-bold text-slate-700">${data.jenisKuis} ${labelLevel}</span>
-                          <span class="text-[10px] font-semibold text-slate-400 mt-0.5">${tanggalText} ${infoTambahan}</span>
-                      </div>
-                      <div class="px-3 py-1.5 rounded-lg border font-extrabold text-sm ${warnaSkor}">
-                          ${data.skor}
-                      </div>
-                  </div>
-              `;
-              containerRiwayat.innerHTML += itemRiwayat;
-          });
-      })
-      .catch((error) => {
-          console.error("Gagal memuat riwayat:", error);
-          containerRiwayat.innerHTML = '<p class="text-xs text-rose-500 font-medium text-center py-4">Gagal memuat riwayat: ' + error.message + '</p>';
-      });
+    const elNama = document.getElementById('namaSantriLatihan');
+    if (elNama) elNama.innerText = namaAnak || "";
+    return muatDataLatihan(namaAnak, true);
 };
 
 const oldNavigateTo = window.navigateTo;

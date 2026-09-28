@@ -384,6 +384,7 @@
                         <div class="mt-5">
                             <h2 class="text-lg font-extrabold text-slate-800 tracking-tight">Kuis Hukum Tajwid</h2>
                             <p class="text-xs text-slate-500 font-medium mt-1">Uji pemahaman hukum bacaan.</p>
+                            <p id="progresLatihan-tajwid" class="text-[10px] font-bold text-emerald-600 mt-2 min-h-[14px]"></p>
                         </div>
                     </button>
 
@@ -395,6 +396,7 @@
                         <div class="mt-5">
                             <h2 class="text-lg font-extrabold text-slate-800 tracking-tight">Makharijul Huruf</h2>
                             <p class="text-xs text-slate-500 font-medium mt-1">Latihan tempat keluarnya huruf.</p>
+                            <p id="progresLatihan-makharijul" class="text-[10px] font-bold text-emerald-600 mt-2 min-h-[14px]"></p>
                         </div>
                     </button>
 
@@ -406,6 +408,7 @@
                         <div class="mt-5">
                             <h2 class="text-lg font-extrabold text-slate-800 tracking-tight">Hafalan Juz 30</h2>
                             <p class="text-xs text-slate-500 font-medium mt-1">Latihan sambung ayat, ayat demi ayat.</p>
+                            <p id="progresLatihan-juz30" class="text-[10px] font-bold text-emerald-600 mt-2 min-h-[14px]"></p>
                         </div>
                     </button>
 
@@ -417,18 +420,9 @@
                         <div class="mt-5">
                             <h2 class="text-lg font-extrabold text-slate-800 tracking-tight">Hafalan Juz 29</h2>
                             <p class="text-xs text-slate-500 font-medium mt-1">Latihan sambung ayat, ayat demi ayat.</p>
+                            <p id="progresLatihan-juz29" class="text-[10px] font-bold text-emerald-600 mt-2 min-h-[14px]"></p>
                         </div>
                     </button>
-                </div>
-
-                <div class="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 mt-6">
-                    <div class="flex items-center gap-3 mb-4 pb-4 border-b border-slate-100">
-                        <div class="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600"><span class="material-symbols-outlined text-sm">history</span></div>
-                        <h2 class="text-base font-extrabold text-slate-800 tracking-tight">Riwayat Nilai <span id="namaSantriLatihan" class="text-blue-600"></span></h2>
-                    </div>
-                    <div id="containerRiwayatLatihan" class="space-y-3 max-h-60 overflow-y-auto custom-scrollbar">
-                        <p class="text-xs text-slate-400 font-medium text-center py-4">Memuat riwayat nilai...</p>
-                    </div>
                 </div>
             </div>
 
@@ -437,6 +431,13 @@
                     <div class="flex justify-between w-full mb-6 items-center">
                         <span id="indikatorSoal" class="text-xs font-bold text-slate-400 bg-slate-50 px-3 py-1 rounded-full border border-slate-200">Soal 1 / 5</span>
                         <span id="skorSementara" class="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-100">Skor: 0</span>
+                    </div>
+                    <div class="w-full max-w-2xl mb-6 flex items-center gap-3">
+                        <span class="material-symbols-outlined text-slate-400 text-base">timer</span>
+                        <div class="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+                            <div id="barTimerSoal" class="h-full rounded-full bg-emerald-500" style="width:100%"></div>
+                        </div>
+                        <span id="teksTimerSoal" class="text-xs font-extrabold tabular-nums text-slate-500 w-14 text-right">20 dtk</span>
                     </div>
                     <h3 id="teksPertanyaan" class="text-lg sm:text-xl font-extrabold text-slate-800 mb-8 leading-relaxed max-w-2xl"></h3>
                     <div id="opsiJawaban" class="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-2xl"></div>
@@ -707,18 +708,34 @@
         </div>
     </div>
 
-    <!-- Modal Pilih Level Kuis -->
+    <!-- Modal Pilih Level Kuis (grid level + popup detail/riwayat level) -->
     <div id="modalPilihLevel" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center hidden p-4 transition-all duration-300">
-        <div class="bg-white w-full max-w-md rounded-3xl p-6 flex flex-col items-center text-center shadow-2xl animate-modal">
-            <div class="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-4 shadow-inner"><span class="material-symbols-outlined text-4xl">psychology</span></div>
+        <div class="bg-white w-full max-w-md max-h-[92vh] overflow-y-auto rounded-3xl p-6 flex flex-col items-center text-center shadow-2xl animate-modal">
+            <div class="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-4 shadow-inner"><span id="simbolModalLevel" class="material-symbols-outlined text-4xl">psychology</span></div>
             <h4 class="text-lg font-extrabold text-slate-800 mb-2 whitespace-pre-line" id="judulModalLevel">Pilih Level</h4>
-            <div class="flex items-center justify-center gap-3 text-[10px] font-bold text-slate-400 mb-3">
-                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>1-16 Dasar</span>
-                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>17-33 Menengah</span>
-                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-rose-400"></span>34-50 Lanjut</span>
+
+            <!-- Panel 1: grid level -->
+            <div id="panelGridLevel" class="w-full flex flex-col items-center">
+                <p id="ringkasanLevel" class="text-xs font-bold text-emerald-600 mb-3 min-h-[16px]"></p>
+                <div class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[10px] font-bold text-slate-400 mb-3">
+                    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>Lulus</span>
+                    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-blue-300"></span>Terbuka</span>
+                    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-rose-300"></span>Belum lulus</span>
+                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[12px]">lock</span>Terkunci</span>
+                </div>
+                <div id="gridLevelKuis" class="w-full grid grid-cols-5 gap-2 max-h-64 overflow-y-auto pr-1"></div>
+                <p class="text-[10px] font-semibold text-slate-400 mt-3">Ketuk level untuk melihat riwayat. Lulus jika salah maksimal 3 dari 10 soal.</p>
+                <button onclick="tutupModalLevel()" class="mt-4 text-sm text-slate-400 font-bold hover:text-slate-700 transition-colors">Batal</button>
             </div>
-            <div id="gridLevelKuis" class="w-full grid grid-cols-5 gap-2 max-h-64 overflow-y-auto pr-1"></div>
-            <button onclick="tutupModalLevel()" class="mt-5 text-sm text-slate-400 font-bold hover:text-slate-700 transition-colors">Batal</button>
+
+            <!-- Panel 2: detail & riwayat satu level -->
+            <div id="panelDetailLevel" class="hidden w-full flex flex-col items-center">
+                <span id="badgeTingkatLevel" class="text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border mb-4">Tingkat</span>
+                <div id="ringkasanDetailLevel" class="w-full grid grid-cols-3 gap-2 mb-4"></div>
+                <div id="riwayatDetailLevel" class="w-full space-y-2 max-h-52 overflow-y-auto custom-scrollbar mb-4"></div>
+                <button id="tombolMulaiLevel" type="button" class="w-full px-5 py-3 text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 rounded-xl transition-all shadow-md active:scale-95">Mulai Level</button>
+                <button onclick="kembaliKeGridLevel()" class="mt-4 text-sm text-slate-400 font-bold hover:text-slate-700 transition-colors">Kembali ke daftar level</button>
+            </div>
         </div>
     </div>
 
@@ -729,7 +746,7 @@
                 <div class="absolute -right-10 -top-10 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
                 <div class="absolute -left-8 -bottom-8 w-24 h-24 bg-indigo-400/20 rounded-full blur-xl"></div>
                 <span class="relative z-10 inline-flex items-center text-[10px] font-bold uppercase tracking-widest text-blue-100 bg-black/10 px-3 py-1 rounded-full border border-white/10">Kuis Selesai</span>
-                <h4 class="relative z-10 text-lg font-extrabold mt-3">Alhamdulillah!</h4>
+                <h4 id="judulHasilKuis" class="relative z-10 text-lg font-extrabold mt-3">Alhamdulillah!</h4>
                 <p class="relative z-10 text-xs text-blue-100 font-semibold mt-1">Level <span id="levelHasilKuis">1</span></p>
             </div>
 
@@ -742,6 +759,8 @@
                     <span id="skorHasilKuis">0</span><span class="text-lg text-slate-400 font-bold">/100</span>
                 </div>
                 <p id="pesanMotivasiHasilKuis" class="text-sm text-slate-500 font-medium mt-2 mb-5">Alhamdulillah, hasil yang luar biasa!</p>
+
+                <div id="statusLulusHasilKuis" class="w-full rounded-2xl border px-4 py-3 mb-5 text-xs text-center"></div>
 
                 <div class="w-full grid grid-cols-2 gap-3 mb-6">
                     <div class="bg-emerald-50 border border-emerald-100 rounded-2xl py-3 flex flex-col items-center">
@@ -756,7 +775,7 @@
                     </div>
                 </div>
 
-                <button onclick="tutupHasilKuis()" class="w-full px-5 py-3 text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 rounded-xl transition-all shadow-md active:scale-95">Lanjutkan</button>
+                <button onclick="tutupHasilKuis()" class="w-full px-5 py-3 text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 rounded-xl transition-all shadow-md active:scale-95">Lihat Daftar Level</button>
             </div>
         </div>
     </div>
