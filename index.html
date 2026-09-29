@@ -51,6 +51,51 @@
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* ===== UI/UX upgrade ===== */
+        :focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; border-radius: 8px; }
+        .spinner { display:inline-block; width:1em; height:1em; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation: spin .7s linear infinite; vertical-align:-2px; margin-right:.4em; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #toastBox { position:fixed; top:16px; left:50%; transform:translateX(-50%); z-index:10000; display:flex; flex-direction:column; gap:8px; width:min(92vw,380px); pointer-events:none; }
+        .toast { pointer-events:auto; display:flex; gap:10px; align-items:center; padding:12px 16px; border-radius:14px; font-size:13px; font-weight:700; color:#fff; box-shadow:0 10px 30px rgba(15,23,42,.25); animation: fadeInDown .3s ease forwards; }
+        .toast.out { opacity:0; transform:translateY(-10px); transition:all .3s; }
+        .toast-success { background:#059669; } .toast-error { background:#e11d48; } .toast-warning { background:#d97706; } .toast-info { background:#2563eb; }
+        #bottomNav { position:fixed; bottom:0; left:0; right:0; z-index:45; display:flex; background:rgba(255,255,255,.95); backdrop-filter:blur(12px); border-top:1px solid #e2e8f0; padding-bottom:env(safe-area-inset-bottom,0); }
+        #bottomNav button { flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; padding:8px 2px; min-height:56px; font-size:10px; font-weight:700; color:#64748b; transition:color .2s; }
+        #bottomNav button.active { color:#2563eb; }
+        #bottomNav button.active .material-symbols-outlined { font-variation-settings:'FILL' 1; }
+        @media (min-width:768px) { #bottomNav { display:none; } }
+        @media (max-width:767px) { main { padding-bottom:88px; } }
+        @media (prefers-reduced-motion: reduce) { *, ::before, ::after { animation-duration:.01ms !important; transition-duration:.01ms !important; } }
+
+        /* ===== Analisis Perkembangan ===== */
+        .ci-box { display:flex; flex-wrap:wrap; gap:6px; margin-top:14px; padding-top:12px; border-top:1px dashed #e2e8f0; }
+        .ci-chip { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:700; padding:4px 10px; border-radius:999px; background:#f1f5f9; color:#475569; }
+        .ci-chip .material-symbols-outlined { font-size:14px; }
+        .ci-good { background:#ecfdf5; color:#047857; } .ci-bad { background:#fff1f2; color:#be123c; } .ci-info { background:#eff6ff; color:#1d4ed8; }
+        .ci-empty { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; text-align:center; font-size:12px; font-weight:600; color:#94a3b8; pointer-events:none; }
+        .ci-empty .material-symbols-outlined { font-size:32px; color:#cbd5e1; }
+        .ci-pills { display:flex; flex-wrap:wrap; gap:6px; }
+        .ci-pills .ci-share { margin-left:auto; display:inline-flex; align-items:center; gap:4px; background:#eff6ff; border-color:#bfdbfe; color:#2563eb; }
+        .ci-pills .ci-share .material-symbols-outlined { font-size:16px; }
+        .ci-pills button { font-size:12px; font-weight:700; padding:6px 14px; min-height:36px; border-radius:999px; border:1px solid #e2e8f0; background:#fff; color:#64748b; transition:all .2s; }
+        .ci-pills button.active { background:#2563eb; border-color:#2563eb; color:#fff; }
+        .rp-ov { position:fixed; inset:0; background:rgba(15,23,42,.6); backdrop-filter:blur(4px); z-index:9998; display:flex; align-items:center; justify-content:center; padding:16px; }
+        .rp-card { background:#fff; border-radius:24px; width:100%; max-width:420px; max-height:90vh; overflow:auto; padding:22px; box-shadow:0 25px 50px rgba(15,23,42,.25); animation:scaleIn .3s cubic-bezier(.34,1.56,.64,1) forwards; }
+        .rp-head { display:flex; justify-content:space-between; align-items:flex-start; }
+        .rp-head h3 { font-size:18px; font-weight:800; color:#0f172a; } .rp-head p { font-size:12px; font-weight:600; color:#2563eb; margin-top:2px; }
+        .rp-x { padding:6px; border-radius:10px; color:#64748b; } .rp-x:hover { background:#f1f5f9; }
+        .rp-sub { font-size:11px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:.08em; margin:14px 0 4px; }
+        .rp-opt { display:flex; align-items:center; gap:12px; padding:11px 12px; margin-top:8px; border:1px solid #e2e8f0; border-radius:14px; cursor:pointer; transition:all .2s; }
+        .rp-opt:hover { border-color:#93c5fd; background:#f8fafc; } .rp-opt.dis { opacity:.45; cursor:not-allowed; }
+        .rp-opt input { width:18px; height:18px; accent-color:#2563eb; flex-shrink:0; }
+        .rp-opt > .material-symbols-outlined { color:#2563eb; font-size:22px; }
+        .rp-t { display:flex; flex-direction:column; } .rp-t b { font-size:13px; font-weight:700; color:#1e293b; } .rp-t small { font-size:11px; color:#94a3b8; font-weight:500; }
+        .rp-foot { display:flex; gap:8px; justify-content:flex-end; margin-top:18px; flex-wrap:wrap; }
+        .rp-btn { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:700; padding:10px 16px; min-height:44px; border-radius:12px; transition:all .2s; }
+        .rp-btn .material-symbols-outlined { font-size:18px; } .rp-btn:disabled { opacity:.7; }
+        .rp-sec { background:#f1f5f9; color:#475569; } .rp-sec:hover { background:#e2e8f0; }
+        .rp-pri { background:#2563eb; color:#fff; box-shadow:0 6px 16px rgba(37,99,235,.3); } .rp-pri:hover { background:#1d4ed8; }
     </style>
 </head>
 
@@ -145,7 +190,7 @@
                             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
                             <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500"></span>
                         </span>
-                        LIVE CHARTS
+                        <span id="chartUpdated">LIVE CHARTS</span>
                     </span>
                 </div>
                 
@@ -805,6 +850,7 @@
 
     <!-- File Script Baru Hasil Refactoring -->
     <script src="js/index-logic.js"></script>
+    <script src="js/laporan.js"></script>
     <script src="js/latihan.js"></script>
     <script src="js/nav-extra.js"></script>
 </body>

@@ -26,14 +26,51 @@ window.addEventListener('DOMContentLoaded', () => {
     // Sensor Pencarian
     let inputCari = document.getElementById('namaInput');
     if (inputCari) {
+        // Pencarian langsung (tanpa Enter): Absensi dirender ulang, halaman lain otomatis mencari santri + menyegarkan grafik
+        let tmrCari;
         inputCari.addEventListener('input', function() {
             let viewAbsensi = document.getElementById('viewAbsensi');
-            if (viewAbsensi && !viewAbsensi.classList.contains('hidden')) {
-                window.renderRiwayatAbsensi();
-            }
+            if (viewAbsensi && !viewAbsensi.classList.contains('hidden')) { window.renderRiwayatAbsensi(); return; }
+            clearTimeout(tmrCari); tmrCari = setTimeout(window.cariSantriLangsung, 500);
+        });
+        inputCari.addEventListener('keydown', function(e) { if (e.key === 'Enter') window.segarkanGrafikSantri(); });
+        // Saat kolom ditinggalkan: lengkapi nama otomatis ("has" -> "Hasnan") agar semua fitur memakai santri yang sama dengan yang tampil
+        inputCari.addEventListener('blur', function() {
+            const s = window._santriLiveObj, v = inputCari.value.trim().toLowerCase();
+            if (s && v && s.nama.toLowerCase() !== v && s.nama.toLowerCase().includes(v) && window.santriAktif && window.santriAktif.nama === s.nama) inputCari.value = s.nama;
         });
     }
 });
+
+
+// Cari santri saat mengetik: meniru tekan Enter, lalu gambar ulang grafik (tanpa pindah halaman)
+window.segarkanGrafikSantri = function(santri) {
+    [150, 900].forEach(ms => setTimeout(() => {
+        if (santri && (!window.santriAktif || window.santriAktif.nama !== santri.nama)) window.santriAktif = santri;
+        if (typeof renderProgressChart === 'function') renderProgressChart();
+    }, ms));
+};
+window.cariSantriLangsung = function() {
+    const el = document.getElementById('namaInput'), q = el ? el.value.trim().toLowerCase() : '';
+    if (!q) { window._santriDicariLangsung = ''; return; }
+    if (q.length < 3 || typeof dataSantri === 'undefined') return; // tunggu minimal 3 huruf
+    const ada = dataSantri.filter(x => x.nama && x.nama.toLowerCase().includes(q));
+    const s = ada.find(x => x.nama.toLowerCase().startsWith(q)) || ada[0];
+    if (!s || window._santriDicariLangsung === s.nama) return; // tidak cocok / sudah dimuat -> diam, tanpa popup
+    window._santriDicariLangsung = s.nama;
+    window._santriLiveObj = s;
+    // Isi nama lengkap sesaat agar pencarian lama pasti berhasil (tanpa popup "tidak ditemukan"), lalu kembalikan ketikan Anda
+    const asli = el.value, a = el.selectionStart, b = el.selectionEnd, toast = window._toastAsli || (window._toastAsli = window.showToast);
+    window.showToast = function() {};
+    try {
+        el.value = s.nama;
+        ['keydown', 'keypress', 'keyup'].forEach(t => el.dispatchEvent(new KeyboardEvent(t, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true })));
+    } finally {
+        el.value = asli; try { el.setSelectionRange(a, b); } catch (e) {}
+        setTimeout(() => { window.showToast = toast; }, 900);
+    }
+    window.segarkanGrafikSantri(s);
+};
 
 // [PERBAIKAN SUPER]: Menambal fungsi bawaan secara paksa agar tidak ada halaman yang tumpang tindih
 const fungsiAsliNavigateTo = window.navigateTo;
@@ -351,7 +388,7 @@ window.onScanSuccess = function(decodedText) {
     }
 
     window.santriAktif = siswaDitemukan;
-    divHasil.innerHTML = "⏳ Menyimpan..."; 
+    divHasil.innerHTML = '<span class="spinner"></span>Menyimpan...'; 
     divHasil.className = "text-sm font-bold text-blue-700 bg-blue-50 px-6 py-4 rounded-xl border border-blue-200";
 
     if (!window.santriAktif.absensi) window.santriAktif.absensi = [];
@@ -366,7 +403,10 @@ window.onScanSuccess = function(decodedText) {
 };
 
 window.resetScan = function(div, msg, color) {
-    div.innerHTML = msg; div.className = `text-sm font-bold text-${color}-700 bg-${color}-50 px-6 py-4 rounded-xl border border-${color}-200`;
+    const mi = String(msg).match(/^(❌|✅|⚠️)\s*/), teks = mi ? String(msg).slice(mi[0].length) : msg;
+    const ikon = mi ? `<span class="material-symbols-outlined" style="font-size:18px;vertical-align:-4px;margin-right:6px">${{'❌':'error','✅':'check_circle','⚠️':'warning'}[mi[1]]}</span>` : '';
+    window.showToast(teks, {emerald:'success', rose:'error', amber:'warning'}[color] || 'info');
+    div.innerHTML = ikon + teks; div.className = `text-sm font-bold text-${color}-700 bg-${color}-50 px-6 py-4 rounded-xl border border-${color}-200`;
     setTimeout(() => { if (html5QrcodeScanner) html5QrcodeScanner.resume(); div.innerHTML = "Menunggu scan..."; div.className = "text-sm font-bold text-slate-500 bg-slate-50 px-6 py-4 rounded-xl border border-slate-200"; }, 2500);
 };
 
@@ -407,3 +447,185 @@ window.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
+
+// ==========================================
+// 6. UI/UX: TOAST, ESC MODAL, ARIA, BOTTOM NAV
+// ==========================================
+window.showToast = function(msg, type = 'info', ms = 3000) {
+    let box = document.getElementById('toastBox');
+    if (!box) { box = document.createElement('div'); box.id = 'toastBox'; box.setAttribute('aria-live', 'polite'); document.body.appendChild(box); }
+    const t = document.createElement('div');
+    t.className = 'toast toast-' + type; t.setAttribute('role', 'status'); t.textContent = msg;
+    box.appendChild(t);
+    setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 300); }, ms);
+};
+
+(function uiUpgrade() {
+    // Modal: [id elemen, fungsi penutup]
+    const modals = [['modalHasilKuis','tutupHasilKuis'],['modalPilihLevel','tutupModalLevel'],['modalPeringatan','tutupPeringatan'],
+                    ['modalPenilaianUmmi','tutupFormNilaiUmmi'],['ummiDetail','closeUmmiDetail'],['suratDetail','closeDetail']];
+    const terbuka = el => el && !el.classList.contains('hidden') && getComputedStyle(el).display !== 'none';
+
+    document.addEventListener('keydown', e => {
+        if (e.key !== 'Escape') return;
+        for (const [id, fn] of modals) {
+            if (terbuka(document.getElementById(id)) && typeof window[fn] === 'function') { window[fn](); break; }
+        }
+    });
+
+    // Bottom nav (mobile). Ubah daftar ini untuk menambah/menghapus menu.
+    const items = [['viewDashboard','home','Beranda'],['viewHafalan','menu_book','Hafalan'],['viewUmmi','school','Ummi'],
+                   ['viewLatihan','quiz','Latihan'],['viewAbsensi','qr_code_scanner','Absen']];
+
+    function init() {
+        modals.forEach(([id]) => { const el = document.getElementById(id); if (el) { el.setAttribute('role','dialog'); el.setAttribute('aria-modal','true'); } });
+
+        // aria-label otomatis untuk tombol yang hanya berisi ikon
+        const label = { logout:'Keluar', close:'Tutup', search:'Cari', arrow_back:'Kembali', menu:'Menu' };
+        document.querySelectorAll('button').forEach(b => {
+            if (b.getAttribute('aria-label') || b.textContent.replace(/\s|[a-z_]+$/i, '').trim()) return;
+            const ic = b.querySelector('.material-symbols-outlined');
+            if (ic && label[ic.textContent.trim()]) b.setAttribute('aria-label', label[ic.textContent.trim()]);
+        });
+        const s = document.getElementById('namaInput'); if (s) s.setAttribute('aria-label', 'Cari santri');
+
+        const nav = document.createElement('nav');
+        nav.id = 'bottomNav'; nav.setAttribute('aria-label', 'Navigasi utama');
+        items.forEach(([view, icon, text]) => {
+            if (!document.getElementById(view)) return;
+            const b = document.createElement('button');
+            b.dataset.view = view;
+            b.innerHTML = `<span class="material-symbols-outlined">${icon}</span>${text}`;
+            b.onclick = () => view === 'viewAbsensi' ? window.bukaMenuAbsensi() : window.navigateTo(view);
+            nav.appendChild(b);
+        });
+        document.body.appendChild(nav);
+
+        const sync = () => {
+            const aktif = [...document.querySelectorAll('.page-view')].find(v => !v.classList.contains('hidden'));
+            nav.querySelectorAll('button').forEach(b => b.classList.toggle('active', !!aktif && b.dataset.view === aktif.id));
+        };
+        new MutationObserver(sync).observe(document.querySelector('main'), { attributes: true, subtree: true, attributeFilter: ['class'] });
+        sync();
+    }
+    document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', init) : init();
+})();
+
+
+// ==========================================
+// 7. ANALISIS PERKEMBANGAN: filter periode + insight (data grafik bersifat kumulatif)
+// ==========================================
+window.periodeGrafik = (function() { try { const v = localStorage.getItem('periodeGrafik'); return v === '7' || v === '30' ? Number(v) : 'all'; } catch (e) { return 'all'; } })();
+
+const _tglOnly = w => String(w || '').split(',')[0].split(' ')[0].trim();
+window.parseTglRiwayat = function(waktu) {
+    const t = _tglOnly(waktu);
+    let m = t.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+    if (m) return new Date(+m[3], +m[2] - 1, +m[1]);
+    m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+};
+
+window.riwayatHarianSantri = function() {
+    const src = (typeof santriAktif !== 'undefined' && santriAktif && santriAktif.riwayatHafalan) || [];
+    const out = []; let last = '';
+    src.forEach(it => { const t = _tglOnly(it.waktu); if (t === last) out[out.length - 1] = it; else { out.push(it); last = t; } });
+    return out;
+};
+
+window.batasPeriode = function(hari, akhir) {
+    const t = akhir || new Date(), b = new Date(t.getFullYear(), t.getMonth(), t.getDate());
+    b.setDate(b.getDate() - (hari - 1)); return b;
+};
+
+// Dipanggil dari dashboard.js: potong data grafik sesuai periode (titik terakhir sebelum periode dipakai sebagai titik awal)
+window.terapkanFilterPeriode = function(harian) {
+    const p = window.periodeGrafik;
+    if (p === 'all' || !harian.length) return harian;
+    const batas = window.batasPeriode(p), tgl = harian.map(it => window.parseTglRiwayat(it.waktu));
+    if (tgl.some(d => !d)) return harian;
+    const idx = tgl.findIndex(d => d >= batas);
+    const dalam = idx === -1 ? [] : harian.slice(idx);
+    const awal = (idx === -1 ? harian.length : idx) - 1;
+    const hasil = awal >= 0 ? [harian[awal], ...dalam] : dalam;
+    return hasil.length ? hasil : harian.slice(-1);
+};
+
+window.hitungInsight = function(harian, field, unit, p, hariIni) {
+    const seri = harian.map(it => ({ d: window.parseTglRiwayat(it.waktu), v: Number(it[field]) || 0, w: _tglOnly(it.waktu) }));
+    const now = seri[seri.length - 1].v, chips = [[`Total: ${now} ${unit}`, 'ci-info', 'flag']];
+    if (!seri.every(s => s.d)) return chips;
+    const today = new Date(hariIni.getFullYear(), hariIni.getMonth(), hariIni.getDate());
+    const sampai = tgl => { let v = 0; seri.forEach(s => { if (s.d <= tgl) v = s.v; }); return v; };
+    const tanda = n => (n > 0 ? '+' : '') + n;
+
+    if (p !== 'all') {
+        const sb = window.batasPeriode(p, today); sb.setDate(sb.getDate() - 1);
+        const ap = new Date(sb); ap.setDate(ap.getDate() - p);
+        const gain = now - sampai(sb), prev = sampai(sb) - sampai(ap);
+        chips.push([`${tanda(gain)} ${unit} · ${p} hari`, gain > 0 ? 'ci-good' : '', gain < 0 ? 'trending_down' : gain > 0 ? 'trending_up' : 'remove']);
+        if (prev > 0) {
+            const pct = Math.round((gain - prev) / prev * 100);
+            if (pct !== 0) chips.push([`${Math.abs(pct)}% vs ${p} hari lalu`, pct > 0 ? 'ci-good' : '', pct > 0 ? 'arrow_upward' : 'arrow_downward']);
+        }
+    } else if (seri.length > 1) {
+        const d = now - seri[0].v;
+        chips.push([`${tanda(d)} sejak ${seri[0].w}`, d > 0 ? 'ci-good' : '', d < 0 ? 'trending_down' : 'trending_up']);
+    }
+
+    for (let i = seri.length - 1; i > 0; i--) if (seri[i].v > seri[i - 1].v) {
+        const hari = Math.round((today - seri[i].d) / 86400000);
+        chips.push([hari <= 0 ? 'Terakhir naik hari ini' : `Terakhir naik ${hari} hari lalu`, '', 'schedule']);
+        break;
+    }
+    return chips;
+};
+
+// Fitur laporan hanya untuk Admin & Guru (murid = akses lihat saja)
+window.bolehLaporan = function() {
+    const r = String(typeof role !== 'undefined' ? role : '').toLowerCase();
+    return !!r && r !== 'murid';
+};
+
+window.renderPeriodeBar = function() {
+    const cv = document.getElementById('progressChart'), grid = cv && cv.closest('.grid');
+    if (!grid) return;
+    let bar = document.getElementById('periodeBar');
+    if (!bar) {
+        bar = document.createElement('div'); bar.id = 'periodeBar'; bar.className = 'ci-pills';
+        bar.setAttribute('role', 'group'); bar.setAttribute('aria-label', 'Periode analisis'); grid.before(bar);
+        [['7', '7 Hari'], ['30', '30 Hari'], ['all', 'Semua']].forEach(([v, t]) => {
+            const b = document.createElement('button'); b.textContent = t; b.dataset.p = v;
+            b.onclick = () => {
+                window.periodeGrafik = v === 'all' ? 'all' : Number(v);
+                try { localStorage.setItem('periodeGrafik', v); } catch (e) {}
+                if (typeof renderProgressChart === 'function') renderProgressChart();
+            };
+            bar.appendChild(b);
+        });
+        const sh = document.createElement('button'); sh.className = 'ci-share'; sh.setAttribute('aria-label', 'Buat laporan PDF');
+        sh.innerHTML = '<span class="material-symbols-outlined">picture_as_pdf</span>Laporan PDF'; sh.onclick = () => window.bukaLaporan && window.bukaLaporan(); bar.appendChild(sh);
+    }
+    bar.querySelectorAll('button[data-p]').forEach(b => { const on = String(window.periodeGrafik) === b.dataset.p; b.classList.toggle('active', on); b.setAttribute('aria-pressed', on); });
+    const shb = bar.querySelector('.ci-share'); if (shb) shb.style.display = window.bolehLaporan() ? '' : 'none';
+};
+
+// Dipanggil dari dashboard.js setiap grafik selesai dirender
+window.renderInsightPerkembangan = function(kosong) {
+    const KONF = [['progressChart', 'skor', 'Ayat'], ['ummiChart', 'skorUmmi', 'Hal'], ['hijaiyahChart', 'skorHijaiyah', 'Huruf'], ['tajwidChart', 'skorTajwid', 'Hukum']];
+    const harian = kosong ? [] : window.riwayatHarianSantri(), hariIni = new Date();
+    KONF.forEach(([id, field, unit]) => {
+        const cv = document.getElementById(id); if (!cv || !cv.parentElement) return;
+        let box = document.getElementById('insight-' + id);
+        if (!box) { box = document.createElement('div'); box.id = 'insight-' + id; box.className = 'ci-box'; cv.parentElement.after(box); }
+        if (!harian.length) { box.style.display = 'none'; return; }
+        const chips = window.hitungInsight(harian, field, unit, window.periodeGrafik, hariIni);
+        box.innerHTML = '';
+        chips.forEach(([txt, cls, ico]) => { const s = document.createElement('span'); s.className = 'ci-chip ' + cls; s.innerHTML = `<span class="material-symbols-outlined">${ico}</span>`; s.append(txt); box.appendChild(s); });
+        box.style.display = 'flex';
+        cv.setAttribute('role', 'img'); cv.setAttribute('aria-label', chips.map(c => c[0]).join(', '));
+    });
+    const stamp = document.getElementById('chartUpdated');
+    if (stamp) stamp.textContent = 'Diperbarui ' + hariIni.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    window.renderPeriodeBar();
+};

@@ -220,6 +220,7 @@ function renderProgressChart() {
             if (tglOnly === tanggalTerakhir) riwayatHarian[riwayatHarian.length - 1] = item;
             else { riwayatHarian.push(item); tanggalTerakhir = tglOnly; }
         });
+        if (typeof terapkanFilterPeriode === 'function') riwayatHarian = terapkanFilterPeriode(riwayatHarian);
 
         // 2. Pecah datanya ke masing-masing array
         riwayatHarian.forEach((item) => {
@@ -301,13 +302,13 @@ function renderProgressChart() {
                         callbacks: {
                             // Menambahkan Ikon pada Tooltip
                             title: function(context) {
-                                return '📅 ' + context[0].label;
+                                return context[0].label;
                             },
                             label: function(context) {
                                 let index = context.dataIndex;
                                 return [
-                                    '📈 Total: ' + context.raw + ' ' + unitGaris,
-                                    '🎯 Detail: ' + context.dataset.capaianKustom[index]
+                                    'Total: ' + context.raw + ' ' + unitGaris,
+                                    'Detail: ' + context.dataset.capaianKustom[index]
                                 ];
                             }
                         }
@@ -353,4 +354,5 @@ function renderProgressChart() {
     myUmmiChart     = buatGrafik(myUmmiChart, 'ummiChart', labelsTanggal, dUmmi, cUmmi, '#2563eb', 'rgba(37, 99, 235, ', 'Hal'); 
     myHijaiyahChart = buatGrafik(myHijaiyahChart, 'hijaiyahChart', labelsTanggal, dHijaiyah, cHijaiyah, '#16a34a', 'rgba(22, 163, 74, ', 'Huruf'); 
     myTajwidChart   = buatGrafik(myTajwidChart, 'tajwidChart', labelsTanggal, dTajwid, cTajwid, '#d97706', 'rgba(217, 119, 6, ', 'Hukum'); 
+    if (typeof renderInsightPerkembangan === 'function') renderInsightPerkembangan(kosong);
 }
