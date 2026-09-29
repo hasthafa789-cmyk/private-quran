@@ -13,7 +13,7 @@ window.addEventListener("load", () => {
     if(splash) {
         setTimeout(() => {
             splash.style.opacity = '0'; 
-            setTimeout(() => { splash.style.display = 'none'; }, 1000); 
+            setTimeout(() => { splash.style.display = 'none'; document.documentElement.classList.remove('splash-on'); }, 1000); 
         }, 1200); 
     }
 });

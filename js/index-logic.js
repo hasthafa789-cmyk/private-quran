@@ -629,3 +629,122 @@ window.renderInsightPerkembangan = function(kosong) {
     if (stamp) stamp.textContent = 'Diperbarui ' + hariIni.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
     window.renderPeriodeBar();
 };
+
+// ==========================================
+// ABSENSI MANUAL (Admin & Guru): target = santri yang diketik di kolom pencarian; guru hanya murid binaannya
+// ==========================================
+(function absenManual() {
+    const peran = () => String(localStorage.getItem('role') || '').toLowerCase();
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const norm = s => String(s == null ? '' : s).trim().toLowerCase();
+    const entriHariIni = s => { const h = new Date().toLocaleDateString('id-ID'); return (s.absensi || []).find(a => a.waktu && a.waktu.includes(h)); };
+    const inputCari = () => document.getElementById('namaInput');
+    let izin = null, izinGagal = false; // izin = daftar nama murid milik guru ini
+
+    if (!document.getElementById('amStyle')) {
+        const st = document.createElement('style'); st.id = 'amStyle';
+        st.textContent = `.am-tabs{display:flex;gap:6px;padding:4px;background:#f1f5f9;border-radius:14px;width:fit-content;margin:0 4px}
+        .am-tab{display:inline-flex;align-items:center;gap:6px;padding:0 16px;min-height:40px;border-radius:11px;font-size:13px;font-weight:700;color:#64748b}
+        .am-tab.on{background:#fff;color:#2563eb;box-shadow:0 1px 4px rgba(15,23,42,.12)} .am-tab .material-symbols-outlined{font-size:18px}
+        .am-head{width:100%;margin-bottom:14px;text-align:left} .am-head h2{font-size:18px;font-weight:800;color:#1e293b} .am-head p{font-size:12px;color:#64748b;font-weight:600}
+        .am-body{width:100%} .am-hint{padding:28px 12px;color:#94a3b8;font-size:13px;font-weight:600;text-align:center}
+        .am-target{display:flex;flex-direction:column;align-items:center;gap:6px;padding:20px 16px;border:1px solid #e2e8f0;border-radius:18px;background:#f8fafc;width:100%}
+        .am-target.ok{background:#ecfdf5;border-color:#a7f3d0}
+        .am-ava{width:56px;height:56px;border-radius:18px;background:linear-gradient(135deg,#2563eb,#6366f1);color:#fff;font-size:22px;font-weight:800;display:flex;align-items:center;justify-content:center}
+        .am-tn{font-size:17px;font-weight:800;color:#1e293b;text-align:center} .am-ts{font-size:12px;font-weight:700;color:#64748b} .am-ts.ok{color:#047857}
+        .am-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;margin-top:10px;width:100%;min-height:52px;border-radius:14px;font-size:15px;font-weight:800;background:linear-gradient(135deg,#2563eb,#6366f1);color:#fff}
+        .am-btn:disabled{background:#d1fae5;color:#047857} .am-btn:not(:disabled):active{transform:scale(.97)}
+        .am-chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px}
+        .am-chip{padding:9px 14px;border:1px solid #c7d2fe;background:#eef2ff;color:#4338ca;border-radius:999px;font-size:13px;font-weight:700}
+        .am-note{font-size:11px;color:#b45309;font-weight:600;margin-top:12px;text-align:center}`;
+        document.head.appendChild(st);
+    }
+
+    // Guru: hanya murid dengan guruPembimbing = nama guru. Jika data akun tak bisa dibaca -> jatuh ke dataSantri apa adanya (dan diberi catatan)
+    async function muatIzin() {
+        if (peran() !== 'guru') return;
+        try {
+            const snap = await db.collection('users').where('role', '==', 'murid').get();
+            if (snap.empty) throw new Error('tidak ada data akun murid');
+            const me = norm(localStorage.getItem('nama')), set = new Set();
+            snap.forEach(d => { const u = d.data(); if (u && u.nama && norm(u.guruPembimbing) === me) set.add(norm(u.nama)); });
+            izin = set;
+        } catch (e) { console.warn('Filter murid per guru tidak aktif:', e.message); izin = null; izinGagal = true; }
+        render();
+    }
+    const boleh = s => peran() === 'admin' || izinGagal || (!!izin && izin.has(norm(s.nama)));
+    const kandidat = () => {
+        const q = norm(inputCari() && inputCari().value); if (!q) return [];
+        const semua = (typeof dataSantri !== 'undefined' ? dataSantri : []).filter(s => s && s.nama && boleh(s));
+        const persis = semua.filter(s => norm(s.nama) === q);
+        return persis.length ? persis : semua.filter(s => norm(s.nama).includes(q));
+    };
+
+    function render() {
+        const box = document.getElementById('am-body'); if (!box) return;
+        const note = document.getElementById('am-note'); if (note) note.textContent = peran() === 'guru' && izinGagal ? 'Filter murid per guru tidak aktif (data akun tidak terbaca).' : '';
+        const q = norm(inputCari() && inputCari().value), guru = peran() === 'guru';
+        if (guru && izin === null && !izinGagal) { box.innerHTML = '<div class="am-hint">Memuat daftar murid Anda...</div>'; return; }
+        if (!q) { box.innerHTML = '<div class="am-hint">Ketik nama santri di kolom pencarian atas, lalu tekan Hadir.</div>'; return; }
+        const k = kandidat();
+        if (!k.length) { box.innerHTML = `<div class="am-hint">${guru ? 'Tidak ada murid Anda dengan nama itu.' : 'Santri tidak ditemukan.'}</div>`; return; }
+        if (k.length > 1) {
+            box.innerHTML = `<div class="am-hint" style="padding-bottom:0">${k.length} nama cocok. Pilih salah satu:</div><div class="am-chips">${k.slice(0, 8).map(s => `<button class="am-chip" data-p="${esc(s.nama)}">${esc(s.nama)}</button>`).join('')}</div>`; return;
+        }
+        const s = k[0], e = entriHariIni(s), jam = e ? (String(e.waktu).split(',')[1] || '').trim() : '';
+        box.innerHTML = `<div class="am-target ${e ? 'ok' : ''}"><div class="am-ava">${esc(s.nama.trim().charAt(0).toUpperCase())}</div><div class="am-tn">${esc(s.nama)}</div>` +
+            `<div class="am-ts ${e ? 'ok' : ''}">${e ? 'Sudah hadir hari ini' + (jam ? ' - ' + esc(jam) : '') : 'Belum absen hari ini'}</div>` +
+            `<button class="am-btn" data-n="${esc(s.nama)}" ${e ? 'disabled' : ''}><span class="material-symbols-outlined" style="font-size:20px">${e ? 'check_circle' : 'how_to_reg'}</span>${e ? 'Sudah hadir' : 'Tandai Hadir'}</button></div>`;
+    }
+
+    async function catat(nama) {
+        const s = (typeof dataSantri !== 'undefined' ? dataSantri : []).find(x => x.nama === nama);
+        if (!s || !boleh(s) || entriHariIni(s)) return; // hanya santri yang boleh & belum absen
+        const waktu = new Date().toLocaleString('id-ID'), oleh = localStorage.getItem('nama') || peran(), entri = { waktu, qrData: 'Manual (' + oleh + ')' };
+        if (!s.absensi) s.absensi = [];
+        s.absensi.push(entri); window.santriAktif = s; render();
+        try {
+            await db.collection('database_hafalan').doc(s.nama).set({ absensi: s.absensi }, { merge: true });
+            if (typeof scriptURLAbsen !== 'undefined') fetch(`${scriptURLAbsen}?nama=${encodeURIComponent(s.nama)}&waktu=${encodeURIComponent(waktu)}&qr_data=${encodeURIComponent(entri.qrData)}`, { method: 'GET', mode: 'no-cors' }).catch(() => {});
+            window.showToast('Tersimpan: ' + s.nama, 'success');
+            if (typeof window.renderRiwayatAbsensi === 'function') window.renderRiwayatAbsensi();
+        } catch (er) {
+            s.absensi = s.absensi.filter(x => x !== entri); render(); window.showToast('Gagal menyimpan ke Cloud', 'error');
+        }
+    }
+
+    function setMode(m) {
+        try { localStorage.setItem('absenMode', m); } catch (e) {}
+        const grid = document.querySelector('#viewAbsensi .grid'), scan = grid.firstElementChild, kartu = document.getElementById('am-card');
+        scan.style.display = m === 'scan' ? '' : 'none'; kartu.style.display = m === 'manual' ? '' : 'none';
+        document.querySelectorAll('#am-tabs .am-tab').forEach(b => b.classList.toggle('on', b.dataset.m === m));
+        try { if (typeof html5QrcodeScanner !== 'undefined' && html5QrcodeScanner) m === 'manual' ? html5QrcodeScanner.pause(true) : html5QrcodeScanner.resume(); } catch (e) {}
+        if (m === 'manual') { render(); const i = inputCari(); if (i) i.focus(); }
+    }
+
+    function bangun() {
+        const view = document.getElementById('viewAbsensi'), grid = view && view.querySelector('.grid');
+        if (!grid || document.getElementById('am-card') || !['admin', 'guru'].includes(peran())) return;
+        const scan = grid.firstElementChild, kartu = document.createElement('div');
+        kartu.id = 'am-card'; kartu.className = scan.className; kartu.style.display = 'none';
+        kartu.innerHTML = `<div class="am-head"><h2>Absen Manual</h2><p>Hanya santri yang namanya ada di kolom pencarian yang diabsen</p></div><div id="am-body" class="am-body"></div><p id="am-note" class="am-note"></p>`;
+        scan.after(kartu);
+        const tabs = document.createElement('div'); tabs.id = 'am-tabs'; tabs.className = 'am-tabs'; tabs.setAttribute('role', 'tablist');
+        tabs.innerHTML = `<button class="am-tab on" data-m="scan"><span class="material-symbols-outlined">qr_code_scanner</span>Scan QR</button><button class="am-tab" data-m="manual"><span class="material-symbols-outlined">touch_app</span>Manual</button>`;
+        grid.before(tabs);
+        tabs.addEventListener('click', e => { const b = e.target.closest('.am-tab'); if (b) setMode(b.dataset.m); });
+        kartu.addEventListener('click', e => {
+            const p = e.target.closest('.am-chip'), b = e.target.closest('.am-btn');
+            if (p) { const i = inputCari(); if (i) { i.value = p.dataset.p; i.dispatchEvent(new Event('input', { bubbles: true })); render(); } }
+            else if (b && !b.disabled) catat(b.dataset.n);
+        });
+        if (inputCari()) inputCari().addEventListener('input', render);
+        muatIzin();
+        let simpan = 'scan'; try { simpan = localStorage.getItem('absenMode') || 'scan'; } catch (e) {}
+        if (simpan === 'manual') setMode('manual');
+    }
+
+    const asli = window.renderRiwayatAbsensi;
+    if (typeof asli === 'function') window.renderRiwayatAbsensi = function() { const h = asli.apply(this, arguments); render(); return h; };
+    bangun(); document.addEventListener('DOMContentLoaded', bangun);
+})();

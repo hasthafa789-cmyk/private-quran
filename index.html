@@ -97,6 +97,15 @@
         .rp-sec { background:#f1f5f9; color:#475569; } .rp-sec:hover { background:#e2e8f0; }
         .rp-pri { background:#2563eb; color:#fff; box-shadow:0 6px 16px rgba(37,99,235,.3); } .rp-pri:hover { background:#1d4ed8; }
     </style>
+    <!-- Gaya kritis splash: tampil instan, tidak menunggu Tailwind (mencegah halaman "bocor" sebelum splash) -->
+    <style>
+        html.splash-on, html.splash-on body { overflow: hidden; }
+        #splashScreen { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #fff; transition: opacity 1s ease-in-out; }
+        #splashScreen > div { display: flex; flex-direction: column; align-items: center; }
+        #splashScreen img { width: 96px; height: 96px; object-fit: contain; margin: 0 0 20px; filter: drop-shadow(0 20px 20px rgba(0,0,0,.15)); }
+        #splashScreen h1 { margin: 0; font: 800 24px 'Plus Jakarta Sans', system-ui, sans-serif; color: #1e293b; letter-spacing: -.025em; }
+    </style>
+    <script>document.documentElement.classList.add('splash-on');</script>
 </head>
 
 <body class="bg-slate-50 text-slate-800 min-h-screen selection:bg-blue-100 selection:text-blue-700">
