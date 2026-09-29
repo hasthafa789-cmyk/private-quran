@@ -13,6 +13,8 @@ let jawabanSalahTotal = 0;
 let jenisKuisSaatIni = "";
 let levelKuisSaatIni = 1;
 let tempKuisPilihan = "";
+let soalSalah = [];           // soal yang dijawab salah / waktu habis (untuk review di layar hasil)
+let menungguLanjut = false;   // true saat panel penjelasan tampil & menunggu tombol Lanjut
 
 // ==========================================
 // ATURAN KUNCI LEVEL
@@ -209,11 +211,11 @@ function formatLabelLevel(level) {
 
 const bankSoalTajwid = {
     dasar: [
-        { pertanyaan: "Apabila ada Nun Sukun (نْ) atau Tanwin bertemu dengan huruf Ba (ب), maka hukum bacaannya adalah...", opsi: ["Iqlab", "Ikhfa Haqiqi", "Idgham Bighunnah", "Idzhar Halqi"], jawabanBenar: "Iqlab" },
-        { pertanyaan: "Berikut ini yang merupakan huruf-huruf Qalqalah adalah...", opsi: ["ق، ط، ب، ج، د", "ي، ن، م، و", "ح، خ، ع، غ، هـ", "ا، ل، م، ر، ك"], jawabanBenar: "ق، ط، ب، ج، د" },
+        { pertanyaan: "Apabila ada Nun Sukun (نْ) atau Tanwin bertemu dengan huruf Ba (ب), maka hukum bacaannya adalah...", opsi: ["Iqlab", "Ikhfa Haqiqi", "Idgham Bighunnah", "Idzhar Halqi"], jawabanBenar: "Iqlab", penjelasan: "Iqlab artinya menukar: bunyi nun sukun atau tanwin ditukar menjadi mim yang samar, lalu dibaca berdengung saat bertemu huruf Ba." },
+        { pertanyaan: "Berikut ini yang merupakan huruf-huruf Qalqalah adalah...", opsi: ["ق، ط، ب، ج، د", "ي، ن، م، و", "ح، خ، ع، غ، هـ", "ا، ل، م، ر، ك"], jawabanBenar: "ق، ط، ب، ج، د", penjelasan: "Huruf Qalqalah ada 5 dan mudah diingat lewat kata Qutbu Jadin, yaitu ق ط ب ج د. Bunyinya memantul ketika sukun." },
         { pertanyaan: "Hukum bacaan Idgham Bilaghunnah terjadi apabila Nun Sukun atau Tanwin bertemu dengan huruf...", opsi: ["Lam (ل) dan Ra (ر)", "Wawu (و) dan Ya (ي)", "Mim (م) dan Nun (ن)", "Ba (ب)"], jawabanBenar: "Lam (ل) dan Ra (ر)" },
-        { pertanyaan: "Secara bahasa, 'Ikhfa' memiliki arti...", opsi: ["Samar-samar", "Jelas", "Memasukkan", "Menukar/Mengganti"], jawabanBenar: "Samar-samar" },
-        { pertanyaan: "Berapakah panjang harakat untuk bacaan Mad Thabi'i (Mad Asli)?", opsi: ["2 Harakat", "4 Harakat", "5 Harakat", "6 Harakat"], jawabanBenar: "2 Harakat" },
+        { pertanyaan: "Secara bahasa, 'Ikhfa' memiliki arti...", opsi: ["Samar-samar", "Jelas", "Memasukkan", "Menukar/Mengganti"], jawabanBenar: "Samar-samar", penjelasan: "Ikhfa berarti samar-samar: bunyi nun sukun atau tanwin dibaca samar, di antara idzhar dan idgham, disertai dengung." },
+        { pertanyaan: "Berapakah panjang harakat untuk bacaan Mad Thabi'i (Mad Asli)?", opsi: ["2 Harakat", "4 Harakat", "5 Harakat", "6 Harakat"], jawabanBenar: "2 Harakat", penjelasan: "Mad Thabi'i (Mad Asli) dibaca 2 harakat, kira-kira sepanjang dua ketukan." },
         { pertanyaan: "Apabila ada Mim Sukun (مْ) bertemu dengan huruf Mim (م), maka hukum bacaannya disebut...", opsi: ["Idgham Mimi (Mutamatsilain)", "Ikhfa Syafawi", "Idzhar Syafawi", "Idgham Bighunnah"], jawabanBenar: "Idgham Mimi (Mutamatsilain)" },
         { pertanyaan: "Hukum Ikhfa Syafawi terjadi apabila...", opsi: ["Mim Sukun bertemu Ba", "Mim Sukun bertemu Mim", "Nun Sukun bertemu Ba", "Mim Sukun bertemu selain Mim dan Ba"], jawabanBenar: "Mim Sukun bertemu Ba" },
         { pertanyaan: "Huruf Idzhar Halqi berjumlah 6, yaitu...", opsi: ["ء، هـ، ع، ح، غ، خ", "ي، ن، م، و، ل، ر", "ت، ث، ج، د، ذ، ز", "ص، ض، ط، ظ، ف، ق"], jawabanBenar: "ء، هـ، ع، ح، غ، خ" },
@@ -832,8 +834,25 @@ window.kirimBackupKeSheet = function(data) {
 // rendah, dominan soal "dasar".
 // ==========================================
 
+// Fisher-Yates: pengacakan merata (sort dengan Math.random() bias)
 function acakUrutan(arr) {
-    return arr.slice().sort(() => 0.5 - Math.random());
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+}
+
+// Teks Arab dibungkus span khusus (font Amiri + arah kanan-ke-kiri) agar
+// harakat terbaca jelas, sementara teks Indonesia di sekitarnya tetap normal.
+const HURUF_ARAB = '[\\u0600-\\u06FF\\u0750-\\u077F\\u08A0-\\u08FF\\uFB50-\\uFDFF\\uFE70-\\uFEFF]+';
+const RE_ARAB = new RegExp(HURUF_ARAB + '(?:\\s+' + HURUF_ARAB + ')*', 'g');
+function escapeHtml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function formatTeksArab(teks) {
+    return escapeHtml(teks).replace(RE_ARAB, m => '<span class="teks-arab" dir="rtl">' + m + '</span>');
 }
 
 function ambilSejumlahSoal(arr, n) {
@@ -847,12 +866,9 @@ function ambilSejumlahSoal(arr, n) {
 
 // ==========================================
 // JUMLAH LEVEL MAKSIMAL PER JENIS KUIS
-// Bank soal Tajwid, Makharijul, dan Juz 30 cukup banyak variasinya
-// sehingga bisa memakai 50 level penuh. Bank soal Juz 29 baru berisi
-// soal sambung-ayat yang sudah diverifikasi ketat (lebih sedikit demi
-// menjaga keakuratan kutipan ayat), jadi levelnya dibuat lebih pendek
-// (1-25) agar tidak mengulang-ulang soal yang sama secara berlebihan
-// di level tinggi. PERBAIKAN: sebelumnya digit "50" ditulis tetap di
+// Semua jenis kuis memakai 50 level. Soal tiap level diambil dari bank
+// soal sesuai tingkat kesulitannya (soal bisa berulang antar level bila
+// bank-nya lebih kecil, seperti Juz 29). PERBAIKAN: sebelumnya digit "50" ditulis tetap di
 // beberapa tempat (grid level, judul modal) padahal jumlah level per
 // jenis kuis bisa berbeda-beda — sekarang semuanya mengikuti nilai di
 // bawah ini.
@@ -861,7 +877,7 @@ const MAKS_LEVEL_PER_JENIS = {
     tajwid: 50,
     makharijul: 50,
     juz30: 50,
-    juz29: 25
+    juz29: 50
 };
 function getMaksLevel(jenis) {
     return MAKS_LEVEL_PER_JENIS[jenis] || 50;
@@ -1155,6 +1171,7 @@ window.mulaiKuisDariLevel = function(level) {
     skorKuis = 0;
     jawabanBenarTotal = 0;
     jawabanSalahTotal = 0;
+    soalSalah = [];
     sesiKuis++;
     soalSudahDijawab = false;
 
@@ -1178,17 +1195,20 @@ window.renderSoal = function() {
 
     document.getElementById('indikatorSoal').innerText = `Soal ${indexSoalSaatIni + 1} / ${kuisAktif.length}`;
     document.getElementById('skorSementara').innerHTML = `Skor: ${Math.round(skorKuis)} <span class="text-emerald-500 ml-2">✓ ${jawabanBenarTotal}</span> <span class="text-rose-500 ml-1">✗ ${jawabanSalahTotal}</span>`;
-    document.getElementById('teksPertanyaan').innerText = soal.pertanyaan;
+    document.getElementById('teksPertanyaan').innerHTML = formatTeksArab(soal.pertanyaan);
+
+    menungguLanjut = false;
+    const panel = document.getElementById('panelUmpanBalik');
+    if (panel) panel.classList.add('hidden');
 
     const containerOpsi = document.getElementById('opsiJawaban');
     containerOpsi.innerHTML = '';
 
-    const opsiAcak = soal.opsi.slice().sort(() => 0.5 - Math.random());
-
-    opsiAcak.forEach(pilihan => {
+    acakUrutan(soal.opsi).forEach(pilihan => {
         const btn = document.createElement('button');
         btn.className = "p-4 bg-slate-50 border border-slate-200 hover:border-blue-400 hover:bg-blue-50 text-slate-700 font-bold rounded-xl transition-all shadow-sm active:scale-95 text-sm sm:text-base";
-        btn.innerText = pilihan;
+        btn.dataset.jawaban = pilihan;
+        btn.innerHTML = formatTeksArab(pilihan);
         btn.onclick = () => window.cekJawaban(pilihan, soal.jawabanBenar, btn);
         containerOpsi.appendChild(btn);
     });
@@ -1265,11 +1285,53 @@ document.addEventListener('visibilitychange', function() {
 });
 
 // Proses satu soal selesai (dijawab atau waktu habis) lalu lanjut
+function lanjutSoal(sesi, dariPanel) {
+    if (sesi !== sesiKuis) return; // kuis sudah ditinggalkan / diganti kuis baru
+    if (dariPanel) {
+        if (!menungguLanjut) return; // cegah klik ganda melompati soal
+        menungguLanjut = false;
+    }
+    const panel = document.getElementById('panelUmpanBalik');
+    if (panel) panel.classList.add('hidden');
+    indexSoalSaatIni++;
+    if (indexSoalSaatIni < kuisAktif.length) {
+        window.renderSoal();
+    } else {
+        window.akhiriKuis();
+    }
+}
+
+// Panel umpan balik: status + jawaban benar + penjelasan + tombol Lanjut.
+function tampilkanUmpanBalik(benar, waktuHabis, soal, sesi) {
+    const panel = document.getElementById('panelUmpanBalik');
+    const isi = document.getElementById('isiUmpanBalik');
+    const tombol = document.getElementById('tombolLanjutSoal');
+    if (!panel || !isi || !tombol) { lanjutSoal(sesi); return; } // HTML belum dipasang: perilaku lama
+
+    let judul, ikon, kelas;
+    if (benar) { judul = 'Benar!'; ikon = 'check_circle'; kelas = 'bg-emerald-50 border-emerald-200 text-emerald-800'; }
+    else if (waktuHabis) { judul = 'Waktu habis'; ikon = 'timer_off'; kelas = 'bg-rose-50 border-rose-200 text-rose-800'; }
+    else { judul = 'Kurang tepat'; ikon = 'cancel'; kelas = 'bg-rose-50 border-rose-200 text-rose-800'; }
+
+    let html = '<p class="font-extrabold flex items-center gap-1.5"><span class="material-symbols-outlined text-lg">' + ikon + '</span>' + judul + '</p>';
+    if (!benar) html += '<p class="mt-1.5 font-semibold">Jawaban benar: ' + formatTeksArab(soal.jawabanBenar) + '</p>';
+    if (soal.penjelasan) html += '<p class="mt-1.5 text-[13px] leading-relaxed opacity-90">' + formatTeksArab(soal.penjelasan) + '</p>';
+
+    isi.className = 'rounded-2xl border px-4 py-3 text-sm ' + kelas;
+    isi.innerHTML = html;
+    const terakhir = indexSoalSaatIni + 1 >= kuisAktif.length;
+    tombol.innerText = terakhir ? 'Lihat Hasil' : 'Lanjut';
+    tombol.onclick = () => lanjutSoal(sesi, true);
+    menungguLanjut = true;
+    panel.classList.remove('hidden');
+}
+
 function selesaikanSoal(jawabanDipilih, jawabanBenar, elemenTombol) {
     if (soalSudahDijawab) return;
     soalSudahDijawab = true;
     hentikanTimerSoal();
     const sesi = sesiKuis;
+    const soal = kuisAktif[indexSoalSaatIni];
 
     const semuaTombol = document.getElementById('opsiJawaban').querySelectorAll('button');
     semuaTombol.forEach(btn => btn.disabled = true); // Kunci agar tak diklik ganda
@@ -1280,10 +1342,11 @@ function selesaikanSoal(jawabanDipilih, jawabanBenar, elemenTombol) {
         kelasBaru.forEach(k => btn.classList.add(k));
     };
     const tandaiBenar = () => semuaTombol.forEach(btn => {
-        if (btn.innerText === jawabanBenar) tandai(btn, ['bg-emerald-100', 'border-emerald-500', 'text-emerald-700']);
+        if (btn.dataset.jawaban === jawabanBenar) tandai(btn, ['bg-emerald-100', 'border-emerald-500', 'text-emerald-700']);
     });
 
-    if (elemenTombol && jawabanDipilih === jawabanBenar) {
+    const benar = !!elemenTombol && jawabanDipilih === jawabanBenar;
+    if (benar) {
         skorKuis += bobotPerSoal;
         jawabanBenarTotal++;
         tandai(elemenTombol, ['bg-emerald-100', 'border-emerald-500', 'text-emerald-700']);
@@ -1291,17 +1354,21 @@ function selesaikanSoal(jawabanDipilih, jawabanBenar, elemenTombol) {
         jawabanSalahTotal++;
         if (elemenTombol) tandai(elemenTombol, ['bg-rose-100', 'border-rose-500', 'text-rose-700']);
         tandaiBenar();
+        soalSalah.push({
+            pertanyaan: soal.pertanyaan,
+            dipilih: elemenTombol ? jawabanDipilih : null, // null = waktu habis
+            benar: jawabanBenar,
+            penjelasan: soal.penjelasan || ''
+        });
     }
 
-    setTimeout(() => {
-        if (sesi !== sesiKuis) return; // kuis sudah ditinggalkan / diganti kuis baru
-        indexSoalSaatIni++;
-        if (indexSoalSaatIni < kuisAktif.length) {
-            window.renderSoal();
-        } else {
-            window.akhiriKuis();
-        }
-    }, 1500);
+    // Jawaban benar tanpa penjelasan: lanjut otomatis seperti sebelumnya.
+    // Jawaban salah / waktu habis / soal ber-penjelasan: tunggu tombol Lanjut.
+    if (benar && !soal.penjelasan) {
+        setTimeout(() => lanjutSoal(sesi, false), 1500);
+    } else {
+        tampilkanUmpanBalik(benar, !elemenTombol, soal, sesi);
+    }
 }
 
 window.cekJawaban = function(jawabanDipilih, jawabanBenar, elemenTombol) {
@@ -1487,6 +1554,29 @@ window.tampilkanHasilKuis = function(hasil) {
         }
         box.className = "w-full rounded-2xl border px-4 py-3 mb-5 text-xs text-center " + kelas;
         box.innerHTML = baris.join('');
+    }
+
+    // Review soal yang salah
+    const rev = document.getElementById('reviewSalahHasilKuis');
+    if (rev) {
+        if (soalSalah.length === 0) {
+            rev.classList.add('hidden');
+            rev.innerHTML = '';
+        } else {
+            let h = '<p class="text-[11px] font-extrabold text-slate-500 uppercase tracking-wide mb-2">Pelajari lagi (' + soalSalah.length + ' soal)</p>';
+            h += '<div class="max-h-56 overflow-y-auto space-y-2 pr-1">';
+            soalSalah.forEach(s => {
+                h += '<div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs">';
+                h += '<p class="font-bold text-slate-700 leading-relaxed">' + formatTeksArab(s.pertanyaan) + '</p>';
+                h += '<p class="mt-1 text-rose-600 font-semibold">' + (s.dipilih === null ? 'Waktu habis' : 'Jawabanmu: ' + formatTeksArab(s.dipilih)) + '</p>';
+                h += '<p class="text-emerald-700 font-semibold">Benar: ' + formatTeksArab(s.benar) + '</p>';
+                if (s.penjelasan) h += '<p class="mt-1 text-slate-500 leading-relaxed">' + formatTeksArab(s.penjelasan) + '</p>';
+                h += '</div>';
+            });
+            h += '</div>';
+            rev.innerHTML = h;
+            rev.classList.remove('hidden');
+        }
     }
 
     modal.classList.remove('hidden');
