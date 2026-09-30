@@ -416,7 +416,7 @@ window.resetScan = function(div, msg, color) {
     const mi = String(msg).match(/^(❌|✅|⚠️)\s*/), teks = mi ? String(msg).slice(mi[0].length) : msg;
     const ikon = mi ? `<span class="material-symbols-outlined" style="font-size:18px;vertical-align:-4px;margin-right:6px">${{'❌':'error','✅':'check_circle','⚠️':'warning'}[mi[1]]}</span>` : '';
     window.showToast(teks, {emerald:'success', rose:'error', amber:'warning'}[color] || 'info');
-    div.innerHTML = ikon + teks; div.className = `text-sm font-bold text-${color}-700 bg-${color}-50 px-6 py-4 rounded-xl border border-${color}-200`;
+    div.innerHTML = ikon + teks; div.className = 'text-sm font-bold px-6 py-4 rounded-xl border ' + ({emerald:'text-emerald-700 bg-emerald-50 border-emerald-200', rose:'text-rose-700 bg-rose-50 border-rose-200', amber:'text-amber-700 bg-amber-50 border-amber-200'}[color] || 'text-slate-700 bg-slate-50 border-slate-200');
     setTimeout(() => { if (html5QrcodeScanner) html5QrcodeScanner.resume(); div.innerHTML = "Menunggu scan..."; div.className = "text-sm font-bold text-slate-500 bg-slate-50 px-6 py-4 rounded-xl border border-slate-200"; }, 2500);
 };
 
@@ -629,8 +629,13 @@ window.renderPeriodeBar = function() {
 window.renderInsightPerkembangan = function(kosong) {
     const KONF = [['progressChart', 'skor', 'Ayat'], ['ummiChart', 'skorUmmi', 'Hal'], ['hijaiyahChart', 'skorHijaiyah', 'Huruf'], ['tajwidChart', 'skorTajwid', 'Hukum']];
     const harian = kosong ? [] : window.riwayatHarianSantri(), hariIni = new Date();
+    let jmlAda = 0;
     KONF.forEach(([id, field, unit]) => {
         const cv = document.getElementById(id); if (!cv || !cv.parentElement) return;
+        // Tampilkan kartu grafik hanya jika ada data perkembangannya
+        const ada = harian.some(it => Number(it && it[field]) > 0), kartu = cv.closest('.group');
+        if (kartu) kartu.style.display = ada ? '' : 'none';
+        if (ada) { jmlAda++; try { const ch = window.Chart && Chart.getChart && Chart.getChart(cv); if (ch) ch.resize(); } catch (e) {} }
         let box = document.getElementById('insight-' + id);
         if (!box) { box = document.createElement('div'); box.id = 'insight-' + id; box.className = 'ci-box'; cv.parentElement.after(box); }
         if (!harian.length) { box.style.display = 'none'; return; }
@@ -640,6 +645,9 @@ window.renderInsightPerkembangan = function(kosong) {
         box.style.display = 'flex';
         cv.setAttribute('role', 'img'); cv.setAttribute('aria-label', chips.map(c => c[0]).join(', '));
     });
+    // Tidak ada satu pun data: sembunyikan seluruh bagian Analisis Perkembangan
+    const gridA = document.getElementById('progressChart'), secA = gridA && gridA.closest('section');
+    if (secA) secA.style.display = jmlAda ? '' : 'none';
     const stamp = document.getElementById('chartUpdated');
     if (stamp) stamp.textContent = 'Diperbarui ' + hariIni.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
     window.renderPeriodeBar();

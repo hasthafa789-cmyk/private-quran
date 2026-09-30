@@ -10,16 +10,16 @@
     <meta name="theme-color" content="#2563eb">
 
     <!-- Library Eksternal -->
-    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script defer src="https://unpkg.com/html5-qrcode"></script>
     <!-- Tailwind hasil build. Jika css/tailwind.css belum ada, otomatis pakai CDN sebagai cadangan. -->
     <link rel="stylesheet" href="css/tailwind.css" onerror="var s=document.createElement('script');s.src='https://cdn.tailwindcss.com';document.head.appendChild(s)">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <!-- Fonts & Icons -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
     <style>.teks-arab{font-family:'Amiri','Scheherazade New','Traditional Arabic',serif;font-size:1.3em;line-height:1.9;unicode-bidi:isolate;}</style>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
 
@@ -140,9 +140,9 @@
                     <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
                         <span class="material-symbols-outlined text-lg">search</span>
                     </span>
-                    <input id="namaInput" type="text" placeholder="Cari Santri..." class="w-full sm:w-64 pl-10 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-semibold text-slate-700 placeholder:text-slate-400">
+                    <input id="namaInput" type="text" aria-label="Cari santri" placeholder="Cari Santri..." class="w-full sm:w-64 pl-10 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-semibold text-slate-700 placeholder:text-slate-400">
                 </div>
-                <button onclick="logout()" class="p-2.5 sm:px-5 sm:py-2.5 text-sm font-bold bg-white text-rose-600 hover:bg-rose-50 border border-rose-200 active:scale-95 rounded-xl transition-all flex items-center gap-2 shadow-sm">
+                <button onclick="logout()" aria-label="Keluar" class="p-2.5 sm:px-5 sm:py-2.5 text-sm font-bold bg-white text-rose-600 hover:bg-rose-50 border border-rose-200 active:scale-95 rounded-xl transition-all flex items-center gap-2 shadow-sm">
                     <span class="material-symbols-outlined text-lg">logout</span> 
                     <span class="hidden sm:inline">Keluar</span>
                 </button>
@@ -264,7 +264,7 @@
 
             <!-- 4. STATISTIK KARTU -->
             <section class="animate-entry delay-2 space-y-3 pt-2">
-                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Dashboard Live Overview</h3>
+                <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest">Dashboard Live Overview</h3>
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
                     
                     <div class="relative overflow-hidden p-5 sm:p-6 rounded-3xl bg-blue-900 text-white shadow-lg group transition-all duration-300 min-h-[140px] flex flex-col justify-between hover:scale-[1.02] hover:-translate-y-1">
@@ -340,7 +340,7 @@
 
             <!-- 5. AKSES PROGRAM -->
             <section class="animate-entry delay-3 space-y-3 pt-2">
-                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Menu Program Utama</h3>
+                <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest">Menu Program Utama</h3>
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
 
                     <button onclick="navigateTo('viewLatihan')" class="text-left bg-white border border-slate-200 rounded-3xl p-6 text-slate-800 shadow-sm group active:scale-[0.98] transition-all hover:-translate-y-1 hover:shadow-lg hover:border-blue-300 flex flex-col justify-between min-h-[160px]">
@@ -425,7 +425,7 @@
         <!-- ============================================== -->
         <div id="viewLatihan" class="page-view hidden space-y-6">
             <div class="flex items-center gap-3">
-                <button onclick="kembaliDashboard()" class="px-4 py-2 text-xs font-bold bg-white text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition active:scale-95 flex items-center gap-1.5 shadow-sm">
+                <button onclick="kembaliDashboard()" class="px-4 py-3 text-xs font-bold bg-white text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition active:scale-95 flex items-center gap-1.5 shadow-sm">
                     <span class="material-symbols-outlined text-sm">arrow_back</span> Kembali
                 </button>
                 <div class="h-4 w-[1px] bg-slate-300"></div>
@@ -513,7 +513,7 @@
         <!-- ============================================== -->
         <div id="viewHafalan" class="page-view hidden space-y-6">
             <div class="flex items-center gap-3">
-                <button onclick="kembaliDashboard()" class="px-4 py-2 text-xs font-bold bg-white text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition active:scale-95 flex items-center gap-1.5 shadow-sm">
+                <button onclick="kembaliDashboard()" class="px-4 py-3 text-xs font-bold bg-white text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition active:scale-95 flex items-center gap-1.5 shadow-sm">
                     <span class="material-symbols-outlined text-sm">arrow_back</span> Kembali
                 </button>
                 <div class="h-4 w-[1px] bg-slate-300"></div>
@@ -541,7 +541,7 @@
                                 <h2 id="txtJudulHalamanJuz" class="text-lg font-extrabold text-slate-800 tracking-tight">Daftar Surat</h2>
                             </div>
                         </div>
-                        <button onclick="kembaliKeDaftarJuz()" class="px-4 py-2 text-xs font-bold bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 rounded-xl transition flex items-center gap-1.5">
+                        <button onclick="kembaliKeDaftarJuz()" class="px-4 py-3 text-xs font-bold bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 rounded-xl transition flex items-center gap-1.5">
                             <span class="material-symbols-outlined text-sm">arrow_back</span> Daftar Juz
                         </button>
                     </div>
@@ -555,7 +555,7 @@
         <!-- ============================================== -->
         <div id="viewUmmi" class="page-view hidden space-y-6">
             <div class="flex items-center gap-3">
-                <button onclick="kembaliDashboard()" class="px-4 py-2 text-xs font-bold bg-white text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition active:scale-95 flex items-center gap-1.5 shadow-sm">
+                <button onclick="kembaliDashboard()" class="px-4 py-3 text-xs font-bold bg-white text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition active:scale-95 flex items-center gap-1.5 shadow-sm">
                     <span class="material-symbols-outlined text-sm">arrow_back</span> Kembali
                 </button>
                 <div class="h-4 w-[1px] bg-slate-300"></div>
@@ -581,7 +581,7 @@
         <!-- ============================================== -->
         <div id="viewPenilaian" class="page-view hidden space-y-6">
             <div class="flex items-center gap-3">
-                <button onclick="kembaliDashboard()" class="px-4 py-2 text-xs font-bold bg-white text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition active:scale-95 flex items-center gap-1.5 shadow-sm">
+                <button onclick="kembaliDashboard()" class="px-4 py-3 text-xs font-bold bg-white text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition active:scale-95 flex items-center gap-1.5 shadow-sm">
                     <span class="material-symbols-outlined text-sm">arrow_back</span> Kembali
                 </button>
                 <div class="h-4 w-[1px] bg-slate-300"></div>
@@ -619,7 +619,7 @@
                             <div class="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600"><span class="material-symbols-outlined">record_voice_over</span></div>
                             <h2 class="text-lg font-extrabold text-slate-800 tracking-tight">Makharijul Huruf</h2>
                         </div>
-                        <button onclick="kembaliKeMenuPenilaian()" class="px-4 py-2 text-xs font-bold bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 rounded-xl transition flex items-center gap-1.5">
+                        <button onclick="kembaliKeMenuPenilaian()" class="px-4 py-3 text-xs font-bold bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 rounded-xl transition flex items-center gap-1.5">
                             <span class="material-symbols-outlined text-sm">arrow_back</span> Menu
                         </button>
                     </div>
@@ -634,7 +634,7 @@
                             <div class="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600"><span class="material-symbols-outlined">lightbulb</span></div>
                             <h2 class="text-lg font-extrabold text-slate-800 tracking-tight">Hukum Tajwid</h2>
                         </div>
-                        <button onclick="kembaliKeMenuPenilaian()" class="px-4 py-2 text-xs font-bold bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 rounded-xl transition flex items-center gap-1.5">
+                        <button onclick="kembaliKeMenuPenilaian()" class="px-4 py-3 text-xs font-bold bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 rounded-xl transition flex items-center gap-1.5">
                             <span class="material-symbols-outlined text-sm">arrow_back</span> Menu
                         </button>
                     </div>
@@ -649,11 +649,11 @@
         <div id="viewAbsensi" class="page-view hidden space-y-6">
             <div class="flex items-center justify-between px-1">
                 <div class="flex items-center gap-3">
-                    <button onclick="tutupMenuAbsensi()" class="px-4 py-2 text-xs font-bold bg-white text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all active:scale-95 flex items-center gap-1.5 shadow-sm group">
+                    <button onclick="tutupMenuAbsensi()" class="px-4 py-3 text-xs font-bold bg-white text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all active:scale-95 flex items-center gap-1.5 shadow-sm group">
                         <span class="material-symbols-outlined text-sm group-hover:-translate-x-1 transition-transform">arrow_back</span> Kembali
                     </button>
                     <div class="h-4 w-[1px] bg-slate-300"></div>
-                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest hidden sm:block">Sistem Absensi</h3>
+                    <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest hidden sm:block">Sistem Absensi</h3>
                 </div>
                 
                 <span class="flex items-center gap-2 text-[10px] font-bold text-rose-600 bg-white px-3 py-1.5 rounded-full border border-rose-100 shadow-sm">
@@ -704,10 +704,10 @@
     <div id="backdropDetail" onclick="closeDetail()" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] transition-all duration-300 w-screen h-screen"></div>
 
     <!-- Modal Hafalan -->
-    <section id="suratDetail" class="hidden fixed inset-0 z-[110] flex items-center justify-center p-4 transition-all duration-300">
+    <section id="suratDetail" role="dialog" aria-modal="true" aria-labelledby="judulSurat" class="hidden fixed inset-0 z-[110] flex items-center justify-center p-4 transition-all duration-300">
         <div class="w-full max-w-xl bg-white rounded-3xl shadow-2xl border border-slate-100 flex flex-col max-h-[85vh] overflow-hidden animate-modal">
             <div class="bg-blue-600 p-4 sm:p-5 text-white flex items-center justify-between flex-shrink-0">
-                <button onclick="closeDetail()" class="p-1.5 hover:bg-white/10 rounded-lg transition active:scale-90 flex items-center justify-center"><span class="material-symbols-outlined text-base">close</span></button>
+                <button onclick="closeDetail()" aria-label="Tutup" class="p-1.5 hover:bg-white/10 rounded-lg transition active:scale-90 flex items-center justify-center"><span class="material-symbols-outlined text-base">close</span></button>
                 <h2 id="judulSurat" class="text-sm sm:text-base font-bold text-center flex-grow tracking-wide">Nama Surat</h2>
                 <div class="w-8"></div>
             </div>
@@ -721,10 +721,10 @@
     </section>
 
     <!-- Modal Jilid Ummi -->
-    <section id="ummiDetail" class="hidden fixed inset-0 z-[110] flex items-center justify-center p-4 transition-all duration-300">
+    <section id="ummiDetail" role="dialog" aria-modal="true" aria-labelledby="judulUmmi" class="hidden fixed inset-0 z-[110] flex items-center justify-center p-4 transition-all duration-300">
         <div class="w-full max-w-xl bg-white rounded-3xl shadow-2xl border border-slate-100 flex flex-col max-h-[85vh] overflow-hidden animate-modal">
             <div class="bg-blue-600 p-4 sm:p-5 text-white flex items-center justify-between flex-shrink-0">
-                <button onclick="closeUmmiDetail()" class="p-1.5 hover:bg-white/10 rounded-lg transition active:scale-90 flex items-center justify-center"><span class="material-symbols-outlined text-base">close</span></button>
+                <button onclick="closeUmmiDetail()" aria-label="Tutup" class="p-1.5 hover:bg-white/10 rounded-lg transition active:scale-90 flex items-center justify-center"><span class="material-symbols-outlined text-base">close</span></button>
                 <h2 id="judulUmmi" class="text-sm sm:text-base font-bold text-center flex-grow tracking-wide">Nama Jilid</h2>
                 <div class="w-8"></div>
             </div>
@@ -848,29 +848,29 @@
     <!-- ============================================== -->
     <!-- PEMANGGILAN SCRIPT EKSTERNAL (PURE HTML) -->
     <!-- ============================================== -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     
-    <script src="js/config.js"></script>
-    <script src="js/data.js"></script>
-    <script src="js/firebase.js"></script>
-    <script src="js/app.js"></script>
-    <script src="js/santri.js"></script>
-    <script src="js/navigation.js"></script>
-    <script src="js/dashboard.js"></script>
-    <script src="js/hafalan.js"></script>
-    <script src="js/penilaian.js"></script>
-    <script src="js/ummi.js"></script>
-    <script src="js/ui.js"></script>
-    <script src="js/auth.js"></script>
-    <script src="js/popup.js"></script>
-    <script src="js/role.js"></script>
+    <script defer src="js/config.js"></script>
+    <script defer src="js/data.js"></script>
+    <script defer src="js/firebase.js"></script>
+    <script defer src="js/app.js"></script>
+    <script defer src="js/santri.js"></script>
+    <script defer src="js/navigation.js"></script>
+    <script defer src="js/dashboard.js"></script>
+    <script defer src="js/hafalan.js"></script>
+    <script defer src="js/penilaian.js"></script>
+    <script defer src="js/ummi.js"></script>
+    <script defer src="js/ui.js"></script>
+    <script defer src="js/auth.js"></script>
+    <script defer src="js/popup.js"></script>
+    <script defer src="js/role.js"></script>
 
     <!-- File Script Baru Hasil Refactoring -->
-    <script src="js/index-logic.js"></script>
-    <script src="js/laporan.js"></script>
-    <script src="js/latihan.js"></script>
-    <script src="js/nav-extra.js"></script>
+    <script defer src="js/index-logic.js"></script>
+    <script defer src="js/laporan.js"></script>
+    <script defer src="js/latihan.js"></script>
+    <script defer src="js/nav-extra.js"></script>
 </body>
 </html>
