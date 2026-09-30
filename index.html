@@ -38,10 +38,10 @@
         .animate-modal { animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
         .animate-fade-in { animation: fadeIn 0.6s ease-in-out; }
         
-        .delay-1 { animation-delay: 0.1s; opacity: 0; }
-        .delay-2 { animation-delay: 0.2s; opacity: 0; }
-        .delay-3 { animation-delay: 0.3s; opacity: 0; }
-        .delay-4 { animation-delay: 0.4s; opacity: 0; }
+        .delay-1 { animation-delay: 0.1s; animation-fill-mode: both; }
+        .delay-2 { animation-delay: 0.2s; animation-fill-mode: both; }
+        .delay-3 { animation-delay: 0.3s; animation-fill-mode: both; }
+        .delay-4 { animation-delay: 0.4s; animation-fill-mode: both; }
 
         #listHukumTajwidKlasifikasi *, #listHurufHijaiyah * {
             word-wrap: break-word !important; overflow-wrap: break-word !important; word-break: break-word !important; white-space: normal !important; max-width: 100%;
@@ -59,9 +59,11 @@
         .spinner { display:inline-block; width:1em; height:1em; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation: spin .7s linear infinite; vertical-align:-2px; margin-right:.4em; }
         @keyframes spin { to { transform: rotate(360deg); } }
         #toastBox { position:fixed; top:16px; left:50%; transform:translateX(-50%); z-index:10000; display:flex; flex-direction:column; gap:8px; width:min(92vw,380px); pointer-events:none; }
-        .toast { pointer-events:auto; display:flex; gap:10px; align-items:center; padding:12px 16px; border-radius:14px; font-size:13px; font-weight:700; color:#fff; box-shadow:0 10px 30px rgba(15,23,42,.25); animation: fadeInDown .3s ease forwards; }
+.toast { --tc:#2563eb; --tb:#eff6ff; pointer-events:auto; display:flex; gap:12px; align-items:center; padding:10px 16px 10px 10px; border-radius:18px; font-size:13px; font-weight:700; line-height:1.35; color:#1e293b; background:#fff; border:1px solid #e2e8f0; border-left:4px solid var(--tc); box-shadow:0 12px 32px rgba(15,23,42,.18); animation: fadeInDown .3s ease forwards; }
+        .toast .toast-ico { flex:none; width:32px; height:32px; border-radius:12px; display:flex; align-items:center; justify-content:center; background:var(--tb); color:var(--tc); }
+        .toast .toast-ico .material-symbols-outlined { font-size:20px; }
         .toast.out { opacity:0; transform:translateY(-10px); transition:all .3s; }
-        .toast-success { background:#059669; } .toast-error { background:#e11d48; } .toast-warning { background:#d97706; } .toast-info { background:#2563eb; }
+        .toast-success { --tc:#059669; --tb:#ecfdf5; } .toast-error { --tc:#e11d48; --tb:#fff1f2; } .toast-warning { --tc:#d97706; --tb:#fffbeb; } .toast-info { --tc:#2563eb; --tb:#eff6ff; }
         #bottomNav { position:fixed; bottom:0; left:0; right:0; z-index:45; display:flex; background:rgba(255,255,255,.95); backdrop-filter:blur(12px); border-top:1px solid #e2e8f0; padding-bottom:env(safe-area-inset-bottom,0); }
         #bottomNav button { flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; padding:8px 2px; min-height:56px; font-size:10px; font-weight:700; color:#64748b; transition:color .2s; }
         #bottomNav button.active { color:#2563eb; }
@@ -193,7 +195,7 @@
                         </div>
                         <div>
                             <h3 class="text-sm font-extrabold text-slate-800 tracking-tight">Analisis Perkembangan</h3>
-                            <p class="text-[10px] text-slate-400 font-semibold uppercase tracking-widest mt-0.5">Statistik Kognitif Santri</p>
+                            <p class="text-[10px] text-slate-400 font-semibold uppercase tracking-widest mt-0.5">Statistik Kognitif</p>
                         </div>
                     </div>
                     <span class="flex items-center gap-2 text-[10px] font-bold text-blue-600 bg-white px-3 py-1.5 rounded-full border border-blue-100 shadow-sm">
@@ -423,7 +425,7 @@
         <!-- ============================================== -->
         <div id="viewLatihan" class="page-view hidden space-y-6">
             <div class="flex items-center gap-3">
-                <button onclick="navigateTo('viewDashboard')" class="px-4 py-2 text-xs font-bold bg-white text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition active:scale-95 flex items-center gap-1.5 shadow-sm">
+                <button onclick="kembaliDashboard()" class="px-4 py-2 text-xs font-bold bg-white text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition active:scale-95 flex items-center gap-1.5 shadow-sm">
                     <span class="material-symbols-outlined text-sm">arrow_back</span> Kembali
                 </button>
                 <div class="h-4 w-[1px] bg-slate-300"></div>
@@ -511,7 +513,7 @@
         <!-- ============================================== -->
         <div id="viewHafalan" class="page-view hidden space-y-6">
             <div class="flex items-center gap-3">
-                <button onclick="navigateTo('viewDashboard')" class="px-4 py-2 text-xs font-bold bg-white text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition active:scale-95 flex items-center gap-1.5 shadow-sm">
+                <button onclick="kembaliDashboard()" class="px-4 py-2 text-xs font-bold bg-white text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition active:scale-95 flex items-center gap-1.5 shadow-sm">
                     <span class="material-symbols-outlined text-sm">arrow_back</span> Kembali
                 </button>
                 <div class="h-4 w-[1px] bg-slate-300"></div>
@@ -553,7 +555,7 @@
         <!-- ============================================== -->
         <div id="viewUmmi" class="page-view hidden space-y-6">
             <div class="flex items-center gap-3">
-                <button onclick="navigateTo('viewDashboard')" class="px-4 py-2 text-xs font-bold bg-white text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition active:scale-95 flex items-center gap-1.5 shadow-sm">
+                <button onclick="kembaliDashboard()" class="px-4 py-2 text-xs font-bold bg-white text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition active:scale-95 flex items-center gap-1.5 shadow-sm">
                     <span class="material-symbols-outlined text-sm">arrow_back</span> Kembali
                 </button>
                 <div class="h-4 w-[1px] bg-slate-300"></div>
@@ -579,7 +581,7 @@
         <!-- ============================================== -->
         <div id="viewPenilaian" class="page-view hidden space-y-6">
             <div class="flex items-center gap-3">
-                <button onclick="navigateTo('viewDashboard')" class="px-4 py-2 text-xs font-bold bg-white text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition active:scale-95 flex items-center gap-1.5 shadow-sm">
+                <button onclick="kembaliDashboard()" class="px-4 py-2 text-xs font-bold bg-white text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition active:scale-95 flex items-center gap-1.5 shadow-sm">
                     <span class="material-symbols-outlined text-sm">arrow_back</span> Kembali
                 </button>
                 <div class="h-4 w-[1px] bg-slate-300"></div>
@@ -801,8 +803,8 @@
     </div>
 
     <!-- Modal Hasil Kuis (Bertema, menggantikan alert bawaan browser) -->
-    <div id="modalHasilKuis" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 transition-all duration-300">
-        <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl border border-slate-100 overflow-hidden animate-modal">
+    <div id="modalHasilKuis" class="hidden fixed inset-0 justify-center bg-slate-900/60 backdrop-blur-sm z-[9999] flex p-4 overflow-y-auto overscroll-contain transition-all duration-300" style="-webkit-overflow-scrolling:touch;">
+        <div class="bg-white w-full max-w-sm mx-auto my-auto rounded-3xl shadow-2xl border border-slate-100 overflow-hidden animate-modal">
             <div class="bg-gradient-to-br from-blue-700 via-blue-600 to-indigo-700 p-6 text-white text-center relative overflow-hidden">
                 <div class="absolute -right-10 -top-10 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
                 <div class="absolute -left-8 -bottom-8 w-24 h-24 bg-indigo-400/20 rounded-full blur-xl"></div>

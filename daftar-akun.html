@@ -85,6 +85,8 @@
         const db = firebase.firestore();
         let prosesMuat = false;
 
+        const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
         async function muatSemuaAkun() {
             if (prosesMuat) return;
             prosesMuat = true;
@@ -121,9 +123,9 @@
                 let nomor = 1;
 
                 dataArray.forEach((data) => {
-                    const namaUser = data.nama || "Tanpa Nama";
-                    const emailUser = data.email || "-"; // Mengambil field email jika ada
-                    const roleUser = data.role || "murid";
+                    const namaUser = esc(data.nama || "Tanpa Nama");
+                    const emailUser = esc(data.email || "-");
+                    const roleUser = esc(data.role || "murid");
 
                     // Atur warna badge label berdasarkan role
                     let badgeColor = "bg-slate-100 text-slate-700";
@@ -152,7 +154,7 @@
                 tabelBody.innerHTML = `
                     <tr>
                         <td colspan="4" class="py-8 text-center text-red-500">
-                            Gagal memuat data akun: <span class="text-xs font-mono">${error.message}</span>
+                            Gagal memuat data akun: <span class="text-xs font-mono">${esc(error.message)}</span>
                         </td>
                     </tr>`;
             } finally {
@@ -166,7 +168,7 @@
                 if (user) {
                     muatSemuaAkun();
                 } else {
-                    tabelBody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-red-500">Sesi berakhir.</td></tr>`;
+                    document.getElementById("tabelBodyAkun").innerHTML = `<tr><td colspan="4" class="py-8 text-center text-red-500">Sesi berakhir. Silakan login ulang.</td></tr>`;
                 }
             });
         });

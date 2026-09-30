@@ -18,8 +18,16 @@ const db = firebase.firestore();
 // ==========================================
 // FUNGSI UTAMA LOGIN
 // ==========================================
+// Cukup ketik nama (contoh: "hasnan") -> otomatis menjadi "hasnan@gmail.com".
+// Kalau sudah mengetik email lengkap (ada "@"), dipakai apa adanya.
+const DOMAIN_EMAIL_DEFAULT = "gmail.com";
+function lengkapiEmail(teks) {
+    const t = String(teks || "").trim().replace(/\s+/g, "");
+    return t && !t.includes("@") ? `${t}@${DOMAIN_EMAIL_DEFAULT}` : t;
+}
+
 async function login() {
-    const emailInput = document.getElementById("username").value.trim();
+    const emailInput = lengkapiEmail(document.getElementById("username").value);
     const passwordInput = document.getElementById("password").value.trim();
 
     if (!emailInput || !passwordInput) {

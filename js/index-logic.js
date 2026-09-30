@@ -74,7 +74,11 @@ window.cariSantriLangsung = function() {
 
 // [PERBAIKAN SUPER]: Menambal fungsi bawaan secara paksa agar tidak ada halaman yang tumpang tindih
 const fungsiAsliNavigateTo = window.navigateTo;
+window.kembaliDashboard = function() { window._pulihScroll = true; window.navigateTo('viewDashboard'); };
 window.navigateTo = function(viewId) {
+    // Simpan posisi scroll dashboard sebelum pindah halaman
+    const dash = document.getElementById('viewDashboard');
+    if (dash && !dash.classList.contains('hidden') && viewId !== 'viewDashboard') window._scrollDash = window.scrollY;
     // 1. TUTUP PAKSA SEMUA HALAMAN (Menambal array yang kurang di navigation.js)
     document.querySelectorAll('.page-view').forEach(el => {
         el.classList.add('hidden');
@@ -99,6 +103,12 @@ window.navigateTo = function(viewId) {
         target.classList.remove("hidden");
         setTimeout(() => target.classList.add("animate-entry"), 10); 
     }
+    // Kembali ke dashboard lewat tombol Kembali: pulihkan scroll terakhir (seperti Absensi)
+    if (viewId === 'viewDashboard' && window._pulihScroll) {
+        const y = window._scrollDash || 0;
+        [0, 60, 250].forEach(t => setTimeout(() => window.scrollTo(0, y), t));
+    }
+    window._pulihScroll = false;
 };
 
 window.bukaHalamanJuz = function(nomorJuz) {
@@ -455,7 +465,12 @@ window.showToast = function(msg, type = 'info', ms = 3000) {
     let box = document.getElementById('toastBox');
     if (!box) { box = document.createElement('div'); box.id = 'toastBox'; box.setAttribute('aria-live', 'polite'); document.body.appendChild(box); }
     const t = document.createElement('div');
-    t.className = 'toast toast-' + type; t.setAttribute('role', 'status'); t.textContent = msg;
+    type = ({sukses:'success',berhasil:'success',ok:'success',gagal:'error',bahaya:'error',peringatan:'warning'})[String(type).toLowerCase()] || (['success','error','warning','info'].includes(type) ? type : 'info');
+    t.className = 'toast toast-' + type; t.setAttribute('role', 'status');
+    const ikon = { success: 'check_circle', error: 'error', warning: 'warning', info: 'info' }[type];
+    const i = document.createElement('span'); i.className = 'toast-ico'; i.innerHTML = '<span class="material-symbols-outlined">' + ikon + '</span>';
+    const p = document.createElement('span'); p.textContent = msg;
+    t.appendChild(i); t.appendChild(p);
     box.appendChild(t);
     setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 300); }, ms);
 };
@@ -747,4 +762,16 @@ window.renderInsightPerkembangan = function(kosong) {
     const asli = window.renderRiwayatAbsensi;
     if (typeof asli === 'function') window.renderRiwayatAbsensi = function() { const h = asli.apply(this, arguments); render(); return h; };
     bangun(); document.addEventListener('DOMContentLoaded', bangun);
+})();
+
+
+// ==========================================
+// Landing awal: selalu mulai dari bagian paling atas Dashboard (semua role)
+// ==========================================
+(function() {
+    const keAtas = () => {
+        const d = document.getElementById('viewDashboard');
+        if (d && !d.classList.contains('hidden')) window.scrollTo(0, 0);
+    };
+    window.addEventListener('load', () => { [0, 200, 600, 1200].forEach(t => setTimeout(keAtas, t)); });
 })();

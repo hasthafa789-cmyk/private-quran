@@ -260,7 +260,9 @@
         cek(34); y += 6;
         font('normal', 9, MUTED); doc.text('Mengetahui,', M + W - 45, y, { align: 'center' });
         font('bold', 9.5, GELAP); doc.text('Guru Pembimbing', M + W - 45, y + 5, { align: 'center' });
-        garis(MUTED); doc.setLineWidth(0.3); doc.line(M + W - 75, y + 24, M + W - 15, y + 24);
+        let lebarTtd = 60; const cx = M + W - 45;
+        if (meta.guru) { font('bold', 9.5, GELAP); const nm = T(meta.guru); doc.text(nm, cx, y + 22.5, { align: 'center' }); lebarTtd = Math.min(Math.max(doc.getTextWidth(nm) + 8, 30), 80); }
+        garis(MUTED); doc.setLineWidth(0.3); doc.line(cx - lebarTtd / 2, y + 24, cx + lebarTtd / 2, y + 24);
 
         // ===== FOOTER =====
         const n = doc.getNumberOfPages();
@@ -308,6 +310,36 @@
         });
     }
 
+    // ----- Daftar guru pembimbing: tersimpan di Firestore (users/{uid}.pembimbingLaporan), cadangan di localStorage -----
+    const KUNCI_GURU = 'pembimbingLaporan';
+    const escG = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    let daftarGuru = (() => { try { const a = JSON.parse(localStorage.getItem(KUNCI_GURU)); return Array.isArray(a) ? a : []; } catch (e) { return []; } })();
+    const uidGuru = () => { try { const u = firebase.auth().currentUser; return u ? u.uid : null; } catch (e) { return null; } };
+    async function simpanGuru(list) {
+        daftarGuru = list;
+        try { localStorage.setItem(KUNCI_GURU, JSON.stringify(list)); } catch (e) {}
+        try { const uid = uidGuru(); if (uid) await db.collection('users').doc(uid).set({ [KUNCI_GURU]: list }, { merge: true }); }
+        catch (e) { console.warn('Gagal menyimpan daftar guru ke Firestore', e); window.showToast && window.showToast('Daftar nama hanya tersimpan di perangkat ini', 'warning'); }
+    }
+    async function muatGuru() {
+        try {
+            const uid = uidGuru(); if (!uid) return;
+            const snap = await db.collection('users').doc(uid).get(), a = snap.exists ? snap.data()[KUNCI_GURU] : null;
+            if (Array.isArray(a)) { daftarGuru = a; try { localStorage.setItem(KUNCI_GURU, JSON.stringify(a)); } catch (e) {} }
+            else if (daftarGuru.length) simpanGuru(daftarGuru); // pindahkan daftar lama di perangkat ini ke akun
+        } catch (e) { console.warn('Gagal memuat daftar guru pembimbing', e); }
+    }
+    function catatGuru(nama) { // nama terbaru di urutan pertama, tanpa duplikat, maks 20 nama
+        const n = String(nama || '').trim().replace(/\s+/g, ' '); if (!n) return;
+        simpanGuru([n, ...daftarGuru.filter(x => x.toLowerCase() !== n.toLowerCase())].slice(0, 20));
+    }
+    function chipGuru(m) {
+        const el = m.querySelector('#rpGuruList'); if (!el) return;
+        el.innerHTML = daftarGuru.map((n, i) => `<span style="display:inline-flex;align-items:center;background:#eef2ff;border:1px solid #c7d2fe;border-radius:999px;padding:3px 4px 3px 10px;font-size:12px;font-weight:700;color:#3730a3">` +
+            `<button type="button" data-a="pilihguru" data-i="${i}" style="all:unset;cursor:pointer">${escG(n)}</button>` +
+            `<button type="button" data-a="hapusguru" data-i="${i}" aria-label="Hapus ${escG(n)}" style="all:unset;cursor:pointer;padding:0 7px;font-size:15px;color:#64748b">&times;</button></span>`).join('');
+    }
+
     const onEsc = e => { if (e.key === 'Escape') tutup(); };
     function tutup() { const m = document.getElementById('rpModal'); if (m) m.remove(); document.removeEventListener('keydown', onEsc); }
 
@@ -318,14 +350,16 @@
         try {
             await muatJsPdf();
             const logo = await muatLogo();
+            const guru = ((document.getElementById('rpGuru') || {}).value || '').trim();
             const pv = (document.getElementById('rpPeriode') || {}).value || 'all', r = rentang(pv), d = susunData(pv);
             const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' }), now = new Date();
-            const meta = { logo, tgl: `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`, periode: r.label,
+            const meta = { logo, guru, tgl: `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`, periode: r.label,
                            catatan: r.awal ? 'Grafik dan absensi mengikuti periode ' + r.label + '; daftar capaian menampilkan kondisi terkini.' : '' };
             gambar(doc, pilih, d, pilih.ringkasan ? ambilRingkasan() : [], pilih.grafik ? ambilGrafik(pilih, r) : [], meta);
             const nama = `Laporan_${(d.nama || 'santri').replace(/\s+/g, '_')}_${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}.pdf`;
             if (aksi === 'bagikan') await navigator.share({ files: [new File([doc.output('blob')], nama, { type: 'application/pdf' })], title: 'Laporan Hasil Belajar' });
             else { doc.save(nama); window.showToast('PDF berhasil dibuat', 'success'); }
+            catatGuru(guru);
             tutup();
         } catch (e) {
             if (!(e && e.name === 'AbortError')) { window.showToast('Gagal membuat PDF', 'error'); console.error(e); }
@@ -356,6 +390,9 @@
             <div class="rp-subrow"><p class="rp-sub">Pilih bagian yang ingin dimasukkan</p><button class="rp-all" data-a="semua">Pilih semua</button></div>
             ${OPSI.map(([id, judul, desc, ico]) => `<label class="rp-opt ${ada[id] ? '' : 'dis'}"><input type="checkbox" value="${id}" ${ada[id] ? 'checked' : 'disabled'}>
                 <span class="material-symbols-outlined">${ico}</span><span class="rp-t"><b>${judul}</b><small>${ada[id] ? desc : 'Belum ada data'}</small></span></label>`).join('')}
+            <p class="rp-sub">Nama Guru Pembimbing (tercetak di tanda tangan)</p>
+            <input id="rpGuru" type="text" maxlength="60" autocomplete="off" placeholder="Ketik nama guru pembimbing" value="${escG(daftarGuru[0] || (typeof role !== 'undefined' && role === 'guru' && typeof namaLogin !== 'undefined' ? namaLogin : ''))}" style="width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:12px;font-size:14px;font-weight:600;box-sizing:border-box">
+            <div id="rpGuruList" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div>
             <div class="rp-foot">
                 <button class="rp-btn rp-sec" data-a="batal">Batal</button>
                 ${bisaBagikan ? '<button class="rp-btn rp-sec" data-a="bagikan"><span class="material-symbols-outlined">share</span>Bagikan</button>' : ''}
@@ -369,8 +406,12 @@
                 const cb = [...m.querySelectorAll('input[type=checkbox]:not(:disabled)')], semua = cb.every(c => c.checked);
                 cb.forEach(c => { c.checked = !semua; }); b.textContent = semua ? 'Pilih semua' : 'Kosongkan'; return;
             }
+            if (b.dataset.a === 'pilihguru') { const inp = m.querySelector('#rpGuru'); if (inp) inp.value = daftarGuru[+b.dataset.i] || ''; return; }
+            if (b.dataset.a === 'hapusguru') { simpanGuru(daftarGuru.filter((_, i) => i !== +b.dataset.i)); chipGuru(m); return; }
             proses(b.dataset.a, d, b);
         });
         document.body.appendChild(m); document.addEventListener('keydown', onEsc);
+        chipGuru(m);
+        muatGuru().then(() => { if (!m.isConnected) return; chipGuru(m); const inp = m.querySelector('#rpGuru'); if (inp && !inp.value.trim() && daftarGuru[0]) inp.value = daftarGuru[0]; });
     };
 })();

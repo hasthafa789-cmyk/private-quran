@@ -68,6 +68,9 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
+    <script src="js/data.js"></script>
+    <script src="js/progres-parser.js"></script>
+
     <script>
         // Konfigurasi Firebase Anda
         const firebaseConfig = {
@@ -111,9 +114,26 @@
                     return;
                 }
 
+                // Progres disimpan di koleksi database_hafalan/{nama}. Ambil sekali saja (bukan per murid).
+                const progresMap = {};
+                try {
+                    const progSnap = await db.collection("database_hafalan").get();
+                    progSnap.forEach((d) => { progresMap[d.id] = d.data(); });
+                } catch (e) {
+                    console.warn("Gagal memuat database_hafalan:", e);
+                }
+
                 let dataArray = [];
                 snapshot.forEach((doc) => {
-                    dataArray.push(doc.data());
+                    const u = doc.data();
+                    const p = progresMap[u.nama] || {};
+                    dataArray.push({
+                        ...u,
+                        terakhirHafalan: parseHafalan(p.terakhirHafalan || "-", p),
+                        terakhirHijaiyah: parseHijaiyah(p.terakhirHijaiyah || "-"),
+                        terakhirTajwid: parseTajwid(p.terakhirTajwid || "-"),
+                        ummi: ringkasDataUmmi(p.ummi)
+                    });
                 });
 
                 // Urutkan berdasarkan Pembimbing lalu Nama
@@ -135,21 +155,15 @@
                 let nomor = 1;
 
                 dataArray.forEach((data) => {
-                    const namaSantri = data.nama || "Tanpa Nama";
+                    const namaSantri = esc(data.nama || "Tanpa Nama");
                     const pembimbing = data.guruPembimbing ? 
-                        `<span class="bg-blue-50 text-blue-700 px-3 py-1 rounded-full font-medium text-xs">${data.guruPembimbing}</span>` : 
+                        `<span class="bg-blue-50 text-blue-700 px-3 py-1 rounded-full font-medium text-xs">${esc(data.guruPembimbing)}</span>` : 
                         `<span class="text-slate-400 italic text-xs">Belum ditentukan</span>`;
 
-                    // ============================================================
-                    // PERHATIAN: MENARIK DATA 4 KOLOM BARU
-                    // Ubah kata 'terakhirHafalan' dll di bawah ini jika nama 
-                    // field/variabel di database Firestore Anda berbeda.
-                    // Jika data kosong, akan menampilkan tanda setrip (-).
-                    // ============================================================
-                    const hafalan = data.terakhirHafalan || "-";
-                    const hijaiyah = data.terakhirHijaiyah || "-";
-                    const tajwid = data.terakhirTajwid || "-";
-                    const ummi = data.terakhirUmmi || "-";
+                    const hafalan = esc(data.terakhirHafalan);
+                    const hijaiyah = esc(data.terakhirHijaiyah);
+                    const tajwid = esc(data.terakhirTajwid);
+                    const ummi = esc(data.ummi);
 
                     htmlContent += `
                         <tr class="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
@@ -173,7 +187,7 @@
                     <tr>
                         <td colspan="7" class="py-8 text-center text-red-500">
                             Terjadi kesalahan saat memuat data.<br>
-                            <span class="text-xs text-red-400">${error.message}</span>
+                            <span class="text-xs text-red-400">${esc(error.message)}</span>
                         </td>
                     </tr>`;
             } finally {

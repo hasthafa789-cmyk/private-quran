@@ -78,10 +78,13 @@
             appId: "1:737022132780:web:8ab47b587f13ee53900789"
         };
 
-        // HANYA MENGGUNAKAN APLIKASI UTAMA (Mencegah Crash Websocket)
+        // App utama = sesi admin (Firestore). App kedua HANYA untuk membuat akun,
+        // sehingga login admin di app utama tidak tergantikan oleh akun baru.
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
         const auth = firebase.auth();
+        const appKedua = firebase.initializeApp(firebaseConfig, "RegistrasiMassal");
+        const authKedua = appKedua.auth();
 
         // Fungsi Membaca dan Memisahkan Struktur Teks Excel
         function prosesRegistrasiMassal() {
@@ -139,8 +142,8 @@
                     btn.innerHTML = `<span class="material-symbols-outlined animate-spin">autorenew</span> Memproses Akun ${i + 1} dari ${dataUsers.length}...`;
                     
                     try {
-                        // 1. Buat Akun (Firebase akan otomatis login sebagai user baru ini)
-                        const userCredential = await auth.createUserWithEmailAndPassword(user.email, user.password);
+                        // 1. Buat Akun lewat app kedua
+                        const userCredential = await authKedua.createUserWithEmailAndPassword(user.email, user.password);
                         const newUser = userCredential.user;
                         
                         // 2. Siapkan data Firestore
@@ -154,17 +157,17 @@
                         }
 
                         try {
-                            // 3. Simpan ke Firestore 
-                            // (Pasti lolos Rules karena status saat ini newUser sedang login)
+                            // 3. Simpan ke Firestore memakai sesi ADMIN (app utama)
                             await db.collection("users").doc(newUser.uid).set(dataUser);
                             
-                            // 4. Logout akun yang baru dibuat agar Auth bersih kembali
-                            await auth.signOut();
+                            // 4. Logout akun baru di app kedua (sesi admin tidak terpengaruh)
+                            await authKedua.signOut();
                             sukses++;
                             
                         } catch (firestoreError) {
                             // Rollback jika gagal simpan Firestore
                             try { await newUser.delete(); } catch (e) {}
+                            try { await authKedua.signOut(); } catch (e) {}
                             daftarError.push(`Baris ${i+1} (${user.email}): Gagal simpan database (${firestoreError.message})`);
                             gagal++;
                         }
